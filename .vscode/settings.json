@@ -1,0 +1,8 @@
+{
+    "workbench.colorCustomizations": {},
+    "files.associations": {
+        "*.dbclient-js": "javascript",
+        "*.embeddedhtml": "html",
+        "plyconfig.json": "jsonc"
+    }
+}
