@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 from app.db.mongo import get_mongo_db
 from app.db.mysql import get_mysql_conn
+from app.api.especialistas import router as especialistas_router
 
 app = FastAPI(title="API Recomendación Médica v1")
+
+# Registrar routers
+app.include_router(especialistas_router)
 
 @app.get("/")
 def root():
@@ -11,19 +15,16 @@ def root():
 @app.get("/health")
 def health():
     resultados = {"api": "ok", "mysql": "error", "mongodb": "error"}
-
     try:
         conn = get_mysql_conn()
         conn.close()
         resultados["mysql"] = "ok"
     except Exception as e:
         resultados["mysql"] = str(e)
-
     try:
         db = get_mongo_db()
         db.command("ping")
         resultados["mongodb"] = "ok"
     except Exception as e:
         resultados["mongodb"] = str(e)
-
     return resultados

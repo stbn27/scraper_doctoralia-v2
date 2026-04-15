@@ -4,13 +4,16 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: medicos_db
+      MYSQL_ROOT_HOST: '%'
     ports: ["3310:3306"]
     volumes: [mysql_data:/var/lib/mysql]
 
   mongodb:
-    image: mongo:7
+    image: mongo:6
     ports: ["27017:27017"]
-    volumes: [mongo_data:/data/db]
+    volumes:
+      - mongo_data:/data/db
+    command: --wiredTigerCacheSizeGB 0.5 # limita cache a 512MB
 
   ollama:
     image: ollama/ollama
@@ -23,9 +26,9 @@ services:
     depends_on: [mysql, mongodb, ollama]
     env_file: .env
     volumes:
-      - ./backend:/app        # Montar el código fuente para desarrollo
+      - ./backend:/app # Montar el código fuente para desarrollo
     environment:
-      - WATCHFILES_FORCE_POLLING=true   # necesario en Linux para el --reload
+      - WATCHFILES_FORCE_POLLING=true # Para Linux para el --reload
 
 volumes:
   mysql_data:
