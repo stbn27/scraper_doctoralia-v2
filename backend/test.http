@@ -1,0 +1,5 @@
+### Raíz
+GET http://localhost:8000/
+
+### Health check
+GET http://localhost:8000/health
