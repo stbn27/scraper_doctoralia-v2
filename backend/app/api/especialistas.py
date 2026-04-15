@@ -14,7 +14,7 @@ def serializar(doc: dict) -> dict:
     return doc
 
 
-# CREATE (lo que llega del scraper)
+# CREATE
 @router.post("/", response_model=EspecialistaResponse, status_code=201)
 def crear_especialista(data: EspecialistaCreate):
     """ "
@@ -45,7 +45,7 @@ def crear_especialista(data: EspecialistaCreate):
     return doc
 
 
-# READ ALL (con filtros)
+# READ ALL
 @router.get("/", response_model=list[EspecialistaResponse])
 def listar_especialistas(
     especialidad: Optional[str] = Query(None, description="Ej: Cardiología"),

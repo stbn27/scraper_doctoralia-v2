@@ -2,11 +2,12 @@ from fastapi import FastAPI
 from app.db.mongo import get_mongo_db
 from app.db.mysql import get_mysql_conn
 from app.api.especialistas import router as especialistas_router
+from app.api.usuarios import router as usuarios_router
 
 app = FastAPI(title="API Recomendación Médica v1")
 
-# Registrar routers
 app.include_router(especialistas_router)
+app.include_router(usuarios_router)
 
 @app.get("/")
 def root():

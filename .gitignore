@@ -5,6 +5,7 @@
 node_modules/**
 backend/venv/**
 **cache**
+/backend/test/**
 
 # Arquivos de configuración
 .env
