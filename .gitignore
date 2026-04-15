@@ -1,0 +1,13 @@
+# Sistema
+.vscode
+
+# Directorios de dependencias
+node_modules/**
+backend/venv/**
+**cache**
+
+# Arquivos de configuración
+.env
+
+*.pyc
+*.pyo
