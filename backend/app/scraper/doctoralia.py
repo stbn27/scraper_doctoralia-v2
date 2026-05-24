@@ -1,7 +1,10 @@
 import json
 import re
+import httpx
 from pathlib import Path
 from bs4 import BeautifulSoup
+from datetime import datetime, timezone
+from app.scraper.utils.base import get_user_agent
 
 
 def clean_text(value: str | None) -> str | None:
@@ -332,14 +335,19 @@ def extract_services(soup: BeautifulSoup) -> list[dict]:
                     current_name = None
                 continue
 
-            if len(line) > 3 and line.lower() not in {"servicios y precios", "servicios"}:
+            if len(line) > 3 and line.lower() not in {
+                "servicios y precios",
+                "servicios",
+            }:
                 current_name = line
 
     # Fallback: extraer directo del HTML del bloque de servicios si regex no encontró pares.
     if not services:
         service_nodes = soup.select("#profile-pricing [data-id='service-item']")
         if not service_nodes:
-            service_nodes = soup.select("[data-tab-id='profile-pricing'] [data-id='service-item']")
+            service_nodes = soup.select(
+                "[data-tab-id='profile-pricing'] [data-id='service-item']"
+            )
 
         for node in service_nodes:
             nombre = safe_text(
@@ -511,55 +519,77 @@ def get_latest_review_date(reviews: list[dict]) -> str | None:
     return max(dates) if dates else None
 
 
-def parse_doctoralia_html(html: str, limit_reviews: int | None = None) -> dict:
+def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
     soup = BeautifulSoup(html, "lxml")
 
     data = extract_profile_header(soup)
     data["experiencia"] = extract_experiencia(soup)
     data["servicios"] = extract_services(soup)
     data["consultorios"] = extract_addresses(soup)
-    data["opiniones"] = extract_reviews(soup, limit=limit_reviews)
+    # data["opiniones"] = extract_reviews(soup, limit=limit_reviews)
     data["pacientes"] = extract_pacientes(soup)
 
-    data["resumen_extraccion"] = {
+    data["info"] = {
         "total_servicios": len(data["servicios"]),
         "total_consultorios": len(data["consultorios"]),
-        "opiniones_extraidas": len(data["opiniones"]),
-        "ultima_opinion_fecha": get_latest_review_date(data["opiniones"]),
+        # "opiniones_extraidas": len(data["opiniones"]),
+        # "ultima_opinion_fecha": get_latest_review_date(data["opiniones"]),
+    }
+
+    data["scraping_meta"] = {
+        "url_origen": url,
+        "fecha_consulta": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "total_servicios": len(data["servicios"]),
+        "total_consultorios": len(data["consultorios"]),
     }
 
     return data
 
 
-def parse_doctoralia_file(
-    file_path: str | Path, limit_reviews: int | None = None
-) -> dict:
+def parse_doctoralia_file(file_path: str | Path, url: str | None = None) -> dict:
     file_path = Path(file_path)
     html = file_path.read_text(encoding="utf-8", errors="ignore")
-    result = parse_doctoralia_html(html, limit_reviews=limit_reviews)
+    result = parse_doctoralia_html(html, url=url)
     result["archivo_fuente"] = str(file_path)
+    return result
+
+
+def fetch_and_parse_profile(url: str) -> dict:
+    """Descarga el perfil desde la URL real y lo parsea."""
+    headers = {
+        "User-Agent": get_user_agent(),
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,*/*",
+    }
+    response = httpx.get(url, headers=headers, timeout=30, follow_redirects=True)
+    response.raise_for_status()
+    result = parse_doctoralia_html(response.text, url=url)
+    result.pop("archivo_fuente", None)  # no aplica en scraping real
     return result
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Parser local de perfiles Doctoralia")
-    parser.add_argument("html_file", help="Ruta al archivo HTML descargado")
-    parser.add_argument(
-        "--limit-reviews", type=int, default=10, help="Máximo de opiniones a extraer"
-    )
+    parser = argparse.ArgumentParser(description="Parser de perfiles Doctoralia")
+    
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--file", help="Ruta a un archivo HTML local")
+    source.add_argument("--url", help="URL real del perfil en Doctoralia")
+
     parser.add_argument(
         "--output", default="doctoralia_output.json", help="Archivo JSON de salida"
     )
-
     args = parser.parse_args()
 
-    data = parse_doctoralia_file(args.html_file, limit_reviews=args.limit_reviews)
+    if args.file:
+        data = parse_doctoralia_file(args.file, url=args.url)
+    else:
+        data = fetch_and_parse_profile(args.url)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     print(f"OK -> JSON guardado en: {args.output}")
     print(f"Nombre: {data.get('nombre')}")
-    print(f"Opiniones extraídas: {len(data.get('opiniones', []))}")
