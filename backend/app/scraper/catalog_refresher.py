@@ -22,7 +22,7 @@ def download_html(url: str) -> str:
         "Accept-Encoding": "gzip, deflate, br",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
-    response = httpx.get(url, headers=headers, timeout=30)
+    response = httpx.get(url, headers=headers, timeout=30, follow_redirects=True)
     response.raise_for_status()
     return response.text
 

@@ -526,6 +526,7 @@ def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
     data["experiencia"] = extract_experiencia(soup)
     data["servicios"] = extract_services(soup)
     data["consultorios"] = extract_addresses(soup)
+    data["opiniones"] = []
     # data["opiniones"] = extract_reviews(soup, limit=limit_reviews)
     data["pacientes"] = extract_pacientes(soup)
 

@@ -1,2 +1,2 @@
-from .especialista import EspecialistaCreate, EspecialistaResponse, Resena
+from .especialista import EspecialistaModel, EspecialistaResponse
 from .usuario import UsuarioCreate, UsuarioResponse, UsuarioLogin, TokenResponse
