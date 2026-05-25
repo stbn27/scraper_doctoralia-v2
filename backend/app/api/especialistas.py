@@ -3,11 +3,13 @@ from pydantic import BaseModel
 
 from app.db.repositorios import especialistas_repo
 from app.models.especialista import EspecialistaResponse
+from app.models.opinion import OpinionesResponse
 from app.services.especialistas_service import (
     buscar_o_scrapear_especialistas,
     cargar_catalogo_desde_fixture,
     actualizar_catalogo_desde_web,
 )
+from app.services.opiniones_service import obtener_o_scrapear_opiniones
 
 
 router = APIRouter(prefix="/especialistas", tags=["Especialistas"])
@@ -98,3 +100,43 @@ async def cargar_catalogo(payload: CatalogoCargaRequest):
 async def actualizar_catalogo():
     """Scrapea el catalogo completo y lo persiste en Mongo."""
     return await actualizar_catalogo_desde_web()
+
+
+@router.get("/{especialista_id}/opiniones", response_model=OpinionesResponse)
+async def obtener_opiniones(
+    especialista_id: str,
+    limite: int = Query(30, ge=1, le=200),
+    actualizar: bool = Query(False),
+):
+    """Obtiene opiniones de un especialista con scraping bajo demanda."""
+    especialista = await especialistas_repo.buscar_por_id(especialista_id)
+    if not especialista:
+        raise HTTPException(status_code=404, detail="Especialista no encontrado")
+
+    resultado = await obtener_o_scrapear_opiniones(
+        especialista=especialista,
+        limite=limite,
+        forzar_actualizacion=actualizar,
+    )
+
+    especialista_info = {
+        "nombre": especialista.get("nombre"),
+        "especialidad": especialista.get("especialidad"),
+        "ciudad": especialista.get("ciudad"),
+        "rating_global": especialista.get("rating_global"),
+        "total_opiniones": especialista.get("total_opiniones"),
+    }
+
+    opiniones_info = {
+        "fuente": resultado.get("fuente"),
+        "total_en_bd": resultado.get("total_en_bd"),
+        "total_extraidas": resultado.get("total_extraidas"),
+    }
+
+    opiniones = [_serializar_doc(op) for op in resultado.get("opiniones", [])]
+
+    return {
+        "especialista": especialista_info,
+        "opiniones_info": opiniones_info,
+        "opiniones": opiniones,
+    }
