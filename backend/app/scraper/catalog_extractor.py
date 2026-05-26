@@ -29,6 +29,15 @@ BLOCKED_SPECIALTIES = {
 
 
 def clean_text(text: str | None) -> str | None:
+    """Normaliza texto quitando espacios repetidos y extremos vacios.
+
+    Args:
+        text: Texto original o ``None``.
+
+    Returns:
+        Texto limpio, o ``None`` si la entrada estaba vacia o solo tenia
+        espacios.
+    """
     if not text:
         return None
     text = re.sub(r"\s+", " ", text).strip()
@@ -36,6 +45,18 @@ def clean_text(text: str | None) -> str | None:
 
 
 def slugify_name(name: str) -> str:
+    """Convierte un nombre legible en un slug seguro para URLs.
+
+    El slug queda en minusculas, sin acentos, sin caracteres especiales y con
+    guiones como separadores. Por ejemplo, ``"Medicina Interna"`` se convierte
+    en ``"medicina-interna"``.
+
+    Args:
+        name: Nombre de especialidad o texto que se quiere convertir.
+
+    Returns:
+        Cadena normalizada para usar como identificador o parte de una URL.
+    """
     text = unicodedata.normalize("NFD", name)
     text = "".join(char for char in text if unicodedata.category(char) != "Mn")
     text = text.lower().strip()
@@ -46,6 +67,19 @@ def slugify_name(name: str) -> str:
 
 
 def extract_specialties(soup: BeautifulSoup) -> list[dict]:
+    """Extrae especialidades medicas desde el HTML de Doctoralia.
+
+    Busca textos en selectores donde Doctoralia suele renderizar opciones del
+    buscador de especialidades. Despues limpia duplicados, descarta textos
+    genericos como "especialidad" y genera un slug para cada nombre.
+
+    Args:
+        soup: Documento HTML ya parseado con BeautifulSoup.
+
+    Returns:
+        Lista de diccionarios con esta forma:
+        ``{"nombre": str, "slug": str}``.
+    """
     selectors = [
         "[data-test-id='dropdown-item'] .text-truncate",
         "[data-test-id='dropdown-item'] .capitalize",
@@ -80,12 +114,37 @@ def extract_specialties(soup: BeautifulSoup) -> list[dict]:
 
 
 def canonical_url(url: str) -> str:
+    """Devuelve una URL sin parametros de consulta ni fragmentos.
+
+    Args:
+        url: URL completa que puede incluir ``?query`` o ``#fragment``.
+
+    Returns:
+        La misma URL, pero sin query string ni fragmento.
+    """
     parsed = urlparse(url)
     return parsed._replace(query="", fragment="").geturl()
 
 
 #def extract_pairs(soup: BeautifulSoup) -> tuple[list[dict], list[dict]]:
 def extract_pairs(soup, known_slugs: set[str] | None = None):
+    """Extrae combinaciones de especialidad y ciudad desde enlaces.
+
+    Recorre todos los enlaces del HTML y conserva solo los que apuntan a rutas
+    de Doctoralia con dos segmentos, como ``/endodoncia/ciudad-de-mexico``.
+    Tambien separa las rutas online, donde el segundo segmento es ``online``.
+
+    Args:
+        soup: Documento HTML parseado con BeautifulSoup.
+        known_slugs: Conjunto opcional de slugs validos. Si se entrega, los
+            enlaces con especialidades fuera de ese conjunto se ignoran.
+
+    Returns:
+        Tupla ``(pairs, online)``:
+        ``pairs`` contiene rutas presenciales con ``especialidad_slug``,
+        ``ciudad_slug``, ``url`` y ``texto_enlace``. ``online`` contiene rutas
+        online con ``especialidad_slug``, ``modalidad`` y ``url``.
+    """
     base_url = "https://www.doctoralia.com.mx"
     pairs: list[dict] = []
     online: list[dict] = []
@@ -155,6 +214,24 @@ def extract_pairs(soup, known_slugs: set[str] | None = None):
 
 
 def build_catalog(html_text: str, source_path: Path) -> dict:
+    """Construye el catalogo completo a partir de HTML.
+
+    Convierte el texto HTML en un objeto BeautifulSoup, extrae especialidades y
+    pares de busqueda, y agrega metadatos utiles para saber de donde salio la
+    informacion y cuando se genero.
+
+    Args:
+        html_text: Contenido HTML de la pagina origen.
+        source_path: Ruta local o identificador de la fuente usada.
+
+    Returns:
+        Diccionario con las claves ``meta``, ``especialidades``,
+        ``pares_presencial`` y ``pares_online``.
+
+    Side Effects:
+        Imprime advertencias si encuentra pocos datos, lo cual puede indicar
+        que el HTML cambio o que la pagina no cargo completa.
+    """
     soup = BeautifulSoup(html_text, "html.parser")
     specialties = extract_specialties(soup)
     pairs_presencial, pairs_online = extract_pairs(soup)
@@ -186,6 +263,18 @@ def build_catalog(html_text: str, source_path: Path) -> dict:
 
 
 def save_catalog(catalog: dict, output_path: Path) -> None:
+    """Guarda un catalogo como archivo JSON legible.
+
+    Args:
+        catalog: Diccionario del catalogo que se desea guardar.
+        output_path: Ruta donde se escribira el archivo JSON.
+
+    Returns:
+        None.
+
+    Side Effects:
+        Crea directorios padres si no existen y sobrescribe el archivo destino.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as handle:
         json.dump(catalog, handle, ensure_ascii=False, indent=2)
@@ -196,6 +285,18 @@ def extract_from_file(
     html_path: Path = DEFAULT_HTML_PATH,
     output_path: Path = DEFAULT_OUTPUT_PATH,
 ) -> dict:
+    """Lee un HTML local, extrae el catalogo y lo guarda en JSON.
+
+    Esta funcion es util para trabajar sin descargar la pagina otra vez. Toma
+    un archivo HTML previamente guardado, genera el catalogo y lo persiste.
+
+    Args:
+        html_path: Ruta del archivo HTML local que se va a analizar.
+        output_path: Ruta donde se guardara el JSON generado.
+
+    Returns:
+        Diccionario del catalogo generado.
+    """
     html_text = html_path.read_text(encoding="utf-8")
     catalog = build_catalog(html_text, html_path)
     save_catalog(catalog, output_path)

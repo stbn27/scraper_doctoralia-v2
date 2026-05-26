@@ -8,6 +8,14 @@ from app.scraper.utils.base import get_user_agent
 
 
 def clean_text(value: str | None) -> str | None:
+    """Limpia texto quitando espacios repetidos.
+
+    Args:
+        value: Texto original o ``None``.
+
+    Returns:
+        Texto con espacios normalizados, o ``None`` si la entrada esta vacia.
+    """
     if not value:
         return None
     value = re.sub(r"\s+", " ", value)
@@ -15,10 +23,29 @@ def clean_text(value: str | None) -> str | None:
 
 
 def safe_text(node):
+    """Obtiene texto limpio de un nodo HTML de forma segura.
+
+    Args:
+        node: Nodo de BeautifulSoup o ``None``.
+
+    Returns:
+        Texto del nodo limpio, o ``None`` si el nodo no existe.
+    """
     return clean_text(node.get_text(" ", strip=True)) if node else None
 
 
 def normalize_context(text: str | None) -> str | None:
+    """Normaliza texto de contexto de una opinion.
+
+    Reemplaza separadores visuales, como puntos medios y barras verticales, por
+    espacios normales. Despues compacta espacios repetidos.
+
+    Args:
+        text: Texto de contexto o ``None``.
+
+    Returns:
+        Texto normalizado, o ``None`` si no queda contenido.
+    """
     if not text:
         return None
     text = text.replace("•", " ").replace("|", " ")
@@ -27,6 +54,14 @@ def normalize_context(text: str | None) -> str | None:
 
 
 def extract_number(text: str | None) -> int | None:
+    """Extrae el primer numero entero encontrado en un texto.
+
+    Args:
+        text: Texto que puede contener numeros, por ejemplo ``"12 opiniones"``.
+
+    Returns:
+        Primer numero como entero, o ``None`` si no se encuentra.
+    """
     if not text:
         return None
     match = re.search(r"(\d[\d,\.]*)", text.replace(",", ""))
@@ -39,6 +74,16 @@ def extract_number(text: str | None) -> int | None:
 
 
 def extract_price(text: str | None) -> int | None:
+    """Extrae un precio en pesos desde un texto.
+
+    Busca formatos como ``$ 1,200`` o ``$500`` y devuelve solo el numero.
+
+    Args:
+        text: Texto que puede contener un precio.
+
+    Returns:
+        Precio como entero, o ``None`` si no hay precio reconocible.
+    """
     if not text:
         return None
     match = re.search(r"\$ ?([\d,]+)", text)
@@ -48,6 +93,16 @@ def extract_price(text: str | None) -> int | None:
 
 
 def first_text_by_selectors(soup: BeautifulSoup, selectors: list[str]) -> str | None:
+    """Devuelve el primer texto encontrado usando una lista de selectores CSS.
+
+    Args:
+        soup: Documento HTML parseado con BeautifulSoup.
+        selectors: Lista de selectores CSS que se probaran en orden.
+
+    Returns:
+        Primer texto limpio encontrado, o ``None`` si ningun selector produce
+        contenido.
+    """
     for selector in selectors:
         node = soup.select_one(selector)
         if node:
@@ -58,6 +113,15 @@ def first_text_by_selectors(soup: BeautifulSoup, selectors: list[str]) -> str | 
 
 
 def clean_address_parts(parts: list[str]) -> str | None:
+    """Une partes de una direccion eliminando vacios y duplicados consecutivos.
+
+    Args:
+        parts: Lista de fragmentos de direccion, como calle, ciudad y codigo
+            postal.
+
+    Returns:
+        Direccion completa como texto, o ``None`` si no hay partes validas.
+    """
     parts = [clean_text(p) for p in parts if clean_text(p)]
     if not parts:
         return None
@@ -79,6 +143,20 @@ def clean_address_parts(parts: list[str]) -> str | None:
 
 # Se cambia para evitar especialidades falsas desde secciones no relacionadas.
 def extract_specialty(soup: BeautifulSoup) -> str | None:
+    """Intenta detectar la especialidad principal del perfil.
+
+    La funcion evita tomar titulos de secciones como "Opiniones" o "Servicios".
+    Primero revisa selectores especificos del encabezado del doctor, despues
+    busca cerca del ``h1`` y finalmente usa un fallback acotado al inicio del
+    documento.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Especialidad detectada, o ``None`` si no se encuentra una coincidencia
+        confiable.
+    """
     section_blacklist = {
         "consultorios",
         "articulos",
@@ -104,12 +182,31 @@ def extract_specialty(soup: BeautifulSoup) -> str | None:
     )
 
     def is_section_title(text: str | None) -> bool:
+        """Indica si un texto parece ser titulo de seccion, no especialidad.
+
+        Args:
+            text: Texto candidato tomado del HTML.
+
+        Returns:
+            ``True`` si el texto esta vacio o contiene palabras de secciones
+            conocidas que deben ignorarse. ``False`` si puede seguir evaluandose
+            como posible especialidad.
+        """
         if not text:
             return True
         low = text.lower().strip()
         return any(term in low for term in section_blacklist)
 
     def specialty_from_text(text: str | None) -> str | None:
+        """Busca una especialidad medica dentro de un texto corto.
+
+        Args:
+            text: Texto donde se quiere buscar una especialidad.
+
+        Returns:
+            Nombre de la especialidad encontrada, o ``None`` si el texto es un
+            titulo de seccion, esta vacio o no coincide con el patron esperado.
+        """
         if not text:
             return None
         text = clean_text(text)
@@ -158,6 +255,19 @@ def extract_specialty(soup: BeautifulSoup) -> str | None:
 
 
 def extract_profile_header(soup: BeautifulSoup) -> dict:
+    """Extrae datos generales del encabezado del perfil.
+
+    Busca nombre, especialidad, ciudad, cedulas profesionales, total de
+    opiniones y rating global. Combina selectores HTML y busquedas por texto
+    para tolerar cambios pequenos en la estructura de la pagina.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Diccionario con ``nombre``, ``especialidad``, ``ciudad``, ``cedula``,
+        ``cedulas``, ``total_opiniones`` y ``rating_global``.
+    """
     full_text = soup.get_text("\n", strip=True)
 
     nombre = None
@@ -220,6 +330,19 @@ def extract_profile_header(soup: BeautifulSoup) -> dict:
 
 
 def extract_experiencia(soup: BeautifulSoup) -> list[str]:
+    """Extrae lineas de experiencia profesional del perfil.
+
+    La funcion toma el bloque de texto que empieza en "Experiencia" y termina
+    antes de otras secciones conocidas. Luego limpia lineas, elimina encabezados
+    repetidos y quita duplicados.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de textos de experiencia. Devuelve una lista vacia si no encuentra
+        el bloque.
+    """
     text = soup.get_text("\n", strip=True)
 
     m = re.search(
@@ -264,6 +387,19 @@ def extract_experiencia(soup: BeautifulSoup) -> list[str]:
 
 # Se cambia para soportar más delimitadores y fallback por selectores HTML.
 def extract_services(soup: BeautifulSoup) -> list[dict]:
+    """Extrae servicios y precios publicados en el perfil.
+
+    Primero intenta leer el bloque textual "Servicios y precios". Si no logra
+    formar pares de servicio y precio, usa un fallback con selectores HTML del
+    bloque de precios. Al final elimina duplicados exactos.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de diccionarios con ``nombre``, ``precio_desde`` y
+        ``precio_texto``.
+    """
     text = soup.get_text("\n", strip=True)
 
     end_markers = (
@@ -388,6 +524,18 @@ def extract_services(soup: BeautifulSoup) -> list[dict]:
 
 
 def extract_addresses(soup: BeautifulSoup) -> list[dict]:
+    """Extrae consultorios o direcciones del perfil.
+
+    Revisa primero opciones de un selector desplegable y, si no hay resultados,
+    busca secciones de direccion del doctor. Cada consultorio se devuelve con
+    direccion y nombre de clinica cuando estan disponibles.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista sin duplicados de diccionarios con ``direccion`` y ``clinica``.
+    """
     consultorios = []
 
     options = soup.select(".multiselect__content .multiselect__option .media")
@@ -428,6 +576,19 @@ def extract_addresses(soup: BeautifulSoup) -> list[dict]:
 
 
 def extract_reviews(soup: BeautifulSoup, limit: int | None = None) -> list[dict]:
+    """Extrae opiniones visibles directamente en el HTML del perfil.
+
+    Esta funcion no llama al endpoint AJAX de opiniones; solo procesa los
+    bloques ya presentes en el HTML recibido.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+        limit: Cantidad maxima opcional de opiniones a devolver.
+
+    Returns:
+        Lista de opiniones con ``autor``, ``fecha``, ``rating``, ``texto`` y
+        ``contexto``. Solo incluye opiniones que tienen texto.
+    """
     review_nodes = soup.select('[data-test-id="opinion-block"]')
     reviews = []
 
@@ -488,6 +649,18 @@ def extract_reviews(soup: BeautifulSoup, limit: int | None = None) -> list[dict]
 
 
 def extract_pacientes(soup: BeautifulSoup) -> dict:
+    """Extrae el tipo de pacientes que atiende el doctor.
+
+    Busca el bloque "Pacientes que atiendo" y revisa si menciona ninos,
+    adultos o adolescentes. Tambien conserva las lineas originales encontradas.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Diccionario con banderas booleanas ``atiende_ninos``,
+        ``atiende_adultos``, ``atiende_adolescentes`` y ``texto_original``.
+    """
     text = soup.get_text("\n", strip=True)
 
     m = re.search(
@@ -515,11 +688,33 @@ def extract_pacientes(soup: BeautifulSoup) -> dict:
 
 
 def get_latest_review_date(reviews: list[dict]) -> str | None:
+    """Obtiene la fecha mas reciente dentro de una lista de opiniones.
+
+    Args:
+        reviews: Lista de opiniones donde cada elemento puede tener la clave
+            ``fecha``.
+
+    Returns:
+        Fecha maxima como texto, o ``None`` si ninguna opinion tiene fecha.
+    """
     dates = [r.get("fecha") for r in reviews if r.get("fecha")]
     return max(dates) if dates else None
 
 
 def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
+    """Parsea el HTML completo de un perfil de Doctoralia.
+
+    Coordina todos los extractores del archivo para devolver un unico
+    diccionario con datos generales, experiencia, servicios, consultorios,
+    pacientes y metadatos de scraping.
+
+    Args:
+        html: Contenido HTML completo del perfil.
+        url: URL de origen opcional. Se guarda en los metadatos.
+
+    Returns:
+        Diccionario con la informacion estructurada del perfil.
+    """
     soup = BeautifulSoup(html, "lxml")
 
     data = extract_profile_header(soup)
@@ -548,6 +743,15 @@ def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
 
 
 def parse_doctoralia_file(file_path: str | Path, url: str | None = None) -> dict:
+    """Lee un archivo HTML local y parsea el perfil de Doctoralia.
+
+    Args:
+        file_path: Ruta del archivo HTML local.
+        url: URL de origen opcional para registrar en metadatos.
+
+    Returns:
+        Diccionario del perfil parseado, incluyendo ``archivo_fuente``.
+    """
     file_path = Path(file_path)
     html = file_path.read_text(encoding="utf-8", errors="ignore")
     result = parse_doctoralia_html(html, url=url)
@@ -556,7 +760,19 @@ def parse_doctoralia_file(file_path: str | Path, url: str | None = None) -> dict
 
 
 def fetch_and_parse_profile(url: str) -> dict:
-    """Descarga el perfil desde la URL real y lo parsea."""
+    """Descarga un perfil real de Doctoralia y lo parsea.
+
+    Args:
+        url: URL completa del perfil en Doctoralia.
+
+    Returns:
+        Diccionario estructurado del perfil, igual al que produce
+        ``parse_doctoralia_html``.
+
+    Raises:
+        httpx.HTTPStatusError: Si el servidor responde con error HTTP.
+        httpx.RequestError: Si ocurre un problema de red o timeout.
+    """
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",

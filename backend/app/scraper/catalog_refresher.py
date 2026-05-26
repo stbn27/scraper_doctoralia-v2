@@ -16,6 +16,23 @@ LATEST_HTML_PATH = FIXTURES_DIR / "views" / "inicio_doctoralia_latest.html"
 
 
 def download_html(url: str) -> str:
+    """Descarga el HTML de una URL usando cabeceras similares a un navegador.
+
+    Esta funcion se usa para obtener la pagina inicial de Doctoralia desde
+    internet. Define cabeceras HTTP basicas, como ``User-Agent`` e idioma, para
+    que la peticion se parezca a la de un navegador real.
+
+    Args:
+        url: Direccion web completa que se quiere descargar.
+
+    Returns:
+        El contenido HTML de la pagina como texto.
+
+    Raises:
+        httpx.HTTPStatusError: Si el servidor responde con un codigo de error,
+            por ejemplo 404, 403 o 500.
+        httpx.RequestError: Si ocurre un problema de red, DNS o timeout.
+    """
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
@@ -28,6 +45,23 @@ def download_html(url: str) -> str:
 
 
 def refresh_catalog() -> dict:
+    """Actualiza el catalogo local de especialidades y ciudades.
+
+    El flujo completo es:
+    1. Descargar la pagina de busqueda de Doctoralia.
+    2. Guardar una copia del HTML descargado en fixtures.
+    3. Extraer especialidades, pares presenciales y opciones online.
+    4. Guardar el catalogo resultante como JSON.
+
+    Returns:
+        Diccionario con la estructura del catalogo generado. Incluye la clave
+        ``meta`` con totales y fecha de extraccion, ademas de listas de
+        especialidades y rutas encontradas.
+
+    Side Effects:
+        Crea o sobrescribe el archivo HTML mas reciente y el JSON del catalogo.
+        Tambien imprime un resumen en consola.
+    """
     html_text = download_html(SEARCH_URL)
     LATEST_HTML_PATH.parent.mkdir(parents=True, exist_ok=True)
     LATEST_HTML_PATH.write_text(html_text, encoding="utf-8")

@@ -19,7 +19,14 @@ BASE_URL = "https://www.doctoralia.com.mx/ajax/mobile/doctor-opinions"
 
 
 def limpiar_texto(text: str | None) -> str | None:
-    """Normaliza texto eliminando espacios repetidos y recortando extremos."""
+    """Normaliza texto eliminando espacios repetidos y recortando extremos.
+
+    Args:
+        text: Texto original o ``None``.
+
+    Returns:
+        Texto limpio, o ``None`` si no hay contenido util.
+    """
     if not text:
         return None
     text = " ".join(text.split()).strip()
@@ -27,7 +34,14 @@ def limpiar_texto(text: str | None) -> str | None:
 
 
 def convertir_entero(value: str | int | float | None) -> int | None:
-    """Convierte a entero si es posible, o devuelve None."""
+    """Convierte un valor a entero si es posible.
+
+    Args:
+        value: Numero, texto numerico o ``None``.
+
+    Returns:
+        Entero convertido, o ``None`` si la entrada esta vacia o no es numerica.
+    """
     if value is None:
         return None
     try:
@@ -37,7 +51,14 @@ def convertir_entero(value: str | int | float | None) -> int | None:
 
 
 def convertir_decimal(value: str | int | float | None) -> float | None:
-    """Convierte a float si es posible, o devuelve None."""
+    """Convierte un valor a numero decimal si es posible.
+
+    Args:
+        value: Numero, texto numerico o ``None``.
+
+    Returns:
+        Valor ``float`` convertido, o ``None`` si la conversion falla.
+    """
     if value is None:
         return None
     try:
@@ -47,7 +68,23 @@ def convertir_decimal(value: str | int | float | None) -> float | None:
 
 
 def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
-    """Descarga una pagina de opiniones y regresa el HTML decodificado."""
+    """Descarga una pagina de opiniones desde el endpoint AJAX.
+
+    Doctoralia devuelve una respuesta JSON que contiene HTML en la clave
+    ``html``. Esta funcion obtiene esa respuesta, extrae el HTML y decodifica
+    entidades como ``&amp;`` o ``&quot;``.
+
+    Args:
+        doctor_id: Identificador interno del doctor en Doctoralia.
+        page: Numero de pagina de opiniones que se quiere descargar.
+
+    Returns:
+        HTML de las opiniones como texto.
+
+    Raises:
+        httpx.HTTPStatusError: Si el servidor responde con error HTTP.
+        httpx.RequestError: Si ocurre un problema de red o timeout.
+    """
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
@@ -63,7 +100,14 @@ def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
 
 
 def extract_opinion_id(node) -> int | None:
-    """Intenta obtener el id de opinion desde atributos comunes."""
+    """Intenta obtener el id de una opinion desde atributos HTML comunes.
+
+    Args:
+        node: Nodo de BeautifulSoup que representa una opinion.
+
+    Returns:
+        Identificador numerico de la opinion, o ``None`` si no se encuentra.
+    """
     for attr in ["data-opinion-id", "data-review-id", "data-id", "id"]:
         value = node.get(attr)
         value = convertir_entero(value)
@@ -73,7 +117,18 @@ def extract_opinion_id(node) -> int | None:
 
 
 def extract_rating(node) -> float | None:
-    """Extrae la calificacion desde metadatos o atributos de rating."""
+    """Extrae la calificacion de una opinion.
+
+    La funcion prueba varias fuentes: metadatos ``itemprop``, atributos
+    ``data-score``/``data-rating`` y texto visible con formatos como ``5/5`` o
+    ``5 estrellas``.
+
+    Args:
+        node: Nodo de BeautifulSoup que representa una opinion.
+
+    Returns:
+        Calificacion como decimal, o ``None`` si no se detecta.
+    """
     rating_meta = node.select_one("[itemprop='ratingValue']")
     if rating_meta and rating_meta.get("content"):
         return convertir_decimal(rating_meta.get("content"))
@@ -94,6 +149,21 @@ def extract_rating(node) -> float | None:
 
 
 def extract_review_fields(node) -> dict:
+    """Extrae los campos principales de una opinion.
+
+    Lee el autor, rating, texto, fecha, servicio consultado, consultorio y tipo
+    de verificacion desde el bloque HTML de una opinion. La funcion esta
+    adaptada a la estructura que Doctoralia usa en sus bloques
+    ``data-test-id='opinion-block'``.
+
+    Args:
+        node: Nodo de BeautifulSoup correspondiente a una opinion.
+
+    Returns:
+        Diccionario con las claves ``opinion_id``, ``autor``, ``rating``,
+        ``texto``, ``fecha``, ``servicio_consultado``, ``consultorio`` y
+        ``tipo_verificacion``.
+    """
     # opinion_id
     opinion_id = convertir_entero(node.get("data-id"))
 
@@ -152,6 +222,15 @@ def extract_review_fields(node) -> dict:
 
 
 def parse_opinions(html_text: str) -> list[dict]:
+    """Parsea HTML de opiniones y lo convierte en una lista de diccionarios.
+
+    Args:
+        html_text: HTML que contiene uno o varios bloques de opinion.
+
+    Returns:
+        Lista de opiniones extraidas. Cada elemento es el diccionario devuelto
+        por ``extract_review_fields``.
+    """
     soup = BeautifulSoup(html_text, "html.parser")
     # Nodo raíz real de cada opinión
     candidates = soup.select("[data-test-id='opinion-block']")
@@ -165,7 +244,23 @@ def construir_resultado_opiniones(
     total_opiniones: int,
     max_opiniones: int | None = None,
 ) -> dict:
-    """Descarga todas las paginas de opiniones y arma el JSON final."""
+    """Descarga varias paginas de opiniones y arma el resultado final.
+
+    Cada pagina del endpoint suele traer hasta 10 opiniones. La funcion calcula
+    cuantas paginas debe pedir a partir del total informado y del limite
+    opcional. Entre paginas espera un tiempo aleatorio corto para no hacer todas
+    las peticiones seguidas.
+
+    Args:
+        doctor_id: Identificador interno del doctor en Doctoralia.
+        total_opiniones: Total de opiniones conocido para ese doctor.
+        max_opiniones: Limite opcional de opiniones a extraer. Si es ``None``,
+            intenta extraer todas las disponibles segun ``total_opiniones``.
+
+    Returns:
+        Diccionario con ``meta`` y ``opiniones``. ``meta`` incluye totales,
+        limite aplicado y fecha de extraccion.
+    """
 
     total_paginas = math.ceil(total_opiniones / 10) if total_opiniones else 0
 
@@ -203,7 +298,18 @@ def construir_resultado_opiniones(
 
 
 def save_reviews(result: dict, output_path: Path) -> None:
-    """Guarda el JSON de opiniones en el path indicado."""
+    """Guarda el resultado de opiniones como JSON.
+
+    Args:
+        result: Diccionario con metadatos y opiniones.
+        output_path: Ruta donde se escribira el archivo JSON.
+
+    Returns:
+        None.
+
+    Side Effects:
+        Crea directorios padres si no existen y sobrescribe el archivo destino.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
@@ -211,7 +317,14 @@ def save_reviews(result: dict, output_path: Path) -> None:
 
 
 def main() -> None:
-    """Entrada principal para ejecutar desde CLI."""
+    """Punto de entrada para ejecutar el scraper de opiniones por CLI.
+
+    Lee el id del doctor, el total de opiniones y un limite opcional desde la
+    consola. Luego descarga las opiniones y guarda el JSON dentro de fixtures.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("doctor_id", type=int)
     parser.add_argument("total_opiniones", type=int)

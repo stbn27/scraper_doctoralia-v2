@@ -3,12 +3,36 @@ import random
 
 
 async def espera_humana(min_seg: float = 2.0, max_seg: float = 6.0):
-    """Pausa aleatoria entre acciones para simular comportamiento humano."""
+    """Pausa la ejecucion durante un tiempo aleatorio.
+
+    En scraping con navegador es comun insertar pausas entre acciones para no
+    hacer todas las operaciones con tiempos exactos. Esta funcion elige un
+    numero aleatorio entre ``min_seg`` y ``max_seg`` y espera esa cantidad de
+    segundos sin bloquear el event loop de ``asyncio``.
+
+    Args:
+        min_seg: Tiempo minimo de espera en segundos.
+        max_seg: Tiempo maximo de espera en segundos.
+
+    Returns:
+        None. La funcion solo espera y luego continua.
+    """
     await asyncio.sleep(random.uniform(min_seg, max_seg))
 
 
 async def scroll_humano(page):
-    """Scroll gradual como lo haría un humano leyendo la página."""
+    """Hace scroll gradual en una pagina abierta con Playwright.
+
+    La funcion calcula la altura total del documento y baja poco a poco usando
+    incrementos aleatorios. Esto ayuda a cargar contenido dinamico que aparece
+    al hacer scroll y evita un salto instantaneo hasta el final de la pagina.
+
+    Args:
+        page: Objeto ``Page`` de Playwright ya abierto.
+
+    Returns:
+        None. Modifica visualmente la posicion de scroll de la pagina.
+    """
     altura = await page.evaluate("document.body.scrollHeight")
     posicion = 0
     while posicion < altura:
@@ -33,10 +57,33 @@ USER_AGENTS = [
 
 
 def get_user_agent() -> str:
+    """Selecciona aleatoriamente un User-Agent conocido.
+
+    Un ``User-Agent`` es el texto que identifica el navegador y sistema
+    operativo ante un servidor web. Al elegir uno de la lista se evita enviar
+    siempre exactamente la misma identificacion.
+
+    Returns:
+        Cadena de texto con un User-Agent de navegador de escritorio.
+    """
     return random.choice(USER_AGENTS)
 
 
 async def configurar_pagina_sigilosa(browser):
+    """Crea una pagina de Playwright con configuracion menos detectable.
+
+    Esta funcion abre un nuevo contexto de navegador con idioma, zona horaria,
+    viewport y cabeceras similares a las de un usuario real en Mexico. Tambien
+    inyecta JavaScript para ocultar algunas señales comunes de automatizacion,
+    como ``navigator.webdriver``.
+
+    Args:
+        browser: Instancia de navegador de Playwright, por ejemplo la devuelta
+            por ``async_playwright().chromium.launch()``.
+
+    Returns:
+        Una nueva pagina de Playwright lista para navegar.
+    """
     context = await browser.new_context(
         user_agent=get_user_agent(),
         viewport={
@@ -84,6 +131,26 @@ async def configurar_pagina_sigilosa(browser):
 
 
 async def fetch_con_reintento(page, url: str, max_intentos: int = 3) -> bool:
+    """Navega a una URL con reintentos y esperas progresivas.
+
+    Intenta abrir una pagina con Playwright. Si detecta codigos HTTP asociados
+    a bloqueos temporales, como 403, 429 o 503, espera antes de intentar otra
+    vez. Tambien revisa el HTML para detectar palabras relacionadas con CAPTCHA
+    o robots.
+
+    Args:
+        page: Pagina de Playwright donde se realizara la navegacion.
+        url: Direccion web que se quiere abrir.
+        max_intentos: Numero maximo de intentos antes de rendirse.
+
+    Returns:
+        ``True`` si la pagina se pudo cargar sin senales claras de bloqueo.
+        ``False`` si todos los intentos fallaron o fueron bloqueados.
+
+    Side Effects:
+        Imprime mensajes de error o bloqueo en consola y puede esperar varios
+        segundos entre intentos.
+    """
     for intento in range(max_intentos):
         try:
             response = await page.goto(url, wait_until="networkidle", timeout=30000)

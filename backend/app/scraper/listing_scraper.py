@@ -18,6 +18,14 @@ BASE_DOMAIN = "https://www.doctoralia.com.mx"
 
 
 def clean_text(text: str | None) -> str | None:
+    """Limpia texto eliminando espacios repetidos.
+
+    Args:
+        text: Texto original o ``None``.
+
+    Returns:
+        Texto sin espacios sobrantes, o ``None`` si no queda contenido util.
+    """
     if not text:
         return None
     text = re.sub(r"\s+", " ", text).strip()
@@ -25,6 +33,19 @@ def clean_text(text: str | None) -> str | None:
 
 
 def clean_url(url: str, base_url: str = BASE_DOMAIN) -> str:
+    """Normaliza una URL de Doctoralia.
+
+    Convierte URLs relativas o que empiezan con ``//`` en URLs absolutas y
+    elimina parametros de consulta y fragmentos. Esto permite comparar enlaces
+    aunque vengan escritos de formas ligeramente distintas.
+
+    Args:
+        url: URL original encontrada en el HTML.
+        base_url: Dominio base usado para resolver URLs relativas.
+
+    Returns:
+        URL absoluta sin query string ni fragmento.
+    """
     if url.startswith("//"):
         url = f"https:{url}"
     if url.startswith("/"):
@@ -34,6 +55,15 @@ def clean_url(url: str, base_url: str = BASE_DOMAIN) -> str:
 
 
 def parse_int(value: str | int | float | None) -> int | None:
+    """Convierte un valor a entero cuando es posible.
+
+    Args:
+        value: Numero o texto que representa un numero. Puede ser ``None``.
+
+    Returns:
+        Entero convertido, o ``None`` si la entrada no se puede interpretar
+        como numero.
+    """
     if value is None:
         return None
     try:
@@ -43,6 +73,14 @@ def parse_int(value: str | int | float | None) -> int | None:
 
 
 def parse_float(value: str | int | float | None) -> float | None:
+    """Convierte un valor a decimal cuando es posible.
+
+    Args:
+        value: Numero o texto que representa un numero decimal.
+
+    Returns:
+        Valor ``float`` convertido, o ``None`` si la conversion falla.
+    """
     if value is None:
         return None
     try:
@@ -52,6 +90,16 @@ def parse_float(value: str | int | float | None) -> float | None:
 
 
 def empty_doctor() -> dict:
+    """Crea la estructura base para representar un doctor del listado.
+
+    El diccionario incluye todas las claves esperadas por el extractor, con
+    valores iniciales en ``None``. Usar esta plantilla evita que cada funcion
+    tenga que validar si una clave existe antes de escribir datos.
+
+    Returns:
+        Diccionario con campos de identificacion, perfil, rating, direccion,
+        consultorio y servicio destacado.
+    """
     return {
         "doctoralia_id": None,
         "nombre": None,
@@ -79,6 +127,18 @@ def empty_doctor() -> dict:
 
 
 def normalize_specialties(value) -> list[str] | None:
+    """Normaliza una o varias especialidades a lista de textos.
+
+    Doctoralia puede entregar especialidades como lista o como texto separado
+    por comas. Esta funcion acepta ambas formas, limpia cada elemento y descarta
+    valores vacios.
+
+    Args:
+        value: Lista, cadena separada por comas o ``None``.
+
+    Returns:
+        Lista de especialidades limpias, o ``None`` si no hay datos validos.
+    """
     if value is None:
         return None
     if isinstance(value, list):
@@ -91,6 +151,19 @@ def normalize_specialties(value) -> list[str] | None:
 
 
 def parse_available_service(value: dict | list | None) -> dict:
+    """Extrae el servicio destacado desde datos JSON-LD.
+
+    El campo ``availableService`` puede llegar como diccionario, como lista de
+    diccionarios o no existir. Esta funcion toma el primer servicio disponible
+    y lee su nombre, precio y moneda.
+
+    Args:
+        value: Valor del campo ``availableService`` obtenido desde JSON-LD.
+
+    Returns:
+        Diccionario con ``nombre``, ``precio`` y ``moneda``. Si falta
+        informacion, esas claves quedan en ``None``.
+    """
     service = {"nombre": None, "precio": None, "moneda": None}
     if not value:
         return service
@@ -108,6 +181,20 @@ def parse_available_service(value: dict | list | None) -> dict:
 
 
 def extract_jsonld_items(soup: BeautifulSoup) -> list[dict]:
+    """Obtiene items de doctores desde scripts JSON-LD tipo ItemList.
+
+    JSON-LD es un bloque de datos estructurados incrustado en HTML. Doctoralia
+    lo usa para publicar informacion que tambien aparece visualmente en la
+    pagina. Esta funcion localiza scripts ``application/ld+json`` y conserva
+    los elementos dentro de ``itemListElement``.
+
+    Args:
+        soup: HTML del listado parseado con BeautifulSoup.
+
+    Returns:
+        Lista de diccionarios que representan items encontrados en JSON-LD.
+        Los scripts con JSON invalido se ignoran.
+    """
     items: list[dict] = []
     for node in soup.find_all("script", attrs={"type": "application/ld+json"}):
         if not node.string:
@@ -139,6 +226,18 @@ def extract_jsonld_items(soup: BeautifulSoup) -> list[dict]:
 
 
 def extract_doctors_from_jsonld(soup: BeautifulSoup) -> dict[str, dict]:
+    """Extrae doctores usando los datos estructurados JSON-LD.
+
+    Esta fuente suele contener nombre, URL de perfil, foto, especialidades,
+    rating, numero de opiniones, direccion y servicio destacado.
+
+    Args:
+        soup: HTML del listado parseado con BeautifulSoup.
+
+    Returns:
+        Diccionario indexado por URL de perfil. Cada valor sigue la estructura
+        creada por ``empty_doctor``.
+    """
     doctors: dict[str, dict] = {}
     for item in extract_jsonld_items(soup):
         url = item.get("url")
@@ -177,6 +276,19 @@ def extract_doctors_from_jsonld(soup: BeautifulSoup) -> dict[str, dict]:
 
 
 def extract_doctors_from_html(soup: BeautifulSoup) -> dict[str, dict]:
+    """Extrae doctores desde las tarjetas visibles del HTML.
+
+    Esta funcion lee atributos ``data-*`` y metadatos dentro de cada tarjeta del
+    listado. Suele aportar datos que JSON-LD no siempre incluye, como id interno,
+    disponibilidad de calendario, modalidad online y coordenadas.
+
+    Args:
+        soup: HTML del listado parseado con BeautifulSoup.
+
+    Returns:
+        Diccionario indexado por URL de perfil. Cada valor sigue la estructura
+        creada por ``empty_doctor``.
+    """
     doctors: dict[str, dict] = {}
     for card in soup.select("[data-test-id='result-item']"):
         doctor = empty_doctor()
@@ -227,6 +339,19 @@ def extract_doctors_from_html(soup: BeautifulSoup) -> dict[str, dict]:
 
 
 def merge_doctors(jsonld: dict[str, dict], html: dict[str, dict]) -> list[dict]:
+    """Combina doctores extraidos desde JSON-LD y desde HTML.
+
+    Usa la URL de perfil como identificador. Primero toma la informacion de
+    JSON-LD y luego completa o reemplaza campos con datos del HTML cuando estos
+    no son ``None``. Los doctores encontrados solo en HTML tambien se incluyen.
+
+    Args:
+        jsonld: Doctores extraidos desde datos estructurados.
+        html: Doctores extraidos desde tarjetas HTML.
+
+    Returns:
+        Lista de doctores combinados, sin duplicados por URL.
+    """
     merged: list[dict] = []
     seen: set[str] = set()
 
@@ -265,6 +390,19 @@ def merge_doctors(jsonld: dict[str, dict], html: dict[str, dict]) -> list[dict]:
 
 
 def extract_pagination(soup: BeautifulSoup) -> tuple[int | None, int | None]:
+    """Lee la pagina actual y el total de paginas del listado.
+
+    Busca contenedores comunes de paginacion y revisa el elemento marcado como
+    actual. Para el total, recorre los numeros visibles y conserva el ultimo
+    numero valido encontrado.
+
+    Args:
+        soup: HTML del listado parseado con BeautifulSoup.
+
+    Returns:
+        Tupla ``(pagina_actual, total_paginas)``. Cada valor puede ser ``None``
+        si no se encuentra en el HTML.
+    """
     pagination = (
         soup.select_one("[data-test-id='pagination']")
         or soup.select_one("[data-test-id='listing-pagination']")
@@ -298,6 +436,22 @@ def build_listing_result(
     city_slug: str,
     page: int,
 ) -> dict:
+    """Construye el resultado final de un listado de doctores.
+
+    Parsear un listado implica juntar varias fuentes: JSON-LD, tarjetas HTML y
+    paginacion. Esta funcion coordina esas extracciones y agrega metadatos como
+    especialidad, ciudad, pagina, fuente y fecha.
+
+    Args:
+        html_text: HTML completo del listado.
+        source_path: Ruta local o identificador de la fuente analizada.
+        specialty_slug: Slug de especialidad usado en la busqueda.
+        city_slug: Slug de ciudad usado en la busqueda.
+        page: Numero de pagina solicitado originalmente.
+
+    Returns:
+        Diccionario con ``meta`` y ``doctores``.
+    """
     soup = BeautifulSoup(html_text, "html.parser")
     jsonld_doctors = extract_doctors_from_jsonld(soup)
     html_doctors = extract_doctors_from_html(soup)
@@ -332,6 +486,18 @@ def build_listing_result(
 
 
 def save_listing(result: dict, output_path: Path) -> None:
+    """Guarda un resultado de listado como JSON.
+
+    Args:
+        result: Diccionario devuelto por ``build_listing_result``.
+        output_path: Ruta destino del archivo JSON.
+
+    Returns:
+        None.
+
+    Side Effects:
+        Crea directorios padres si no existen y sobrescribe el archivo destino.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
@@ -339,6 +505,20 @@ def save_listing(result: dict, output_path: Path) -> None:
 
 
 def fetch_listing_html(specialty_slug: str, city_slug: str, page: int) -> str:
+    """Descarga el HTML de una pagina de listado de Doctoralia.
+
+    Args:
+        specialty_slug: Slug de la especialidad, por ejemplo ``endodoncia``.
+        city_slug: Slug de la ciudad, por ejemplo ``ciudad-de-mexico``.
+        page: Numero de pagina que se quiere descargar.
+
+    Returns:
+        HTML recibido desde Doctoralia.
+
+    Raises:
+        httpx.HTTPStatusError: Si Doctoralia responde con error HTTP.
+        httpx.RequestError: Si falla la conexion o vence el timeout.
+    """
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
@@ -357,6 +537,17 @@ def extract_from_file(
     city_slug: str,
     page: int,
 ) -> dict:
+    """Extrae doctores desde un archivo HTML local.
+
+    Args:
+        html_path: Ruta al archivo HTML previamente guardado.
+        specialty_slug: Slug de especialidad que se asociara al resultado.
+        city_slug: Slug de ciudad que se asociara al resultado.
+        page: Numero de pagina que se asociara al resultado.
+
+    Returns:
+        Diccionario con metadatos y lista de doctores extraidos.
+    """
     html_text = html_path.read_text(encoding="utf-8")
     return build_listing_result(html_text, html_path, specialty_slug, city_slug, page)
 
@@ -366,6 +557,18 @@ def scrape_listing(
     city_slug: str,
     page: int,
 ) -> tuple[dict, int | None]:
+    """Descarga y parsea una pagina de listado desde Doctoralia.
+
+    Args:
+        specialty_slug: Slug de la especialidad buscada.
+        city_slug: Slug de la ciudad buscada.
+        page: Numero de pagina a descargar.
+
+    Returns:
+        Tupla ``(resultado, total_paginas)``. ``resultado`` contiene ``meta`` y
+        ``doctores``. ``total_paginas`` puede ser ``None`` si no se detecto
+        paginacion.
+    """
     html_text = fetch_listing_html(specialty_slug, city_slug, page)
     source_path = Path(f"{BASE_DOMAIN}/{specialty_slug}/{city_slug}?page={page}")
     result = build_listing_result(html_text, source_path, specialty_slug, city_slug, page)
@@ -374,6 +577,14 @@ def scrape_listing(
 
 
 def main() -> None:
+    """Punto de entrada para ejecutar el extractor de listados por CLI.
+
+    Lee argumentos de consola, decide si usar un archivo local o descargar desde
+    internet, y guarda el resultado en ``fixtures``.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--especialidad", default="endodoncia")
     parser.add_argument("--ciudad", default="ciudad-de-mexico")
