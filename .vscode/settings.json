@@ -4,5 +4,6 @@
         "*.dbclient-js": "javascript",
         "*.embeddedhtml": "html",
         "plyconfig.json": "jsonc"
-    }
+    },
+    "todo-tree.tree.scanMode": "current file"
 }

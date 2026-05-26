@@ -10,9 +10,13 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 from app.db.repositorios import catalogos_repo, especialistas_repo
-from app.scraper import catalog_extractor, catalog_refresher, doctoralia, listing_scraper
+from app.scraper import (
+    catalog_extractor,
+    catalog_refresher,
+    doctoralia,
+    listing_scraper,
+)
 from app.scraper.utils.rate_limiter import RateLimiter
-
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FIXTURES_DIR = ROOT_DIR / "fixtures"
@@ -20,7 +24,9 @@ CATALOGO_PATH = FIXTURES_DIR / "catalogo_doctoralia.json"
 
 
 def _normalizar_slug(texto: str) -> str:
-    """Convierte un texto a slug en minusculas sin acentos."""
+    """Convierte un texto a slug en minusculas sin acentos.
+    Ejemplo: "Clínica Médica" -> "clinica-medica"."""
+
     texto = unicodedata.normalize("NFD", texto)
     texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     texto = texto.lower().strip()
@@ -29,7 +35,11 @@ def _normalizar_slug(texto: str) -> str:
 
 
 def _es_reciente(fecha_iso: str | None, dias_max: int = 7) -> bool:
-    """Evalua si una fecha ISO esta dentro del rango de dias permitidos."""
+    """Evalua si una fecha ISO esta dentro del rango de dias permitidos.
+    Ejemplo: si fecha_iso es:
+    - "2026-06-01T12:00:00+00:00" y hoy es 2026-06-05, devuelve True.
+    - "2026-05-20T12:00:00+00:00" y hoy es 2026-06-05, devuelve False."""
+
     if not fecha_iso:
         return False
     try:
@@ -42,11 +52,17 @@ def _es_reciente(fecha_iso: str | None, dias_max: int = 7) -> bool:
 
 
 def _cargar_catalogo_local(especialidad_slug: str, ciudad_slug: str) -> dict | None:
-    """Busca un par especialidad-ciudad en el catalogo local."""
+    """Busca un par especialidad-ciudad en el catalogo local. Requiere que en el directorio __fixtures__ existe
+    el archivo de la variable _CATALOGO_PATH_ con la estructura adecuada. Esto es util para evitar hacer scraping 
+    en combinaciones que sabemos que no existen."""
+    
     if not CATALOGO_PATH.exists():
         return None
+    
     payload = json.loads(CATALOGO_PATH.read_text(encoding="utf-8"))
-    especialidades = {e.get("slug"): e.get("nombre") for e in payload.get("especialidades", [])}
+    especialidades = {
+        e.get("slug"): e.get("nombre") for e in payload.get("especialidades", [])
+    }
     for par in payload.get("pares_presencial", []):
         if (
             par.get("especialidad_slug") == especialidad_slug
@@ -58,7 +74,9 @@ def _cargar_catalogo_local(especialidad_slug: str, ciudad_slug: str) -> dict | N
                 "ciudad_slug": ciudad_slug,
                 "ciudad_nombre": par.get("texto_enlace"),
                 "url": par.get("url"),
-                "ultima_actualizacion": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "ultima_actualizacion": datetime.now(timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
             }
     return None
 
@@ -224,11 +242,15 @@ async def buscar_o_scrapear_especialistas(
             necesita_refrescar = not _es_reciente(fecha)
 
         if not existente:
-            perfil = await asyncio.to_thread(doctoralia.fetch_and_parse_profile, url_perfil)
+            perfil = await asyncio.to_thread(
+                doctoralia.fetch_and_parse_profile, url_perfil
+            )
             doc = _mapear_perfil_a_doc(perfil, doctoralia_id, especialidad, ciudad)
             await especialistas_repo.insertar_especialista(doc)
         elif necesita_refrescar:
-            perfil = await asyncio.to_thread(doctoralia.fetch_and_parse_profile, url_perfil)
+            perfil = await asyncio.to_thread(
+                doctoralia.fetch_and_parse_profile, url_perfil
+            )
             doc = _mapear_perfil_a_doc(perfil, doctoralia_id, especialidad, ciudad)
             await especialistas_repo.actualizar_especialista(doctoralia_id, doc)
 

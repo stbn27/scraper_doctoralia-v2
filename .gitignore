@@ -1,11 +1,14 @@
 # Sistema
 .vscode
+.idea
 
 # Directorios de dependencias
 node_modules/**
 backend/venv/**
 **cache**
 /backend/test/**
+/backend/fixtures/**
+.venv
 
 # Arquivos de configuración
 .env

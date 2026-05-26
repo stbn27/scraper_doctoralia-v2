@@ -11,9 +11,7 @@ from app.services.especialistas_service import (
 )
 from app.services.opiniones_service import obtener_o_scrapear_opiniones
 
-
 router = APIRouter(prefix="/especialistas", tags=["Especialistas"])
-
 
 class CatalogoCargaRequest(BaseModel):
     """Payload para cargar el catalogo desde fixtures."""
@@ -23,7 +21,22 @@ class CatalogoCargaRequest(BaseModel):
 
 
 def _serializar_doc(doc: dict) -> dict:
-    """Convierte el _id de Mongo a string en la respuesta."""
+    """
+    Convierte el campo "_id" de un documento a su representación de cadena si existe y no es `None`.
+
+    Esta función es útil para serializar documentos de MongoDB, donde el campo "_id" es un ObjectId que no es directamente serializable a JSON.
+
+    Parametros
+    ----------
+    doc : dict
+        Un diccionario que representa un documento de MongoDB.
+
+    Returns
+    -------
+    dict
+        Un diccionario con el campo "_id" convertido a cadena si estaba presente y no era `None`.
+        Si el campo "_id" no existe o es `None`, el diccionario se devuelve sin modificaciones.
+    """
     if "_id" in doc and doc["_id"] is not None:
         doc["_id"] = str(doc["_id"])
     return doc
@@ -36,7 +49,39 @@ async def buscar_especialistas(
     limite: int = Query(20, ge=1, le=100),
     forzar_scraping: bool = Query(False),
 ):
-    """Busca especialistas en Mongo o ejecuta scraping segun sea necesario."""
+    """
+    Busca especialistas por especialidad y ciudad.
+
+    La función primero intenta obtener los resultados desde MongoDB y, si no
+    encuentra suficientes registros o se solicita explícitamente, puede ejecutar
+    scraping para completar la respuesta.
+
+    Parámetros
+    ----------
+    especialidad : str
+        Nombre o texto de la especialidad a buscar.
+        Parametro obligatorio
+    ciudad : str
+        Ciudad donde se desea realizar la búsqueda.
+        Parametro obligatorio
+    limite : int
+        Número máximo de especialistas a devolver.
+        Parámetro opcional, por defecto es 20.
+    forzar_scraping : bool
+        Indica si se debe ignorar la caché en Mongo y ejecutar scraping.
+        Parámetro opcional, por defecto es False.
+
+    Retorna
+    -------
+    dict
+        Diccionario con la información de la búsqueda y la lista de especialistas.
+
+    Excepciones
+    -----------
+    HTTPException
+        Se lanza con estado 404 si no hay especialistas disponibles para los
+        criterios solicitados.
+    """
     try:
         resultado = await buscar_o_scrapear_especialistas(
             especialidad=especialidad,
@@ -58,7 +103,31 @@ async def listar_especialistas(
     ciudad: str | None = Query(None),
     limite: int = Query(20, ge=1, le=100),
 ):
-    """Lista especialistas desde Mongo sin disparar scraping."""
+    """
+    Listado de especialistas basado en filtros de especialidad, ciudad y límite de resultados.
+
+    Obtiene una lista de especialistas del repositorio según los filtros proporcionados para
+    especialidad, ciudad y límite en el número de resultados. Si no se proporcionan filtros,
+    devolverá especialistas sin condiciones dentro del límite especificado.
+
+    Parámetros
+    ----------
+    especialidad : str or None
+        Filtrar especialistas por su especialidad. Se admiten coincidencias parciales mediante expresiones regulares propias de MongoDB.
+        Parámetro opcional, por defecto es None, lo que significa que no se aplican filtros de especialidad.
+    ciudad : str or None
+        Filtrar especialistas por su ciudad. Se admiten coincidencias parciales mediante expresiones regulares.
+        Filtro opcional, por defecto es None, lo que significa que no se aplican filtros de ciudad.
+    limite : int
+        Maximo número de especialistas a devolver. Debe ser un valor entre 1 y 100 (inclusive). Por defecto es 20.
+
+    Returns
+    -------
+    Listado de especialistas
+        Una lista de objetos que representan especialistas que cumplen con los criterios de búsqueda.
+        Cada objeto contiene información relevante sobre el especialista, como su nombre, especialidad, ciudad, rating global y total de opiniones.
+    """
+
     filtros = {}
     if especialidad:
         filtros["especialidad"] = {"$regex": especialidad, "$options": "i"}
@@ -108,17 +177,46 @@ async def obtener_opiniones(
     limite: int = Query(30, ge=1, le=200),
     actualizar: bool = Query(False),
 ):
-    """Obtiene opiniones de un especialista con scraping bajo demanda."""
+    """
+    Obtiene y devuelve las opiniones de un especialista según la identificación proporcionada.
+    Permite parámetros opcionales para limitar el número de reseñas obtenidas y forzar una
+    Actualización de los datos de revisión mediante scraping.
+
+    Parámetros
+    ----------
+    - especialista_id: str
+        El identificador único del especialista cuyas reseñas se van a buscar.
+    - límite: int, predeterminado = 30
+        El número máximo de reseñas para recuperar. Debe estar entre 1 y 200 (inclusive).
+    - actualizar: bool, default=Falso actualizaralse
+        Si se debe forzar una actualización eliminando las últimas revisiones, incluso si son
+        ya disponible en la base de datos.
+
+    Salida
+    -------
+    dict
+    Un diccionario que contiene detalles sobre el especialista, metadatos sobre las reseñas,
+    y una lista de reseñas serializadas.
+
+    Excepciones
+    ------
+    HTTPExcepción
+    Si no se pudo encontrar al especialista con la identificación proporcionada, aparecerá el error "404 No encontrado".
+    """
+
+    # Buscamos al especialista/médico
     especialista = await especialistas_repo.buscar_por_id(especialista_id)
     if not especialista:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
 
+    # Obtenemos las opiniones del especialista, ya sea desde la base de datos o mediante scraping si es necesario o solicitado
     resultado = await obtener_o_scrapear_opiniones(
         especialista=especialista,
         limite=limite,
         forzar_actualizacion=actualizar,
     )
 
+    # Información basica del especialista/médico
     especialista_info = {
         "nombre": especialista.get("nombre"),
         "especialidad": especialista.get("especialidad"),
@@ -127,6 +225,7 @@ async def obtener_opiniones(
         "total_opiniones": especialista.get("total_opiniones"),
     }
 
+    # Metadatos de las opiniones
     opiniones_info = {
         "fuente": resultado.get("fuente"),
         "total_en_bd": resultado.get("total_en_bd"),
