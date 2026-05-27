@@ -1,0 +1,211 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { RiRobot2Line, RiSendPlaneLine, RiSearchLine } from 'react-icons/ri';
+import { Button } from '@/components/ui/Button';
+import { chatMessage } from '@/services/api';
+
+const INITIAL_MESSAGE = {
+        role: 'assistant',
+        content:
+                '¡Hola! Soy tu asistente médico. Cuéntame: ¿qué molestia tienes o qué tipo de especialista estás buscando?',
+};
+
+export function ChatPanel({ className = '', compact = false, onDetectedChange }) {
+        const navigate = useNavigate();
+        const [messages, setMessages] = useState([INITIAL_MESSAGE]);
+        const [input, setInput] = useState('');
+        const [isTyping, setIsTyping] = useState(false);
+        const [detectedData, setDetectedData] = useState({ especialidad: null, ciudad: null, ready: false });
+        const messagesEndRef = useRef(null);
+        const textareaRef = useRef(null);
+
+        const scrollToBottom = useCallback(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, []);
+
+        useEffect(() => {
+                scrollToBottom();
+        }, [messages, isTyping, scrollToBottom]);
+
+        const sendMessage = useCallback(
+                async (text) => {
+                        if (!text.trim() || isTyping) return;
+
+                        const userMsg = { role: 'user', content: text.trim() };
+                        const newHistory = [...messages, userMsg];
+                        setMessages(newHistory);
+                        setInput('');
+                        setIsTyping(true);
+
+                        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+                        try {
+                                const response = await chatMessage(newHistory);
+                                setMessages((prev) => [...prev, response]);
+
+                                setDetectedData((prev) => {
+                                        const next = {
+                                                ...prev,
+                                                especialidad: response?.especialidad ?? prev.especialidad,
+                                                ciudad: response?.ciudad ?? prev.ciudad,
+                                                ready: Boolean(response?.ready || prev.ready),
+                                        };
+
+                                        onDetectedChange?.(next);
+                                        return next;
+                                });
+                        } catch (error) {
+                                setMessages((prev) => [
+                                        ...prev,
+                                        { role: 'assistant', content: 'Lo siento, hubo un error. ¿Puedes intentar de nuevo?' },
+                                ]);
+                        } finally {
+                                setIsTyping(false);
+                        }
+                },
+                [isTyping, messages, onDetectedChange]
+        );
+
+        const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage(input);
+                }
+        };
+
+        const handleTextareaInput = (e) => {
+                setInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 80) + 'px';
+        };
+
+        const showChips = messages.length <= 1 || (messages.length <= 3 && !detectedData.especialidad);
+
+        return (
+                <div className={`flex h-full min-h-0 flex-col ${className}`}>
+                        <div className="flex items-center justify-between p-4 border-b border-black/10 dark:border-white/10 shrink-0">
+                                <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-lg bg-royalBlue-700 flex items-center justify-center">
+                                                <RiRobot2Line className="text-sm text-royalBlue-300" />
+                                        </div>
+                                        <div>
+                                                <h1 className="text-base font-semibold">MedRec</h1>
+                                                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                                        Asistente de búsqueda médica
+                                                </p>
+                                        </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse-dot" />
+                                        <span className="text-xs text-emerald-400">En línea</span>
+                                </div>
+                        </div>
+
+                        <div className={`flex-1 min-h-0 overflow-y-auto ${compact ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}>
+                                {messages.map((msg, i) => (
+                                        <MessageBubble key={i} message={msg} />
+                                ))}
+
+                                {isTyping && (
+                                        <div className="flex items-end gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-royalBlue-700 flex items-center justify-center shrink-0">
+                                                        <RiRobot2Line className="text-sm text-royalBlue-300" />
+                                                </div>
+                                                <div className="bg-royalBlue-900/60 backdrop-blur rounded-2xl rounded-tl-none px-4 py-3">
+                                                        <div className="flex gap-1.5">
+                                                                <span className="typing-dot" />
+                                                                <span className="typing-dot" />
+                                                                <span className="typing-dot" />
+                                                        </div>
+                                                </div>
+                                        </div>
+                                )}
+
+                                {detectedData.ready && !isTyping && (
+                                        <div className="flex items-end gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-royalBlue-700 flex items-center justify-center shrink-0">
+                                                        <RiRobot2Line className="text-sm text-royalBlue-300" />
+                                                </div>
+                                                <div className="flex-1">
+                                                        <Button
+                                                                variant="primary"
+                                                                fullWidth
+                                                                icon={<RiSearchLine />}
+                                                                onClick={() => {
+                                                                        const params = new URLSearchParams();
+                                                                        if (detectedData.especialidad) params.set('q', detectedData.especialidad);
+                                                                        if (detectedData.ciudad) params.set('ciudad', detectedData.ciudad);
+                                                                        navigate(`/resultados?${params.toString()}`);
+                                                                }}
+                                                                className="rounded-xl py-3 text-base"
+                                                        >
+                                                                Ver especialistas
+                                                        </Button>
+                                                </div>
+                                        </div>
+                                )}
+
+                                <div ref={messagesEndRef} />
+                        </div>
+
+                        {showChips && (
+                                <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
+                                        {['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista'].map((chip) => (
+                                                <button
+                                                        key={chip}
+                                                        onClick={() => sendMessage(chip)}
+                                                        className="border border-royalBlue-400/80 dark:border-royalBlue-400/50 text-royalBlue-500 dark:text-royalBlue-300 rounded-full px-3 py-1 text-xs hover:bg-royalBlue-600/20 transition-all duration-200 hover:scale-105 press-effect"
+                                                >
+                                                        {chip}
+                                                </button>
+                                        ))}
+                                </div>
+                        )}
+
+                        <div className="p-4 border-t border-white/10 shrink-0">
+                                <div className="flex items-end gap-2">
+                                        <textarea
+                                                ref={textareaRef}
+                                                value={input}
+                                                onChange={handleTextareaInput}
+                                                onKeyDown={handleKeyDown}
+                                                placeholder="Escribe tu mensaje…"
+                                                rows={1}
+                                                className="glass-input flex-1 px-4 py-2.5 text-sm resize-none"
+                                                style={{ maxHeight: '80px' }}
+                                        />
+                                        <button
+                                                onClick={() => sendMessage(input)}
+                                                disabled={!input.trim() || isTyping}
+                                                className="p-2.5 rounded-xl bg-royalBlue-600 hover:bg-royalBlue-700 text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed press-effect"
+                                                aria-label="Enviar mensaje"
+                                        >
+                                                <RiSendPlaneLine className="text-xl" />
+                                        </button>
+                                </div>
+                        </div>
+                </div>
+        );
+}
+
+function MessageBubble({ message }) {
+        const isAssistant = message.role === 'assistant';
+
+        return (
+                <div className={`flex items-end gap-2 ${isAssistant ? '' : 'flex-row-reverse'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isAssistant ? 'bg-royalBlue-700' : 'bg-royalBlue-700/90'}`}>
+                                {isAssistant ? (
+                                        <RiRobot2Line className="text-sm text-royalBlue-300" />
+                                ) : (
+                                        <span className="text-xs font-semibold text-white">Tú</span>
+                                )}
+                        </div>
+
+                        <div className={`max-w-[80%] px-4 py-2.5 text-sm leading-relaxed backdrop-blur ${isAssistant ? 'glass-card-chat' : 'bg-royalBlue-700/80 text-white dark:bg-royalBlue-600/80 rounded-2xl rounded-tr-none'}`}>
+                                {message.content}
+                        </div>
+                </div>
+        );
+}
+
+export default ChatPanel;

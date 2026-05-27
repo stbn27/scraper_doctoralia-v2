@@ -3,16 +3,19 @@
 .idea
 
 # Directorios de dependencias
-node_modules/**
-backend/venv/**
-**cache**
-/backend/test/**
-/backend/fixtures/**
-.venv
+**/node_modules/**
+**/venv/**
+**/test/**
+**/fixtures/**
+**/.venv
+**/.agents/**
+frontend/.agents/
+frontend/node_modules/**
+frontend/src/test/**
+
+backend/**/__pycache__/**
+
 
 # Arquivos de configuración
 .env
 **/.env
-
-*.pyc
-*.pyo

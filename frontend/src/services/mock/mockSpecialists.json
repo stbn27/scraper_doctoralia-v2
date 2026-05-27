@@ -1,0 +1,187 @@
+[
+  {
+    "_id": "6a13b0c47fd1ef789ffab5bc",
+    "nombre": "Dra. María de Lourdes Aquino Quinto",
+    "especialidad": "Endodoncia",
+    "ciudad": "Ciudad de México",
+    "consultorios": [
+      { "direccion": "Morelos 2, El Vergel, Iztapalapa", "clinica": "Clínica Dental Aquino" }
+    ],
+    "rating_global": 5.0,
+    "total_opiniones": 8,
+    "score_recomendacion": 87.4,
+    "servicios": [
+      { "nombre": "Endodoncia", "precio_desde": 3000, "precio_texto": "Desde $3,000" },
+      { "nombre": "Limpieza dental", "precio_desde": 800, "precio_texto": "Desde $800" },
+      { "nombre": "Blanqueamiento", "precio_desde": 2500, "precio_texto": "Desde $2,500" }
+    ],
+    "experiencia": [
+      "Soy especialista en Endodoncia con más de 15 años de experiencia.",
+      "Egresada de la UNAM, con certificación vigente del Consejo Nacional de Endodoncia."
+    ],
+    "pacientes": { "atiende_ninos": true, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": "12345678"
+  },
+  {
+    "_id": "7b24c1d58ge2fg890ggbc6cd",
+    "nombre": "Dr. Carlos Ramírez Solís",
+    "especialidad": "Cardiología",
+    "ciudad": "Guadalajara",
+    "consultorios": [
+      { "direccion": "Av. Vallarta 1456, Col. Americana", "clinica": "Cardio Center GDL" }
+    ],
+    "rating_global": 4.8,
+    "total_opiniones": 23,
+    "score_recomendacion": 91.2,
+    "servicios": [
+      { "nombre": "Consulta cardiológica", "precio_desde": 1500, "precio_texto": "Desde $1,500" },
+      { "nombre": "Electrocardiograma", "precio_desde": 800, "precio_texto": "Desde $800" },
+      { "nombre": "Ecocardiograma", "precio_desde": 3500, "precio_texto": "Desde $3,500" },
+      { "nombre": "Prueba de esfuerzo", "precio_desde": 4000, "precio_texto": "Desde $4,000" }
+    ],
+    "experiencia": [
+      "Cardiólogo certificado con especialidad en insuficiencia cardíaca.",
+      "Más de 20 años de práctica clínica en hospitales públicos y privados."
+    ],
+    "pacientes": { "atiende_ninos": false, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": "87654321"
+  },
+  {
+    "_id": "8c35d2e69hf3gh901hhcd7de",
+    "nombre": "Dra. Ana Sofía Hernández Vega",
+    "especialidad": "Dermatología",
+    "ciudad": "Ciudad de México",
+    "consultorios": [
+      { "direccion": "Insurgentes Sur 1234, Col. Del Valle", "clinica": null }
+    ],
+    "rating_global": 4.5,
+    "total_opiniones": 15,
+    "score_recomendacion": 74.5,
+    "servicios": [
+      { "nombre": "Consulta dermatológica", "precio_desde": 1200, "precio_texto": "Desde $1,200" },
+      { "nombre": "Tratamiento de acné", "precio_desde": 2000, "precio_texto": "Desde $2,000" },
+      { "nombre": "Dermatoscopía", "precio_desde": 1500, "precio_texto": "Desde $1,500" },
+      { "nombre": "Peeling químico", "precio_desde": 3000, "precio_texto": "Desde $3,000" },
+      { "nombre": "Biopsia de piel", "precio_desde": 2500, "precio_texto": "Desde $2,500" },
+      { "nombre": "Crioterapia", "precio_desde": 1800, "precio_texto": "Desde $1,800" },
+      { "nombre": "Tratamiento capilar", "precio_desde": 4000, "precio_texto": "Desde $4,000" }
+    ],
+    "experiencia": [
+      "Dermatóloga egresada del Hospital General de México.",
+      "Especialista en enfermedades de la piel, cabello y uñas."
+    ],
+    "pacientes": { "atiende_ninos": true, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": "11223344"
+  },
+  {
+    "_id": "9d46e3f70ig4hi012iide8ef",
+    "nombre": "Dr. Roberto Fuentes Medina",
+    "especialidad": "Ortopedia",
+    "ciudad": "Monterrey",
+    "consultorios": [
+      { "direccion": "Av. Constitución 890, Centro, Monterrey", "clinica": "Traumamed" }
+    ],
+    "rating_global": 4.2,
+    "total_opiniones": 31,
+    "score_recomendacion": 62.1,
+    "servicios": [
+      { "nombre": "Consulta ortopédica", "precio_desde": 1000, "precio_texto": "Desde $1,000" },
+      { "nombre": "Infiltración articular", "precio_desde": 2500, "precio_texto": "Desde $2,500" },
+      { "nombre": "Artroscopía", "precio_desde": 15000, "precio_texto": "Desde $15,000" }
+    ],
+    "experiencia": [
+      "Ortopedista y traumatólogo con subespecialidad en rodilla y cadera.",
+      "Fellow en cirugía artroscópica por el Instituto Nacional de Rehabilitación."
+    ],
+    "pacientes": { "atiende_ninos": true, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": null
+  },
+  {
+    "_id": "0e57f4g81jh5ij123jjef9fg",
+    "nombre": "Dra. Patricia López Castro",
+    "especialidad": "Dentista",
+    "ciudad": "Ciudad de México",
+    "consultorios": [
+      { "direccion": "Calzada de Tlalpan 3456, Coyoacán", "clinica": "Sonrisa Perfecta" }
+    ],
+    "rating_global": 4.9,
+    "total_opiniones": 42,
+    "score_recomendacion": 45.0,
+    "servicios": [
+      { "nombre": "Limpieza dental", "precio_desde": 600, "precio_texto": "Desde $600" },
+      { "nombre": "Extracción dental", "precio_desde": 1500, "precio_texto": "Desde $1,500" },
+      { "nombre": "Resinas estéticas", "precio_desde": 1200, "precio_texto": "Desde $1,200" },
+      { "nombre": "Prótesis dental", "precio_desde": 5000, "precio_texto": "Desde $5,000" }
+    ],
+    "experiencia": [
+      "Odontóloga general con enfoque en estética dental y rehabilitación oral."
+    ],
+    "pacientes": { "atiende_ninos": true, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": "55667788"
+  },
+  {
+    "_id": "1f68g5h92ki6jk234kkfg0gh",
+    "nombre": "Dr. Enrique Vargas Ríos",
+    "especialidad": "Cardiología",
+    "ciudad": "Ciudad de México",
+    "consultorios": [
+      { "direccion": "Paseo de la Reforma 567, Cuauhtémoc", "clinica": "Centro Cardiovascular Reforma" }
+    ],
+    "rating_global": 4.6,
+    "total_opiniones": 19,
+    "score_recomendacion": 82.0,
+    "servicios": [
+      { "nombre": "Consulta cardiológica", "precio_desde": 1800, "precio_texto": "Desde $1,800" },
+      { "nombre": "Holter 24 horas", "precio_desde": 2500, "precio_texto": "Desde $2,500" },
+      { "nombre": "Ecocardiograma", "precio_desde": 4000, "precio_texto": "Desde $4,000" }
+    ],
+    "experiencia": [
+      "Cardiólogo intervencionista egresado del Instituto Nacional de Cardiología.",
+      "Más de 12 años realizando cateterismos y angioplastías."
+    ],
+    "pacientes": { "atiende_ninos": false, "atiende_adultos": true, "atiende_adolescentes": false },
+    "cedula": "99887766"
+  },
+  {
+    "_id": "2g79h6i03lj7kl345llgh1hi",
+    "nombre": "Dra. Lucía Martínez Orozco",
+    "especialidad": "Dermatología",
+    "ciudad": "Guadalajara",
+    "consultorios": [
+      { "direccion": "Av. México 2345, Col. Ladrón de Guevara", "clinica": null }
+    ],
+    "rating_global": 3.9,
+    "total_opiniones": 7,
+    "score_recomendacion": 55.3,
+    "servicios": [
+      { "nombre": "Consulta dermatológica", "precio_desde": 900, "precio_texto": "Desde $900" },
+      { "nombre": "Tratamiento de rosácea", "precio_desde": 1500, "precio_texto": "Desde $1,500" }
+    ],
+    "experiencia": [],
+    "pacientes": { "atiende_ninos": false, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": null
+  },
+  {
+    "_id": "3h80i7j14mk8lm456mmhi2ij",
+    "nombre": "Dr. Fernando Aguilar Peña",
+    "especialidad": "Ortopedia",
+    "ciudad": "Ciudad de México",
+    "consultorios": [
+      { "direccion": "Av. Universidad 789, Narvarte", "clinica": "OrthoMed CDMX" }
+    ],
+    "rating_global": 4.7,
+    "total_opiniones": 12,
+    "score_recomendacion": 38.7,
+    "servicios": [
+      { "nombre": "Consulta ortopédica", "precio_desde": 1200, "precio_texto": "Desde $1,200" },
+      { "nombre": "Férula y yeso", "precio_desde": 800, "precio_texto": "Desde $800" },
+      { "nombre": "Cirugía de columna", "precio_desde": 25000, "precio_texto": "Desde $25,000" }
+    ],
+    "experiencia": [
+      "Traumatólogo con experiencia en columna vertebral y medicina deportiva.",
+      "Atención de lesiones deportivas en atletas de alto rendimiento."
+    ],
+    "pacientes": { "atiende_ninos": true, "atiende_adultos": true, "atiende_adolescentes": true },
+    "cedula": "44332211"
+  }
+]
