@@ -53,12 +53,12 @@ def _es_reciente(fecha_iso: str | None, dias_max: int = 7) -> bool:
 
 def _cargar_catalogo_local(especialidad_slug: str, ciudad_slug: str) -> dict | None:
     """Busca un par especialidad-ciudad en el catalogo local. Requiere que en el directorio __fixtures__ existe
-    el archivo de la variable _CATALOGO_PATH_ con la estructura adecuada. Esto es util para evitar hacer scraping 
+    el archivo de la variable _CATALOGO_PATH_ con la estructura adecuada. Esto es util para evitar hacer scraping
     en combinaciones que sabemos que no existen."""
-    
+
     if not CATALOGO_PATH.exists():
         return None
-    
+
     payload = json.loads(CATALOGO_PATH.read_text(encoding="utf-8"))
     especialidades = {
         e.get("slug"): e.get("nombre") for e in payload.get("especialidades", [])
@@ -142,6 +142,7 @@ def _mapear_perfil_a_doc(
 ) -> dict:
     """Convierte el perfil parseado en el esquema de especialista esperado."""
     scraping_meta = perfil.get("scraping_meta") or {}
+    info_meta = perfil.get("info_meta") or perfil.get("info") or {}
     servicios = perfil.get("servicios") or []
     consultorios = perfil.get("consultorios") or []
     pacientes = perfil.get("pacientes") or {}
@@ -149,6 +150,7 @@ def _mapear_perfil_a_doc(
     return {
         "doctoralia_id": doctoralia_id,
         "nombre": perfil.get("nombre"),
+        "foto_perfil_url": perfil.get("foto_perfil_url"),
         "especialidad": perfil.get("especialidad") or especialidad,
         "ciudad": perfil.get("ciudad") or ciudad,
         "rating_global": perfil.get("rating_global"),
@@ -158,6 +160,12 @@ def _mapear_perfil_a_doc(
         "experiencia": perfil.get("experiencia") or [],
         "servicios": servicios,
         "consultorios": consultorios,
+        "info_meta": {
+            "total_servicios": info_meta.get("total_servicios", len(servicios)),
+            "total_consultorios": info_meta.get(
+                "total_consultorios", len(consultorios)
+            ),
+        },
         "pacientes": {
             "atiende_ninos": pacientes.get("atiende_ninos", False),
             "atiende_adultos": pacientes.get("atiende_adultos", True),

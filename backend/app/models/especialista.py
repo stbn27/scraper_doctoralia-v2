@@ -38,6 +38,7 @@ class EspecialistaModel(BaseModel):
 
     doctoralia_id: int | None = None
     nombre: str
+    foto_perfil_url: str | None = None
     especialidad: str | None
     ciudad: str | None
     rating_global: float | None

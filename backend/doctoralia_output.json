@@ -1,0 +1,51 @@
+{
+  "nombre": "Dr. Alejandro Pérez Islas",
+  "foto_perfil_url": "https://s3.us-east-1.amazonaws.com/doctoralia.com.mx/doctor/13205d/13205d79327daf116c75435b9d076c93_large.jpg",
+  "especialidad": null,
+  "ciudad": "Ciudad de México",
+  "cedula": "10816769",
+  "cedulas": [
+    "10816769"
+  ],
+  "total_opiniones": 134,
+  "rating_global": 5.0,
+  "experiencia": [
+    "Hola mucho gusto! Soy el Dr. Alejandro Islas y soy dentista egresado de la UNAM, con especialidad en Endodoncia. Cuento con mas de 10 años de experiencia, por lo que me dedico a la atención relacionada con caries y dolor dental principalmente.",
+    "Trabajo con materiales de la más alta calidad y cuento con equipo de última tecnología como lo son las radiografías digitales y el microscopio dental, por lo que tu tratamiento se llevará a cabo con los mas altos estándares de calidad.",
+    "Junto a mí trabajan otros especialistas en odontología, por lo que tu tratamiento además, podrá ser llevado de forma integral para recuperar tu salud dental.",
+    "Escríbeme, estaré encantado de ayudarte!"
+  ],
+  "servicios": [
+    {
+      "nombre": "Consulta endodóntica y acceso",
+      "precio_desde": 800,
+      "precio_texto": "Desde $800"
+    }
+  ],
+  "consultorios": [
+    {
+      "direccion": "Guanajuato 224, Roma Norte, Cuauhtémoc 06700, Cuauhtémoc, 06700",
+      "clinica": null
+    }
+  ],
+  "opiniones": [],
+  "pacientes": {
+    "atiende_ninos": false,
+    "atiende_adultos": true,
+    "atiende_adolescentes": false,
+    "texto_original": [
+      "Adultos"
+    ]
+  },
+  "info": {
+    "total_servicios": 1,
+    "total_consultorios": 1
+  },
+  "scraping_meta": {
+    "url_origen": null,
+    "fecha_consulta": "2026-05-27T06:54:11+00:00",
+    "total_servicios": 1,
+    "total_consultorios": 1
+  },
+  "archivo_fuente": "fixtures/views/alejandro_perez.html"
+}

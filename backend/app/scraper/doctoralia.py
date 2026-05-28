@@ -122,12 +122,17 @@ def clean_address_parts(parts: list[str]) -> str | None:
     Returns:
         Direccion completa como texto, o ``None`` si no hay partes validas.
     """
-    parts = [clean_text(p) for p in parts if clean_text(p)]
-    if not parts:
+    cleaned_parts = []
+    for p in parts:
+        cleaned = clean_text(p)
+        if cleaned:
+            cleaned_parts.append(cleaned)
+
+    if not cleaned_parts:
         return None
 
     merged = []
-    for p in parts:
+    for p in cleaned_parts:
         if not merged or merged[-1] != p:
             merged.append(p)
 
@@ -217,6 +222,25 @@ def extract_specialty(soup: BeautifulSoup) -> str | None:
             return clean_text(m.group(1))
         return None
 
+    def specialty_from_specialization_node(node) -> str | None:
+        """Obtiene la especialidad desde el nodo especifico de Doctoralia."""
+        text = safe_text(node)
+        if not text or is_section_title(text):
+            return None
+
+        found = specialty_from_text(text)
+        if found:
+            return found
+
+        candidate = re.split(
+            r"\s*·\s*|Ver más|Ver mas",
+            text,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        candidate = clean_text(candidate)
+        return candidate if candidate and not is_section_title(candidate) else None
+
     # 1) Selectores específicos del header de especializaciones.
     selector_candidates = [
         "[data-test-id='doctor-specializations'] a[title]",
@@ -228,7 +252,10 @@ def extract_specialty(soup: BeautifulSoup) -> str | None:
     ]
     for selector in selector_candidates:
         for node in soup.select(selector):
-            found = specialty_from_text(safe_text(node))
+            if "doctor-specializations" in selector:
+                found = specialty_from_specialization_node(node)
+            else:
+                found = specialty_from_text(safe_text(node))
             if found:
                 return found
 
@@ -252,81 +279,6 @@ def extract_specialty(soup: BeautifulSoup) -> str | None:
     # 3) Fallback acotado al inicio del documento (evita coincidencia ciega global).
     top_text = clean_text(soup.get_text("\n", strip=True)[:2500])
     return specialty_from_text(top_text)
-
-
-def extract_profile_header(soup: BeautifulSoup) -> dict:
-    """Extrae datos generales del encabezado del perfil.
-
-    Busca nombre, especialidad, ciudad, cedulas profesionales, total de
-    opiniones y rating global. Combina selectores HTML y busquedas por texto
-    para tolerar cambios pequenos en la estructura de la pagina.
-
-    Args:
-        soup: HTML del perfil parseado con BeautifulSoup.
-
-    Returns:
-        Diccionario con ``nombre``, ``especialidad``, ``ciudad``, ``cedula``,
-        ``cedulas``, ``total_opiniones`` y ``rating_global``.
-    """
-    full_text = soup.get_text("\n", strip=True)
-
-    nombre = None
-    h1 = soup.select_one("h1")
-    if h1:
-        nombre = safe_text(h1)
-
-    if not nombre:
-        title = soup.title.get_text(strip=True) if soup.title else ""
-        if title:
-            nombre = clean_text(title.split("|")[0].split("- Agenda")[0])
-
-    especialidad = extract_specialty(soup)
-    header_candidates = []
-    for sel in [
-        "h2",
-        "h3",
-        "[data-test-id='doctor-specialty']",
-        ".specialization",
-        ".doctor-specialty",
-    ]:
-        for node in soup.select(sel):
-            txt = safe_text(node)
-            if txt:
-                header_candidates.append(txt)
-
-    ciudad = None
-    if re.search(r"\bCiudad de México\b", full_text, re.IGNORECASE):
-        ciudad = "Ciudad de México"
-
-    cedulas = re.findall(r"No\.\s*de\s*cédula:\s*([0-9]+)", full_text, re.IGNORECASE)
-    cedula = cedulas[0] if cedulas else None
-
-    total_opiniones = None
-    review_count_meta = soup.select_one('[itemprop="reviewCount"]')
-    if review_count_meta and review_count_meta.get("content"):
-        total_opiniones = extract_number(review_count_meta.get("content"))
-    if total_opiniones is None:
-        m = re.search(r"(\d+)\s+opiniones", full_text, re.IGNORECASE)
-        if m:
-            total_opiniones = int(m.group(1))
-
-    rating_global = None
-    rating_meta = soup.select_one('[itemprop="ratingValue"]')
-    if rating_meta and rating_meta.get("content"):
-        try:
-            rating_global = float(rating_meta.get("content"))
-        except ValueError:
-            rating_global = None
-
-    return {
-        "nombre": nombre,
-        "especialidad": especialidad,
-        "ciudad": ciudad,
-        "cedula": cedula,
-        "cedulas": cedulas,
-        "total_opiniones": total_opiniones,
-        "rating_global": rating_global,
-    }
 
 
 def extract_experiencia(soup: BeautifulSoup) -> list[str]:
@@ -385,13 +337,194 @@ def extract_experiencia(soup: BeautifulSoup) -> list[str]:
     return results
 
 
-# Se cambia para soportar más delimitadores y fallback por selectores HTML.
+def extract_profile_photo_url(soup: BeautifulSoup) -> str | None:
+    """Extrae la URL de la foto de perfil del doctor.
+
+    Si la imagen es la foto por defecto de Doctoralia, devuelve ``None``.
+    Normaliza URLs protocol-relative que empiezan con ``//`` agregando ``https:``.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        URL absoluta de la foto de perfil, o ``None`` si no existe o es default.
+    """
+
+    def normalize_photo_url(image_url: str | None) -> str | None:
+        image_url = clean_text(image_url)
+        if not image_url:
+            return None
+
+        if image_url.startswith("//"):
+            image_url = f"https:{image_url}"
+
+        if "doctor-default" in image_url:
+            return None
+
+        if image_url.startswith("http://") or image_url.startswith("https://"):
+            return image_url
+
+        return None
+
+    wrapper = soup.select_one(".unified-doctor-header-info__avatar-wrapper")
+    if wrapper:
+        image_candidates = wrapper.select(
+            "[itemprop='image'], "
+            ".unified-doctor-header-info__avatar, "
+            ".avatar, "
+            "a, "
+            "img, "
+            "[href], "
+            "[content], "
+            "[src], "
+            "[data-src], "
+            "[style]"
+        )
+
+        for image_node in image_candidates:
+            image_url = (
+                image_node.get("href")
+                or image_node.get("content")
+                or image_node.get("src")
+                or image_node.get("data-src")
+                or image_node.get("data-lazy-src")
+                or image_node.get("data-original")
+            )
+
+            if not image_url:
+                style = image_node.get("style", "")
+                style_match = re.search(
+                    r"url\(['\"]?(.*?)['\"]?\)",
+                    style,
+                    re.IGNORECASE,
+                )
+                if style_match:
+                    image_url = style_match.group(1)
+
+            normalized_url = normalize_photo_url(image_url)
+            if normalized_url:
+                return normalized_url
+
+    fallback_selectors = [
+        "meta[property='og:image']",
+        "meta[name='twitter:image']",
+        "meta[itemprop='image']",
+    ]
+
+    for selector in fallback_selectors:
+        node = soup.select_one(selector)
+        if not node:
+            continue
+
+        normalized_url = normalize_photo_url(node.get("content"))
+        if normalized_url and "doctoralia.com.mx/doctor/" in normalized_url:
+            return normalized_url
+
+    full_html = str(soup)
+    match = re.search(
+        r"https?:\/\/s3\.us-east-1\.amazonaws\.com\/doctoralia\.com\.mx\/doctor\/[^\"'\s<>]+?\.(?:jpg|jpeg|png|webp)",
+        full_html,
+        re.IGNORECASE,
+    )
+    if match:
+        return normalize_photo_url(match.group(0))
+
+    match = re.search(
+        r"\/\/s3\.us-east-1\.amazonaws\.com\/doctoralia\.com\.mx\/doctor\/[^\"'\s<>]+?\.(?:jpg|jpeg|png|webp)",
+        full_html,
+        re.IGNORECASE,
+    )
+    if match:
+        return normalize_photo_url(match.group(0))
+
+    return None
+
+
+def extract_profile_header(soup: BeautifulSoup) -> dict:
+    """Extrae datos generales del encabezado del perfil.
+
+    Busca nombre, foto de perfil, especialidad, ciudad, cedulas profesionales,
+    total de opiniones y rating global. Combina selectores HTML y busquedas por
+    texto para tolerar cambios pequenos en la estructura de la pagina.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Diccionario con ``nombre``, ``foto_perfil_url``, ``especialidad``,
+        ``ciudad``, ``cedula``, ``cedulas``, ``total_opiniones`` y
+        ``rating_global``.
+    """
+    full_text = soup.get_text("\n", strip=True)
+
+    nombre = None
+    h1 = soup.select_one("h1")
+    if h1:
+        nombre = safe_text(h1)
+
+    if not nombre:
+        title = soup.title.get_text(strip=True) if soup.title else ""
+        if title:
+            nombre = clean_text(title.split("|")[0].split("- Agenda")[0])
+
+    foto_perfil_url = extract_profile_photo_url(soup)
+    especialidad = extract_specialty(soup)
+    header_candidates = []
+    for sel in [
+        "h2",
+        "h3",
+        "[data-test-id='doctor-specialty']",
+        ".specialization",
+        ".doctor-specialty",
+    ]:
+        for node in soup.select(sel):
+            txt = safe_text(node)
+            if txt:
+                header_candidates.append(txt)
+
+    ciudad = None
+    if re.search(r"\bCiudad de México\b", full_text, re.IGNORECASE):
+        ciudad = "Ciudad de México"
+
+    cedulas = re.findall(r"No\.\s*de\s*cédula:\s*([0-9]+)", full_text, re.IGNORECASE)
+    cedula = cedulas[0] if cedulas else None
+
+    total_opiniones = None
+    review_count_meta = soup.select_one('[itemprop="reviewCount"]')
+    if review_count_meta and review_count_meta.get("content"):
+        total_opiniones = extract_number(review_count_meta.get("content"))
+    if total_opiniones is None:
+        m = re.search(r"(\d+)\s+opiniones", full_text, re.IGNORECASE)
+        if m:
+            total_opiniones = int(m.group(1))
+
+    rating_global = None
+    rating_meta = soup.select_one('[itemprop="ratingValue"]')
+    if rating_meta and rating_meta.get("content"):
+        try:
+            rating_global = float(rating_meta.get("content"))
+        except ValueError:
+            rating_global = None
+
+    return {
+        "nombre": nombre,
+        "foto_perfil_url": foto_perfil_url,
+        "especialidad": especialidad,
+        "ciudad": ciudad,
+        "cedula": cedula,
+        "cedulas": cedulas,
+        "total_opiniones": total_opiniones,
+        "rating_global": rating_global,
+    }
+
+
+# Se cambia para priorizar selectores HTML y dejar el texto como fallback.
 def extract_services(soup: BeautifulSoup) -> list[dict]:
     """Extrae servicios y precios publicados en el perfil.
 
-    Primero intenta leer el bloque textual "Servicios y precios". Si no logra
-    formar pares de servicio y precio, usa un fallback con selectores HTML del
-    bloque de precios. Al final elimina duplicados exactos.
+    Primero lee los items HTML del bloque de precios porque conservan mejor la
+    relacion servicio/precio. Si no existen, intenta leer el bloque textual
+    "Servicios y precios". Al final elimina duplicados exactos.
 
     Args:
         soup: HTML del perfil parseado con BeautifulSoup.
@@ -400,43 +533,6 @@ def extract_services(soup: BeautifulSoup) -> list[dict]:
         Lista de diccionarios con ``nombre``, ``precio_desde`` y
         ``precio_texto``.
     """
-    text = soup.get_text("\n", strip=True)
-
-    end_markers = (
-        r"Consultorios(?:\s*\(\d+\))?",
-        r"Opiniones",
-        r"Experiencia",
-        r"Formaci[oó]n",
-        r"Aseguradoras(?:\s+aceptadas)?",
-        r"Art[ií]culos",
-        r"Sobre\s+m[ií]",
-        r"Novedades",
-        r"Dudas\s+solucionadas",
-        r"Pacientes\s+que\s+atiendo",
-        r"Tipos\s+de\s+consulta",
-    )
-    end_regex = "|".join(end_markers)
-
-    patterns = [
-        rf"Servicios y precios\s+(.*?)(?=\s+(?:{end_regex})|$)",
-        r"(?s)Servicios y precios\s+(.*?)(?:\n\s*\n|$)",
-    ]
-
-    block = None
-    for pat in patterns:
-        matches = list(re.finditer(pat, text, re.DOTALL | re.IGNORECASE))
-        if not matches:
-            continue
-        selected = None
-        for m in matches:
-            candidate = m.group(1)
-            if re.search(r"\$\s*\d", candidate):
-                selected = candidate
-                break
-        block = selected or matches[0].group(1)
-        if block:
-            break
-
     ignore = {
         "Servicios populares",
         "Otros servicios",
@@ -449,73 +545,116 @@ def extract_services(soup: BeautifulSoup) -> list[dict]:
 
     services = []
 
-    if block:
-        lines = [clean_text(x) for x in block.split("\n")]
-        lines = [x for x in lines if x]
+    service_nodes = soup.select("#profile-pricing [data-id='service-item']")
+    if not service_nodes:
+        service_nodes = soup.select(
+            "[data-tab-id='profile-pricing'] [data-id='service-item']"
+        )
 
-        current_name = None
-        for line in lines:
-            if line in ignore:
-                continue
+    for node in service_nodes:
+        nombre = safe_text(
+            node.select_one(
+                "h3[itemprop='availableService'], [itemprop='availableService'], h3"
+            )
+        )
+        if not nombre or nombre in ignore:
+            continue
 
-            is_price = bool(re.search(r"\$\s*\d", line))
-            if is_price:
-                if current_name:
-                    services.append(
-                        {
-                            "nombre": current_name,
-                            "precio_desde": extract_price(line),
-                            "precio_texto": line,
-                        }
-                    )
-                    current_name = None
-                continue
+        raw_text = node.get_text(" ", strip=True)
+        price_match = re.search(
+            r"(Desde\s*\$\s*[\d,]+|\$\s*\d[\d,]*(?:\s*-\s*\$\s*\d[\d,]*)?)",
+            raw_text,
+            re.IGNORECASE,
+        )
+        precio_texto = clean_text(price_match.group(1)) if price_match else None
+        services.append(
+            {
+                "nombre": nombre,
+                "precio_desde": extract_price(precio_texto) if precio_texto else None,
+                "precio_texto": precio_texto,
+            }
+        )
 
-            if len(line) > 3 and line.lower() not in {
-                "servicios y precios",
-                "servicios",
-            }:
-                current_name = line
-
-    # Fallback: extraer directo del HTML del bloque de servicios si regex no encontró pares.
+    # Fallback: usar texto solo si el HTML no expuso items de servicio.
     if not services:
-        service_nodes = soup.select("#profile-pricing [data-id='service-item']")
-        if not service_nodes:
-            service_nodes = soup.select(
-                "[data-tab-id='profile-pricing'] [data-id='service-item']"
-            )
+        text = soup.get_text("\n", strip=True)
 
-        for node in service_nodes:
-            nombre = safe_text(
-                node.select_one(
-                    "h3[itemprop='availableService'], [itemprop='availableService'], h3"
+        end_markers = (
+            r"Consultorios(?:\s*\(\d+\))?",
+            r"Opiniones",
+            r"Experiencia",
+            r"Formaci[oó]n",
+            r"Aseguradoras(?:\s+aceptadas)?",
+            r"Art[ií]culos",
+            r"Sobre\s+m[ií]",
+            r"Novedades",
+            r"Dudas\s+solucionadas",
+            r"Pacientes\s+que\s+atiendo",
+            r"Tipos\s+de\s+consulta",
+        )
+        end_regex = "|".join(end_markers)
+
+        patterns = [
+            rf"Servicios y precios\s+(.*?)(?=\s+(?:{end_regex})|$)",
+            r"(?s)Servicios y precios\s+(.*?)(?:\n\s*\n|$)",
+        ]
+
+        block = None
+        for pat in patterns:
+            matches = list(re.finditer(pat, text, re.DOTALL | re.IGNORECASE))
+            if not matches:
+                continue
+            selected = None
+            for m in matches:
+                candidate = m.group(1)
+                if re.search(r"\$\s*\d", candidate):
+                    selected = candidate
+                    break
+            block = selected or matches[0].group(1)
+            if block:
+                break
+
+        if block:
+            lines = [clean_text(x) for x in block.split("\n")]
+            lines = [x for x in lines if x]
+
+            current_name = None
+            for line in lines:
+                if line in ignore:
+                    continue
+
+                is_price = bool(re.search(r"\$\s*\d", line))
+                if is_price:
+                    if current_name:
+                        services.append(
+                            {
+                                "nombre": current_name,
+                                "precio_desde": extract_price(line),
+                                "precio_texto": line,
+                            }
+                        )
+                        current_name = None
+                    continue
+
+                if len(line) > 3 and line.lower() not in {
+                    "servicios y precios",
+                    "servicios",
+                }:
+                    current_name = line
+
+            if current_name:
+                services.append(
+                    {
+                        "nombre": current_name,
+                        "precio_desde": None,
+                        "precio_texto": None,
+                    }
                 )
-            )
-            if not nombre or nombre in ignore:
-                continue
-
-            raw_text = node.get_text(" ", strip=True)
-            price_match = re.search(
-                r"(Desde\s*\$\s*[\d,]+|\$\s*\d[\d,]*(?:\s*-\s*\$\s*\d[\d,]*)?)",
-                raw_text,
-                re.IGNORECASE,
-            )
-            if not price_match:
-                continue
-
-            precio_texto = clean_text(price_match.group(1))
-            services.append(
-                {
-                    "nombre": nombre,
-                    "precio_desde": extract_price(precio_texto),
-                    "precio_texto": precio_texto,
-                }
-            )
 
     unique = []
     seen = set()
     for item in services:
-        key = (item["nombre"], item["precio_desde"], item["precio_texto"])
+        key = (item["nombre"], item["precio_desde"])
         if key not in seen:
             seen.add(key)
             unique.append(item)
@@ -546,13 +685,16 @@ def extract_addresses(soup: BeautifulSoup) -> list[dict]:
         direccion = safe_text(opt.select_one("h5"))
         clinica = safe_text(opt.select_one(".text-muted"))
 
-        if direccion and clinica and direccion.lower() != "ciudad de méxico":
+        if direccion and direccion.lower() != "ciudad de méxico":
             consultorios.append({"direccion": direccion, "clinica": clinica})
 
     if not consultorios:
         sections = soup.select('section[data-id="doctor-address-item"]')
         for sec in sections:
-            clinica = safe_text(sec.select_one("span.h5"))
+            clinica = safe_text(sec.select_one("span.h5, [class~='h5']"))
+            if clinica and clinica.lower() == "pacientes que atiendo":
+                clinica = None
+
             street = safe_text(sec.select_one('[itemprop="streetAddress"]'))
             city_node = sec.select_one('[itemprop="addressLocality"]')
             postal_node = sec.select_one('[itemprop="postalCode"]')
@@ -721,11 +863,11 @@ def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
     data["experiencia"] = extract_experiencia(soup)
     data["servicios"] = extract_services(soup)
     data["consultorios"] = extract_addresses(soup)
-    data["opiniones"] = []
+    # data["opiniones"] = []
     # data["opiniones"] = extract_reviews(soup, limit=limit_reviews)
     data["pacientes"] = extract_pacientes(soup)
 
-    data["info"] = {
+    data["info_meta"] = {
         "total_servicios": len(data["servicios"]),
         "total_consultorios": len(data["consultorios"]),
         # "opiniones_extraidas": len(data["opiniones"]),
@@ -735,8 +877,6 @@ def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
     data["scraping_meta"] = {
         "url_origen": url,
         "fecha_consulta": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "total_servicios": len(data["servicios"]),
-        "total_consultorios": len(data["consultorios"]),
     }
 
     return data
@@ -790,7 +930,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Parser de perfiles Doctoralia")
-    
+
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--file", help="Ruta a un archivo HTML local")
     source.add_argument("--url", help="URL real del perfil en Doctoralia")

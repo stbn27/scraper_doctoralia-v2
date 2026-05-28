@@ -7,6 +7,7 @@ import {
   RiSave3Line,
   RiEmotionSadLine,
 } from 'react-icons/ri';
+import Select from 'react-select';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
@@ -60,6 +61,10 @@ export default function Dashboard() {
   );
 }
 
+/* ──────────────────────────────────────────────
+   Sub-sección: Buscar especialistas
+   ────────────────────────────────────────────── */
+
 /**
  * SearchSection — Permite buscar por select o por chat (tab)
  */
@@ -111,10 +116,6 @@ function SearchSection({ navigate }) {
     </div>
   );
 }
-
-/* ──────────────────────────────────────────────
-   Sub-sección: Buscar especialistas
-   ────────────────────────────────────────────── */
 
 
 /* ──────────────────────────────────────────────
@@ -248,6 +249,8 @@ function HistorySection({ addToast, navigate }) {
     });
   };
 
+  const especialidades = ['Dentista', 'Endodoncia', 'Cardiología', 'Dermatología', 'Ortopedia'];
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-6">Historial de búsquedas</h2>
@@ -255,18 +258,14 @@ function HistorySection({ addToast, navigate }) {
       {/* Filtros */}
       <div className="glass-card p-4 mb-6 flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
-          <select
+          <Select
+            options={[{ value: '', label: 'Todas las especialidades' }, ...especialidades.map((e) => ({ value: e, label: e }))]}
             value={filterEsp}
-            onChange={(e) => setFilterEsp(e.target.value)}
-            className="glass-input w-full px-3 py-2 text-sm"
-          >
-            <option value="">Todas las especialidades</option>
-            <option value="Dentista">Dentista</option>
-            <option value="Endodoncia">Endodoncia</option>
-            <option value="Cardiología">Cardiología</option>
-            <option value="Dermatología">Dermatología</option>
-            <option value="Ortopedia">Ortopedia</option>
-          </select>
+            onChange={(option) => setFilterEsp(option.value)}
+            className="react-select-container glass-input w-full px-3 py-2 text-sm z-3"
+            classNamePrefix="react-select"
+            placeholder="Filtrar por especialidad"
+          />
         </div>
         <input
           type="date"
