@@ -576,7 +576,59 @@ def scrape_listing(
     return result, total_pages
 
 
+async def scrape_listing_async(
+    specialty_slug: str,
+    city_slug: str,
+    page: int,
+) -> tuple[dict, int | None]:
+    """Descarga y parsea una página de listado de Doctoralia de forma asíncrona.
+
+    Versión async de ``scrape_listing`` diseñada para el pipeline masivo.
+    Usa ``httpx.AsyncClient`` con rotación de User-Agent. El parsing se delega
+    a ``build_listing_result``, que es síncrono y puede llamarse directamente.
+
+    Args:
+        specialty_slug: Slug de la especialidad buscada, por ejemplo
+            ``"endodoncia"``.
+        city_slug: Slug de la ciudad buscada, por ejemplo
+            ``"ciudad-de-mexico"``.
+        page: Número de página a descargar (empieza en 1).
+
+    Returns:
+        Tupla ``(resultado, total_paginas)``. ``resultado`` contiene ``meta`` y
+        ``doctores``. ``total_paginas`` puede ser ``None`` si el HTML no
+        incluye paginación visible.
+
+    Raises:
+        httpx.HTTPStatusError: Si Doctoralia responde con error HTTP.
+        httpx.RequestError: Si falla la conexión o vence el timeout.
+
+    Ejemplo::
+
+        resultado, total = await scrape_listing_async("endodoncia", "ciudad-de-mexico", 1)
+        print(total)          # 5
+        print(len(resultado["doctores"]))   # 17
+    """
+    headers = {
+        "User-Agent": get_user_agent(),
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    url = f"{BASE_DOMAIN}/{specialty_slug}/{city_slug}?page={page}"
+    async with httpx.AsyncClient(timeout=30) as cliente:
+        respuesta = await cliente.get(url, headers=headers)
+        respuesta.raise_for_status()
+        html_text = respuesta.text
+
+    source_path = Path(url)
+    resultado = build_listing_result(html_text, source_path, specialty_slug, city_slug, page)
+    total_paginas = resultado["meta"].get("total_paginas")
+    return resultado, total_paginas
+
+
 def main() -> None:
+
     """Punto de entrada para ejecutar el extractor de listados por CLI.
 
     Lee argumentos de consola, decide si usar un archivo local o descargar desde

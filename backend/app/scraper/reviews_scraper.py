@@ -88,7 +88,6 @@ def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
         "Accept": "application/json, text/plain, */*",
     }
     url = f"{BASE_URL}/{doctor_id}/{page}"

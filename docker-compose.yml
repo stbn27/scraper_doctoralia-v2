@@ -24,7 +24,7 @@ services:
   backend:
     build: ./backend
     ports: ["8000:8000"]
-    depends_on: [mysql, mongodb] # Agregar ollama como dependencia cuando se necesito modelos de IA local
+    depends_on: [mongodb] # Agregar ollama, mysql como dependencia cuando se necesito modelos de IA local
     env_file: .env
     volumes:
       - ./backend:/app # Montar el código fuente para desarrollo

@@ -926,7 +926,109 @@ def fetch_and_parse_profile(url: str) -> dict:
     return result
 
 
+async def fetch_and_parse_profile_async(url: str) -> dict:
+    """Descarga un perfil de Doctoralia de forma asíncrona y lo parsea.
+
+    Versión async de ``fetch_and_parse_profile`` diseñada para el pipeline
+    masivo. Usa ``httpx.AsyncClient`` con rotación de User-Agent en cada
+    solicitud. Aplica backoff exponencial ante respuestas 429 o 503 y detecta
+    páginas de captcha.
+
+    Args:
+        url: URL completa del perfil en Doctoralia.
+
+    Returns:
+        Diccionario estructurado del perfil, idéntico al producido por
+        ``parse_doctoralia_html``.
+
+    Raises:
+        httpx.HTTPStatusError: Si el servidor responde con error HTTP no
+            recuperable tras los reintentos.
+        httpx.RequestError: Si ocurre un problema de red o timeout persistente.
+
+    Ejemplo::
+
+        datos = await fetch_and_parse_profile_async(
+            "https://www.doctoralia.com.mx/alejandro-perez/endodoncista"
+        )
+        print(datos["nombre"])
+    """
+    import asyncio
+    import random as _random
+
+    MAX_REINTENTOS = 3
+
+    headers = {
+        "User-Agent": get_user_agent(),
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,*/*",
+    }
+
+    ultimo_error: Exception | None = None
+
+    for intento in range(MAX_REINTENTOS):
+        headers["User-Agent"] = get_user_agent()
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as cliente:
+                respuesta = await cliente.get(url, headers=headers)
+
+                # Detectar bloqueo temporal — backoff exponencial
+                if respuesta.status_code in (429, 503):
+                    espera = (2 ** intento) * _random.uniform(5, 10)
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {respuesta.status_code}",
+                        request=respuesta.request,
+                        response=respuesta,
+                    )
+
+                respuesta.raise_for_status()
+
+                # Detectar página de captcha real (NO falsos positivos).
+                # Las páginas normales de Doctoralia (~500KB) incluyen
+                # referencias al SDK de reCAPTCHA en el HTML, así que buscar
+                # "captcha" en el contenido siempre da positivo. Solo es un
+                # captcha real cuando la respuesta es muy corta (página de
+                # bloqueo sin contenido médico).
+                if len(respuesta.text) < 5000:
+                    contenido_lower = respuesta.text.lower()
+                    es_captcha = (
+                        "captcha" in contenido_lower
+                        or "comprueba que no eres un robot" in contenido_lower
+                    )
+                    if es_captcha:
+                        await asyncio.sleep(30)
+                        continue
+
+                resultado = parse_doctoralia_html(respuesta.text, url=url)
+                resultado.pop("archivo_fuente", None)
+                return resultado
+
+        except httpx.HTTPStatusError as exc:
+            ultimo_error = exc
+            if exc.response.status_code in (429, 503):
+                espera = (2 ** intento) * _random.uniform(5, 10)
+                await asyncio.sleep(espera)
+            elif intento < MAX_REINTENTOS - 1:
+                await asyncio.sleep(_random.uniform(3, 7))
+            else:
+                raise
+
+        except httpx.RequestError as exc:
+            ultimo_error = exc
+            if intento < MAX_REINTENTOS - 1:
+                await asyncio.sleep(_random.uniform(3, 7))
+            else:
+                raise
+
+    # Si llegamos aquí sin retornar, relanzamos el último error
+    if ultimo_error:
+        raise ultimo_error
+    raise RuntimeError(f"No se pudo obtener el perfil tras {MAX_REINTENTOS} intentos: {url}")
+
+
 if __name__ == "__main__":
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Parser de perfiles Doctoralia")
