@@ -42,6 +42,11 @@ load_dotenv()
 
 from app.db.mongo import get_mongo_db
 from app.nlp.modelos import obtener_modelo
+from app.nlp.nlp_logger import (
+    iniciar_sesion_log,
+    registrar_respuesta_cruda,
+    registrar_resumen_final,
+)
 from app.nlp.preprocesador import preparar_datos_para_analisis
 from app.nlp.prompt_builder import (
     construir_analisis_minimo,
@@ -75,6 +80,9 @@ def _log_success(mensaje: str) -> None:
 
 # ── Versión del prompt ──
 VERSION_PROMPT = "v1"
+
+# ── Logger NLP (se inicializa en main) ──
+_logger_nlp = None
 
 
 def _parsear_argumentos() -> argparse.Namespace:
@@ -203,6 +211,24 @@ def _obtener_opiniones_doctor(doctor_id: int) -> list[dict]:
     return list(cursor)
 
 
+def _es_clinica(especialista: dict) -> bool:
+    """
+    Determina si el especialista es en realidad una clínica o centro médico.
+
+    Parámetros
+    ----------
+    especialista : dict
+        Documento del especialista desde MongoDB.
+
+    Retorna
+    -------
+    bool
+        True si la URL corresponde a una clínica o centro médico, False en caso contrario.
+    """
+    url = (especialista.get("scraping_meta") or {}).get("url_origen", "")
+    return "/clinicas/" in url or "/centros-medicos/" in url
+
+
 def _procesar_especialista(
     especialista: dict,
     modelo,
@@ -228,6 +254,8 @@ def _procesar_especialista(
     dict
         Resultado del procesamiento con estado y detalles.
     """
+    global _logger_nlp
+
     doctor_id = especialista.get("doctoralia_id", 0)
     nombre = especialista.get("nombre", "Sin nombre")
 
@@ -237,6 +265,15 @@ def _procesar_especialista(
         "estado": "error",
         "detalle": "",
     }
+
+    # Verificar si es clínica
+    if _es_clinica(especialista):
+        logger.info(
+            f"{nombre} | id={doctor_id} | skip → es clínica, se procesará en fase 2"
+        )
+        resultado["estado"] = "skip"
+        resultado["detalle"] = "es clínica"
+        return resultado
 
     try:
         # Verificar análisis reciente
@@ -308,7 +345,20 @@ def _procesar_especialista(
         resultado_ia = None
         try:
             resultado_ia = modelo.parsear_respuesta(respuesta_raw)
+
+            # ── Registrar respuesta cruda exitosa ──
+            if _logger_nlp and respuesta_raw:
+                registrar_respuesta_cruda(
+                    _logger_nlp, doctor_id, nombre, respuesta_raw, exito=True,
+                )
+
         except ValueError:
+            # ── Registrar respuesta cruda fallida ──
+            if _logger_nlp and respuesta_raw:
+                registrar_respuesta_cruda(
+                    _logger_nlp, doctor_id, nombre, respuesta_raw, exito=False,
+                )
+
             # Reintentar una vez con el mismo prompt
             logger.warning(
                 "%s | id=%d | JSON inválido, reintentando...",
@@ -320,7 +370,22 @@ def _procesar_especialista(
                         prompt_sistema, prompt_usuario
                     )
                 resultado_ia = modelo.parsear_respuesta(respuesta_raw)
+
+                # ── Registrar respuesta cruda del reintento exitoso ──
+                if _logger_nlp and respuesta_raw:
+                    registrar_respuesta_cruda(
+                        _logger_nlp, doctor_id, nombre, respuesta_raw,
+                        exito=True,
+                    )
+
             except (ValueError, Exception) as e2:
+                # ── Registrar respuesta cruda del reintento fallido ──
+                if _logger_nlp and respuesta_raw:
+                    registrar_respuesta_cruda(
+                        _logger_nlp, doctor_id, nombre, respuesta_raw,
+                        exito=False,
+                    )
+
                 logger.error(
                     "%s | id=%d | Fallo en reintento: %s",
                     nombre, doctor_id, str(e2),
@@ -376,6 +441,8 @@ def _procesar_especialista(
 
 def main() -> None:
     """Punto de entrada principal del pipeline CLI."""
+    global _logger_nlp
+
     args = _parsear_argumentos()
 
     # ── Log de inicio ──
@@ -389,21 +456,37 @@ def main() -> None:
     # ── Determinar modo ──
     if args.prueba:
         modo = f"prueba | Límite: {args.limite} médicos"
+        modo_log = "prueba"
     elif args.reintentar_errores:
         modo = "reintentar errores"
+        modo_log = "reintentar"
     elif args.especialidad:
         modo = f"especialidad: {args.especialidad}"
+        modo_log = "especialidad"
     elif args.todos:
         modo = "todos los especialistas"
+        modo_log = "masivo"
     else:
         modo = f"limitado a {args.limite} médicos"
+        modo_log = "limitado"
 
     logger.info("Modo: %s", modo)
+
+    # ── Iniciar logger NLP dedicado ──
+    modelo_corto = modelo.nombre_modelo().split(" ")[0]
+    _logger_nlp = iniciar_sesion_log(
+        modelo=modelo_corto,
+        modo=modo_log,
+        particion="completo",
+    )
+    _logger_nlp.info("Modelo activo: %s", modelo.nombre_modelo())
+    _logger_nlp.info("Modo: %s", modo)
 
     # ── Obtener especialistas ──
     especialistas = _obtener_especialistas(args)
     total_especialistas = len(especialistas)
     logger.info("Especialistas encontrados: %d", total_especialistas)
+    _logger_nlp.info("Especialistas encontrados: %d", total_especialistas)
 
     if total_especialistas == 0:
         logger.info("No hay especialistas para procesar. Finalizando.")
@@ -467,6 +550,13 @@ def main() -> None:
                     procesados, total_especialistas,
                     completados, sin_opiniones, errores, skips,
                 )
+                _logger_nlp.info(
+                    "Progreso: %d/%d procesados | "
+                    "Completados: %d | Sin opiniones: %d | "
+                    "Errores: %d | Skips: %d",
+                    procesados, total_especialistas,
+                    completados, sin_opiniones, errores, skips,
+                )
 
     # ── Resumen final ──
     tiempo_total = time.time() - tiempo_inicio
@@ -493,6 +583,18 @@ def main() -> None:
         "Tiempo total: %dm %02ds | Promedio: %s",
         minutos, segundos, promedio,
     )
+
+    # ── Registrar resumen en el logger NLP ──
+    registrar_resumen_final(_logger_nlp, {
+        "total": total_especialistas,
+        "completados": completados,
+        "sin_opiniones": sin_opiniones,
+        "errores": errores,
+        "skips": skips,
+        "tiempo_segundos": tiempo_total,
+        "modelo": modelo.nombre_modelo(),
+        "modo": modo,
+    })
 
 
 if __name__ == "__main__":
