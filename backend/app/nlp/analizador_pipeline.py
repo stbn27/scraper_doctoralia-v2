@@ -35,10 +35,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from threading import Semaphore
 
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
 # ── Cargar variables de entorno ──
-load_dotenv(find_dotenv())
+load_dotenv()
 
 from app.db.mongo import get_mongo_db
 from app.nlp.modelos import obtener_modelo

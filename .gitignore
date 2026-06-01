@@ -14,9 +14,8 @@ frontend/node_modules/**
 frontend/src/test/**
 frontend/dist/**
 backend/logs/**
-
 backend/**/__pycache__/**
-
+docs/agents/**
 
 # Arquivos de configuración
 .env
