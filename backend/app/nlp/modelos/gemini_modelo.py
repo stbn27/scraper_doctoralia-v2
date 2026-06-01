@@ -33,7 +33,7 @@ class GeminiModelo(BaseModelo):
 
         self._config = genai.GenerationConfig(
             temperature=0.1,
-            max_output_tokens=800,
+            max_output_tokens=1500,
         )
         self._modelo = genai.GenerativeModel(
             model_name=self._modelo_nombre,

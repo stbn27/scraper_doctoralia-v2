@@ -2,7 +2,7 @@
 Implementación del modelo DeepSeek API.
 
 Usa el cliente OpenAI compatible con base_url de DeepSeek.
-Temperature=0.1, max_tokens=800.
+Temperature=0.1, max_tokens=1500.
 
 Variables de entorno requeridas:
     - DEEPSEEK_API_KEY: API key de DeepSeek
@@ -62,7 +62,8 @@ class DeepSeekModelo(BaseModelo):
                 model=self._modelo,
                 messages=mensajes,
                 temperature=0.1,
-                max_tokens=800,
+                max_tokens=1500,
+                extra_body={"thinking": {"type": "disabled"}},
             )
             return respuesta.choices[0].message.content or ""
 

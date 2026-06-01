@@ -59,7 +59,7 @@ class GroqModelo(BaseModelo):
                 model=self._modelo,
                 messages=mensajes,
                 temperature=0.1,
-                max_tokens=800,
+                max_tokens=1500,
             )
             return respuesta.choices[0].message.content or ""
 
@@ -73,7 +73,7 @@ class GroqModelo(BaseModelo):
                 model=self._modelo,
                 messages=mensajes,
                 temperature=0.1,
-                max_tokens=800,
+                max_tokens=1500,
             )
             return respuesta.choices[0].message.content or ""
 

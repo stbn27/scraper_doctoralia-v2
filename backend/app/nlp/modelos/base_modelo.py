@@ -45,10 +45,8 @@ class BaseModelo(ABC):
     def parsear_respuesta(self, respuesta_raw: str) -> dict:
         """
         Extrae el JSON de la respuesta del modelo.
-
-        Maneja casos donde el modelo envuelve el JSON en bloques
-        ```json ... ```, agrega texto antes o después, o retorna
-        JSON puro.
+        Maneja: bloques ```json...```, texto antes/después del JSON,
+        y respuestas truncadas (intenta reparar con json.JSONDecoder).
 
         Parámetros
         ----------
@@ -65,30 +63,37 @@ class BaseModelo(ABC):
         ValueError
             Si no se puede extraer JSON válido de la respuesta.
         """
+
+        if not respuesta_raw or not respuesta_raw.strip():
+            raise ValueError("El modelo retornó una respuesta vacía.")
+
         texto = respuesta_raw.strip()
 
-        # Intentar extraer JSON de bloque ```json ... ```
-        patron_bloque = re.search(
-            r"```(?:json)?\s*\n?(.*?)\n?\s*```",
-            texto,
-            re.DOTALL,
-        )
-        if patron_bloque:
-            texto = patron_bloque.group(1).strip()
+        # Intento 1: bloque ```json ... ```
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", texto, re.DOTALL)
+        if match:
+            candidato = match.group(1).strip()
+            try:
+                return json.loads(candidato)
+            except json.JSONDecodeError:
+                pass
 
-        # Intentar parsear directamente
-        try:
-            return json.loads(texto)
-        except json.JSONDecodeError:
-            pass
-
-        # Buscar el primer { y último } para extraer JSON embebido
+        # Intento 2: primer { hasta el último }
         inicio = texto.find("{")
         fin = texto.rfind("}")
         if inicio != -1 and fin != -1 and fin > inicio:
-            fragmento = texto[inicio:fin + 1]
+            candidato = texto[inicio:fin + 1]
             try:
-                return json.loads(fragmento)
+                return json.loads(candidato)
+            except json.JSONDecodeError:
+                pass
+
+        # Intento 3: json.JSONDecoder con raw_decode (maneja JSON seguido de texto)
+        if inicio != -1:
+            decoder = json.JSONDecoder()
+            try:
+                obj, _ = decoder.raw_decode(texto, inicio)
+                return obj
             except json.JSONDecodeError:
                 pass
 

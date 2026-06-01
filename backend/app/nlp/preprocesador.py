@@ -404,7 +404,7 @@ def _calcular_metricas(
     dias_lista: list[int] = []
     recientes_6m = 0
     for o in opiniones_originales:
-        fecha = _parsear_fecha(o.get("fecha_publicacion"))
+        fecha = _parsear_fecha(o.get("fecha") or o.get("fecha_publicacion"))
         if fecha:
             dias = max((ahora - fecha).days, 0)
             dias_lista.append(dias)
