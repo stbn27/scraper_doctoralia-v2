@@ -14,8 +14,8 @@ import os
 import time
 import logging
 
-import google.generativeai as genai
-
+from google import genai
+from google.genai import types
 from app.nlp.modelos.base_modelo import BaseModelo
 
 logger = logging.getLogger(__name__)
@@ -25,19 +25,30 @@ class GeminiModelo(BaseModelo):
     """Implementación del modelo Gemini para análisis de opiniones."""
 
     def __init__(self):
-        """Inicializa el cliente Gemini con la API key del entorno."""
         self._api_key = os.getenv("GEMINI_API_KEY", "")
-        self._modelo_nombre = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-
-        genai.configure(api_key=self._api_key)
-
-        self._config = genai.GenerationConfig(
+        self._modelo_nombre = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        self._cliente = genai.Client(api_key=self._api_key)
+        self._config = types.GenerateContentConfig(
             temperature=0.1,
-            max_output_tokens=1500,
-        )
-        self._modelo = genai.GenerativeModel(
-            model_name=self._modelo_nombre,
-            generation_config=self._config,
+            max_output_tokens=8000,
+            safety_settings=[
+                types.SafetySetting(
+                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold="BLOCK_NONE",
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HARASSMENT",
+                    threshold="BLOCK_NONE",
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_HATE_SPEECH",
+                    threshold="BLOCK_NONE",
+                ),
+                types.SafetySetting(
+                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    threshold="BLOCK_NONE",
+                ),
+            ],
         )
 
     def analizar(self, prompt_sistema: str, prompt_usuario: str) -> str:
@@ -63,20 +74,28 @@ class GeminiModelo(BaseModelo):
             f"INSTRUCCIONES DEL SISTEMA:\n{prompt_sistema}\n\n"
             f"DATOS A ANALIZAR:\n{prompt_usuario}"
         )
-
         try:
-            respuesta = self._modelo.generate_content(prompt_combinado)
-            return respuesta.text or ""
-
+            respuesta = self._cliente.models.generate_content(
+                model=self._modelo_nombre,
+                contents=prompt_combinado,
+                config=self._config,
+            )
+            if not respuesta.text:
+                raise ValueError(
+                    f"Gemini bloqueó la respuesta o devolvió vacío. "
+                    f"finish_reason: {respuesta.candidates[0].finish_reason}"
+                )
+            return respuesta.text
         except Exception as e:
             error_str = str(e).lower()
             if "quota" in error_str or "rate" in error_str or "429" in error_str:
-                logger.warning(
-                    "[Gemini] Rate limit alcanzado — esperando 60 segundos..."
-                )
+                logger.warning("[Gemini] Rate limit — esperando 60 segundos...")
                 time.sleep(60)
-
-                respuesta = self._modelo.generate_content(prompt_combinado)
+                respuesta = self._cliente.models.generate_content(
+                    model=self._modelo_nombre,
+                    contents=prompt_combinado,
+                    config=self._config,
+                )
                 return respuesta.text or ""
             raise
 
