@@ -16,6 +16,7 @@ frontend/dist/**
 backend/logs/**
 backend/**/__pycache__/**
 docs/agents/**
+docs/sugerencias/**
 
 # Arquivos de configuración
 .env
