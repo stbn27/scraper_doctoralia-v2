@@ -6,6 +6,7 @@
 **/node_modules/**
 **/venv/**
 **/test/**
+**/tests/**
 **/fixtures/**
 **/.venv
 **/.agents/**
@@ -15,8 +16,12 @@ frontend/src/test/**
 frontend/dist/**
 backend/logs/**
 backend/**/__pycache__/**
+backup/**
+
+# Documentos
 docs/agents/**
 docs/sugerencias/**
+docs/otros/**
 
 # Arquivos de configuración
 .env

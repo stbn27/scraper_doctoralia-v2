@@ -83,12 +83,33 @@ def _estado_vacio() -> dict:
         "perfiles_completados": [],
         "opiniones_completadas": [],
         "errores": [],
+        "nlp": _estado_nlp_vacio(),
     }
 
 
 # ---------------------------------------------------------------------------
 # Persistencia
 # ---------------------------------------------------------------------------
+def _estado_nlp_vacio() -> dict:
+    """Estructura compatible para progreso del pipeline NLP."""
+    return {
+        "analisis_finalizados": [],
+        "ultimo_resumen": {},
+        "detenido_por": None,
+        "fatal_proveedor": False,
+    }
+
+
+def _asegurar_bloque_nlp(estado: dict) -> dict:
+    """Agrega el bloque NLP si el estado fue creado por una versión anterior."""
+    nlp = estado.setdefault("nlp", _estado_nlp_vacio())
+    nlp.setdefault("analisis_finalizados", [])
+    nlp.setdefault("ultimo_resumen", {})
+    nlp.setdefault("detenido_por", None)
+    nlp.setdefault("fatal_proveedor", False)
+    return estado
+
+
 def guardar_estado(estado: dict) -> None:
     """Persiste el estado en disco de forma atómica.
 
@@ -101,6 +122,7 @@ def guardar_estado(estado: dict) -> None:
     Side Effects:
         Escribe o sobreescribe ``fixtures/pipeline_estado.json``.
     """
+    _asegurar_bloque_nlp(estado)
     estado["ultima_actividad"] = datetime.now(timezone.utc).isoformat(
         timespec="seconds"
     )
@@ -132,7 +154,7 @@ def cargar_estado() -> dict:
             datos = json.load(archivo)
         if not isinstance(datos, dict):
             return _estado_vacio()
-        return datos
+        return _asegurar_bloque_nlp(datos)
     except (json.JSONDecodeError, OSError):
         return _estado_vacio()
 
@@ -297,3 +319,39 @@ def opiniones_ya_completadas(estado: dict, doctoralia_id: int) -> bool:
         ``True`` si el ID ya está en ``opiniones_completadas``.
     """
     return doctoralia_id in estado.get("opiniones_completadas", [])
+
+
+# ---------------------------------------------------------------------------
+# Progreso NLP (compatible con el estado del scraper)
+# ---------------------------------------------------------------------------
+def marcar_analisis_nlp_finalizado(estado: dict, doctoralia_id: int) -> dict:
+    """Registra un análisis NLP finalizado para reanudar sin gastar tokens."""
+    estado = _asegurar_bloque_nlp(estado)
+    finalizados = estado["nlp"].setdefault("analisis_finalizados", [])
+    if doctoralia_id not in finalizados:
+        finalizados.append(doctoralia_id)
+    guardar_estado(estado)
+    return estado
+
+
+def analisis_nlp_ya_finalizado(estado: dict, doctoralia_id: int) -> bool:
+    """Verifica si el estado persistido ya marcó el análisis NLP como finalizado."""
+    estado = _asegurar_bloque_nlp(estado)
+    return doctoralia_id in estado["nlp"].get("analisis_finalizados", [])
+
+
+def guardar_resumen_nlp(estado: dict, resumen: dict) -> dict:
+    """Persiste el último resumen operativo del pipeline NLP."""
+    estado = _asegurar_bloque_nlp(estado)
+    estado["nlp"]["ultimo_resumen"] = resumen
+    guardar_estado(estado)
+    return estado
+
+
+def marcar_detencion_nlp(estado: dict, motivo: str, fatal_proveedor: bool = False) -> dict:
+    """Persiste una detención controlada del pipeline NLP."""
+    estado = _asegurar_bloque_nlp(estado)
+    estado["nlp"]["detenido_por"] = motivo
+    estado["nlp"]["fatal_proveedor"] = fatal_proveedor
+    guardar_estado(estado)
+    return estado

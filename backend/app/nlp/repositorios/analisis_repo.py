@@ -105,30 +105,52 @@ def obtener_analisis_por_doctor(doctor_id: int) -> dict | None:
 
 def analisis_existente_reciente(doctor_id: int, dias: int = 30) -> bool:
     """
-    Verifica si existe un análisis completado con menos de N días.
+    Verifica si existe un análisis finalizado válido con menos de N días.
 
-    Parámetros
-    ----------
-    doctor_id : int
-        Identificador único del doctor.
-    dias : int
-        Número máximo de días de antigüedad del análisis.
-
-    Retorna
-    -------
-    bool
-        True si existe análisis reciente completado.
+    Mantiene el nombre público anterior, pero ahora trata como finalizados
+    `completado`, `sospecha_fraude` y `sin_opiniones` para no recalcular
+    registros ya resueltos al reanudar ejecuciones masivas.
     """
+    return analisis_finalizado_reciente(doctor_id, dias=dias)
+
+
+def analisis_finalizado_reciente(doctor_id: int, dias: int = 30) -> bool:
+    """Retorna True si el doctor tiene análisis reciente no reanalizable."""
     _asegurar_indices()
     coleccion = _obtener_coleccion()
     fecha_limite = datetime.now(timezone.utc) - timedelta(days=dias)
 
     doc = coleccion.find_one({
         "doctor_id": doctor_id,
-        "estado": "completado",
+        "estado": {"$in": ["completado", "sospecha_fraude", "sin_opiniones"]},
         "fecha_analisis": {"$gte": fecha_limite},
+        "resultado_ia": {"$exists": True},
     })
     return doc is not None
+
+
+def listar_ids_finalizados_recientes(dias: int = 30) -> set[int]:
+    """Retorna IDs con análisis finalizado reciente para evitar consultas por candidato."""
+    _asegurar_indices()
+    coleccion = _obtener_coleccion()
+    fecha_limite = datetime.now(timezone.utc) - timedelta(days=dias)
+
+    cursor = coleccion.find(
+        {
+            "estado": {"$in": ["completado", "sospecha_fraude", "sin_opiniones"]},
+            "fecha_analisis": {"$gte": fecha_limite},
+            "resultado_ia": {"$exists": True},
+            "doctor_id": {"$exists": True},
+        },
+        {"doctor_id": 1},
+    )
+
+    ids: set[int] = set()
+    for doc in cursor:
+        doctor_id = doc.get("doctor_id")
+        if doctor_id is not None:
+            ids.add(int(doctor_id))
+    return ids
 
 
 def listar_pendientes(limite: int = 100) -> list[dict]:

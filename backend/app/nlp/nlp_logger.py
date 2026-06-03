@@ -179,74 +179,111 @@ def registrar_respuesta_cruda(
         f"══════════════════════════════════════════════════════"
     )
 
-    if exito:
-        logger_nlp.debug(bloque)
-    else:
-        logger_nlp.warning(bloque)
+    logger_nlp.debug(bloque)
+
+
+def registrar_evento_candidato(
+    logger_nlp: logging.Logger,
+    resultado: dict,
+) -> None:
+    """Registra la decisión final tomada para un candidato."""
+    doctor_id = resultado.get("doctor_id", "N/A")
+    nombre = resultado.get("nombre") or "Sin nombre"
+    estado = resultado.get("estado", "desconocido")
+    detalle = resultado.get("detalle") or ""
+    requests = int(resultado.get("requests_consumidos", 0) or 0)
+    llm_realizado = "si" if resultado.get("llm_realizado") else "no"
+
+    mensaje = (
+        "CANDIDATO | estado=%s | id=%s | nombre=%s | llm=%s | requests=%d | detalle=%s"
+        % (estado, doctor_id, nombre, llm_realizado, requests, detalle)
+    )
+
+    logger_nlp.debug(mensaje)
+
+
+def registrar_evento_llm(
+    logger_nlp: logging.Logger,
+    doctor_id: int,
+    nombre: str,
+    evento: str,
+    detalle: str = "",
+) -> None:
+    """Registra eventos intermedios de llamada/parsing del modelo."""
+    mensaje = "LLM | evento=%s | id=%s | nombre=%s" % (evento, doctor_id, nombre)
+    if detalle:
+        mensaje = f"{mensaje} | detalle={detalle}"
+
+    logger_nlp.debug(mensaje)
+
+
+def registrar_progreso(
+    logger_nlp: logging.Logger,
+    stats: dict,
+    limite: int | None,
+) -> None:
+    """Registra un corte de progreso legible para ejecuciones largas."""
+    requests = stats.get("requests_llm_realizados", 0)
+    limite_txt = f"/{limite}" if limite is not None else ""
+    logger_nlp.debug(
+        "PROGRESO | revisados=%d | LLM=%d | locales=%d | skips=%d | errores=%d | requests=%d%s",
+        stats.get("candidatos_revisados", 0),
+        stats.get("procesados_llm", 0),
+        stats.get("procesados_localmente", 0),
+        stats.get("skips", 0),
+        stats.get("errores", 0),
+        requests,
+        limite_txt,
+    )
 
 
 def registrar_resumen_final(
     logger_nlp: logging.Logger,
     stats: dict,
 ) -> None:
-    """
-    Registra el resumen consolidado de la ejecución al finalizar el pipeline.
-
-    Parámetros
-    ----------
-    logger_nlp : logging.Logger
-        Logger de la sesión NLP activa.
-    stats : dict
-        Diccionario con las estadísticas de la ejecución. Claves esperadas:
-
-        - ``total`` (int): Total de especialistas procesados.
-        - ``completados`` (int): Análisis completados exitosamente.
-        - ``sin_opiniones`` (int): Análisis mínimos generados.
-        - ``errores`` (int): Fallos definitivos.
-        - ``skips`` (int): Omitidos por análisis reciente.
-        - ``tiempo_segundos`` (float): Duración total en segundos.
-        - ``modelo`` (str): Nombre del modelo utilizado.
-        - ``modo`` (str): Modo de ejecución.
-
-    Ejemplo
-    -------
-    >>> registrar_resumen_final(logger_nlp, {
-    ...     "total": 100, "completados": 85, "sin_opiniones": 10,
-    ...     "errores": 3, "skips": 2, "tiempo_segundos": 120.5,
-    ...     "modelo": "groq", "modo": "prueba",
-    ... })
-    """
-    total = stats.get("total", 0)
-    completados = stats.get("completados", 0)
-    sin_opiniones = stats.get("sin_opiniones", 0)
+    """Registra el resumen consolidado de la ejecución al finalizar el pipeline."""
+    total = stats.get("total", stats.get("candidatos_revisados", 0))
+    candidatos = stats.get("candidatos_revisados", total)
+    procesados_llm = stats.get("procesados_llm", stats.get("completados", 0))
+    locales = stats.get("procesados_localmente", stats.get("sin_opiniones", 0))
     errores = stats.get("errores", 0)
     skips = stats.get("skips", 0)
+    requests = stats.get("requests_llm_realizados", procesados_llm)
+    limite = stats.get("limite_requests_llm")
+    exitosos = stats.get("requests_llm_exitosos", procesados_llm)
+    fallidos = stats.get("requests_llm_fallidos", 0)
     tiempo = stats.get("tiempo_segundos", 0.0)
     modelo = stats.get("modelo", "desconocido")
     modo = stats.get("modo", "desconocido")
+    detenido_por = stats.get("detenido_por")
 
     minutos = int(tiempo // 60)
     segundos = int(tiempo % 60)
-    promedio = f"{tiempo / total:.1f}s/médico" if total > 0 else "N/A"
-
-    tasa_exito = f"{(completados / total * 100):.1f}%" if total > 0 else "N/A"
+    promedio = f"{tiempo / candidatos:.1f}s/candidato" if candidatos > 0 else "N/A"
+    limite_txt = f"/{limite}" if limite is not None else ""
+    restantes = "N/A" if limite is None else max(int(limite) - int(requests), 0)
 
     bloque = (
         f"\n{'═' * 60}\n"
         f"  RESUMEN DE EJECUCIÓN — Pipeline NLP\n"
         f"{'─' * 60}\n"
-        f"  Modelo:          {modelo}\n"
-        f"  Modo:            {modo}\n"
-        f"  Total médicos:   {total}\n"
+        f"  Modelo:                    {modelo}\n"
+        f"  Modo:                      {modo}\n"
+        f"  Candidatos revisados:      {candidatos}\n"
         f"{'─' * 60}\n"
-        f"  Completados:     {completados}\n"
-        f"  Sin opiniones:   {sin_opiniones}\n"
-        f"  Errores:         {errores}\n"
-        f"  Skips:           {skips}\n"
+        f"  Procesados por LLM:        {procesados_llm}\n"
+        f"  Procesados localmente:     {locales}\n"
+        f"  Skips:                     {skips}\n"
+        f"  Errores:                   {errores}\n"
         f"{'─' * 60}\n"
-        f"  Tasa de éxito:   {tasa_exito}\n"
-        f"  Tiempo total:    {minutos}m {segundos:02d}s\n"
-        f"  Promedio:        {promedio}\n"
+        f"  Requests reales al modelo: {requests}{limite_txt}\n"
+        f"  Requests exitosos:         {exitosos}\n"
+        f"  Requests fallidos:         {fallidos}\n"
+        f"  Requests restantes:        {restantes}\n"
+        f"{'─' * 60}\n"
+        f"  Detenido por:              {detenido_por or 'finalización normal'}\n"
+        f"  Tiempo total:              {minutos}m {segundos:02d}s\n"
+        f"  Promedio:                  {promedio}\n"
         f"{'═' * 60}"
     )
 

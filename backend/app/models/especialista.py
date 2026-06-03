@@ -20,7 +20,7 @@ class PacientesModel(BaseModel):
     """Indica los tipos de pacientes que atiende el especialista."""
 
     atiende_ninos: bool = False
-    atiende_adultos: bool = True
+    atiende_adultos: bool = False
     atiende_adolescentes: bool = False
 
 
