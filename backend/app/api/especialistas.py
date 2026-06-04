@@ -147,6 +147,15 @@ async def obtener_especialista(especialista_id: str):
     return _serializar_doc(doc)
 
 
+@router.get("/doctoralia/{doctoralia_id}", response_model=EspecialistaResponse)
+async def obtener_especialista_por_doctoralia_id(doctoralia_id: int):
+    """Obtiene un especialista por su identificador de Doctoralia."""
+    doc = await especialistas_repo.buscar_por_doctoralia_id(doctoralia_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Especialista no encontrado")
+    return _serializar_doc(doc)
+
+
 @router.delete("/{especialista_id}")
 async def eliminar_especialista(especialista_id: str):
     """Elimina un especialista por ObjectId."""
