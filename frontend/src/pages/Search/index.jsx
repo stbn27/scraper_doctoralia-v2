@@ -1,274 +1,382 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  RiFilterLine,
-  RiArrowLeftLine,
-  RiSearchLine,
-  RiEmotionSadLine,
+    RiSearchLine,
+    RiRobot2Line,
+    RiEmotionSadLine,
 } from 'react-icons/ri';
+
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
+import { SearchSidebar } from '@/components/search/SearchSidebar';
 import { SpecialistCard } from '@/components/shared/SpecialistCard';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { SliderRange } from '@/components/ui/SliderRange';
 import { useToast } from '@/hooks/useToast';
 import { searchSpecialists } from '@/services/api';
+import img1 from '@/assets/doctors/doctor1.svg';
 
-/** Opciones de ordenamiento */
-const SORT_OPTIONS = [
-  { value: 'score', label: 'Mayor recomendación' },
-  { value: 'rating', label: 'Mayor calificación' },
-  { value: 'opiniones', label: 'Más opiniones' },
-  { value: 'precio', label: 'Precio: menor a mayor' },
-];
+function createInitialFilters(searchParams) {
+    return {
+        especialidad: searchParams.get('especialidad') || searchParams.get('q') || '',
+        ciudad: searchParams.get('ciudad') || '',
+        atiendeNinos: false,
+        atiendeAdultos: false,
+        atiendeAdolescentes: false,
+        orden: searchParams.get('orden') || 'puntuacion',
+        soloAnalizados: searchParams.get('solo_analizados') === 'true',
+        confiabilidad: searchParams.get('confiabilidad') || '',
+    };
+}
+
+function hasSearchIntent(filters) {
+    return Boolean(
+        filters.especialidad ||
+        filters.ciudad ||
+        filters.atiendeNinos ||
+        filters.atiendeAdultos ||
+        filters.atiendeAdolescentes ||
+        filters.confiabilidad ||
+        filters.soloAnalizados
+    );
+}
+
+function normalizeApiResults(response) {
+    if (Array.isArray(response)) {
+        return response;
+    }
+
+    if (Array.isArray(response?.results)) {
+        return response.results;
+    }
+
+    if (Array.isArray(response?.especialistas)) {
+        return response.especialistas;
+    }
+
+    if (Array.isArray(response?.favoritos)) {
+        return response.favoritos;
+    }
+
+    return [];
+}
+
+function getSpecialistId(specialist) {
+    return specialist.doctoralia_id || specialist._id || specialist.id;
+}
 
 /**
- * Results — Pantalla de resultados con filtros y grid de tarjetas.
+ * Search — Vista principal de búsqueda de especialistas.
+ *
+ * Esta pantalla permite:
+ * - Buscar con filtros tradicionales.
+ * - Buscar usando el chat médico.
+ * - Mostrar resultados filtrados.
+ * - Evitar cargar todos los especialistas cuando no hay intención de búsqueda.
  */
-export default function Results() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { addToast } = useToast();
+export default function Search() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const { addToast } = useToast();
 
-  const initialEspecialidad = searchParams.get('q') || '';
-  const initialCiudad = searchParams.get('ciudad') || '';
+    const [filters, setFilters] = useState(() => createInitialFilters(searchParams));
+    const [specialists, setSpecialists] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
 
-  const [specialists, setSpecialists] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('score');
-  const [showFilters, setShowFilters] = useState(false);
+    const updateUrlParams = useCallback(
+        (nextFilters) => {
+            const params = new URLSearchParams();
 
-  // Estado de filtros
-  const [filtros, setFiltros] = useState({
-    especialidad: initialEspecialidad,
-    ciudad: initialCiudad,
-    precioMin: 0,
-    precioMax: 30000,
-    atiendeNinos: false,
-    atiendeAdultos: false,
-    minOpiniones: 1,
-  });
+            if (nextFilters.especialidad) {
+                params.set('especialidad', nextFilters.especialidad);
+            }
 
-  /**
-   * Ejecuta la búsqueda con los filtros actuales.
-   */
-  const doSearch = useCallback(async (filters) => {
-    setLoading(true);
-    try {
-      const response = await searchSpecialists(filters);
-      setSpecialists(response.especialistas);
-    } catch (err) {
-      console.error('Error al buscar:', err);
-      addToast({ type: 'error', message: 'Error al cargar especialistas.' });
-    } finally {
-      setLoading(false);
-    }
-  }, [addToast]);
+            if (nextFilters.ciudad) {
+                params.set('ciudad', nextFilters.ciudad);
+            }
 
-  useEffect(() => {
-    doSearch(filtros);
-  }, []); // Solo al montar
+            if (nextFilters.orden) {
+                params.set('orden', nextFilters.orden);
+            }
 
-  /**
-   * Aplica los filtros actuales.
-   */
-  const applyFilters = () => {
-    doSearch(filtros);
-    setShowFilters(false);
-  };
+            if (nextFilters.soloAnalizados) {
+                params.set('solo_analizados', 'true');
+            }
 
-  /**
-   * Limpia todos los filtros.
-   */
-  const clearFilters = () => {
-    const cleared = {
-      especialidad: '',
-      ciudad: '',
-      precioMin: 0,
-      precioMax: 30000,
-      atiendeNinos: false,
-      atiendeAdultos: false,
-      minOpiniones: 1,
-    };
-    setFiltros(cleared);
-    doSearch(cleared);
-  };
+            if (nextFilters.confiabilidad) {
+                params.set('confiabilidad', nextFilters.confiabilidad);
+            }
 
-  /**
-   * Ordena los especialistas según el criterio seleccionado.
-   * @param {Array} list — Lista de especialistas.
-   * @returns {Array}
-   */
-  const sortedSpecialists = [...specialists].sort((a, b) => {
-    switch (sortBy) {
-      case 'score': return b.score_recomendacion - a.score_recomendacion;
-      case 'rating': return b.rating_global - a.rating_global;
-      case 'opiniones': return b.total_opiniones - a.total_opiniones;
-      case 'precio': {
-        const minA = Math.min(...a.servicios.map((s) => s.precio_desde));
-        const minB = Math.min(...b.servicios.map((s) => s.precio_desde));
-        return minA - minB;
-      }
-      default: return 0;
-    }
-  });
+            setSearchParams(params);
+        },
+        [setSearchParams]
+    );
 
-  return (
-    <PageWrapper name="results">
-      <BubbleBackground />
-      <Navbar />
+    const doSearch = useCallback(
+        async (nextFilters) => {
+            if (!hasSearchIntent(nextFilters)) {
+                setSpecialists([]);
+                setLoading(false);
+                setHasSearched(false);
+                return;
+            }
 
-      <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Toggle filtros mobile */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="lg:hidden flex items-center gap-2 glass-card px-4 py-3 text-sm font-medium"
-          >
-            <RiFilterLine /> Filtros
-          </button>
+            setLoading(true);
+            setHasSearched(true);
 
-          {/* Panel de filtros */}
-          <aside className={`glass-card p-5 space-y-5 shrink-0 w-full lg:w-[280px] ${showFilters ? 'block' : 'hidden lg:block'}`}>
-            <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-              Filtros
+            try {
+                const response = await searchSpecialists(nextFilters);
+                const results = normalizeApiResults(response);
+
+                setSpecialists(results);
+                updateUrlParams(nextFilters);
+            } catch (error) {
+                console.error('Error al buscar especialistas:', error);
+
+                addToast({
+                    type: 'error',
+                    message: 'Error al cargar especialistas.',
+                });
+
+                setSpecialists([]);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [addToast, updateUrlParams]
+    );
+
+    const applyFilters = useCallback(() => {
+        doSearch(filters);
+    }, [doSearch, filters]);
+
+    const clearFilters = useCallback(() => {
+        const clearedFilters = {
+            especialidad: '',
+            ciudad: '',
+            atiendeNinos: false,
+            atiendeAdultos: false,
+            atiendeAdolescentes: false,
+            orden: 'puntuacion',
+            soloAnalizados: false,
+            confiabilidad: '',
+        };
+
+        setFilters(clearedFilters);
+        setSpecialists([]);
+        setLoading(false);
+        setHasSearched(false);
+        setSearchParams({});
+    }, [setSearchParams]);
+
+    const handleChatDetected = useCallback(
+        (detectedData) => {
+            const nextFilters = {
+                ...filters,
+                especialidad: detectedData?.especialidad ?? filters.especialidad,
+                ciudad: detectedData?.ciudad ?? filters.ciudad,
+            };
+
+            setFilters(nextFilters);
+
+            if (detectedData?.ready) {
+                doSearch(nextFilters);
+            }
+        },
+        [doSearch, filters]
+    );
+
+    const sortedSpecialists = useMemo(() => {
+        return [...specialists].sort((a, b) => {
+            switch (filters.orden) {
+                case 'puntuacion':
+                    return (
+                        (b.puntuacion_recomendacion ?? b.score_recomendacion ?? 0) -
+                        (a.puntuacion_recomendacion ?? a.score_recomendacion ?? 0)
+                    );
+
+                case 'rating':
+                    return (b.rating_global ?? 0) - (a.rating_global ?? 0);
+
+                case 'opiniones':
+                    return (b.total_opiniones ?? 0) - (a.total_opiniones ?? 0);
+
+                default:
+                    return 0;
+            }
+        });
+    }, [specialists, filters.orden]);
+
+    useEffect(() => {
+        const initialFilters = createInitialFilters(searchParams);
+
+        setFilters(initialFilters);
+
+        if (hasSearchIntent(initialFilters)) {
+            doSearch(initialFilters);
+        }
+    }, []);
+
+    const showInitialState = !loading && !hasSearched;
+    const showEmptyState = !loading && hasSearched && sortedSpecialists.length === 0;
+    const showResults = !loading && sortedSpecialists.length > 0;
+
+    return (
+        <PageWrapper name="search" className="relative">
+            <BubbleBackground />
+            <Navbar />
+
+            <div className="relative z-10 mx-auto max-w-7xl px-4 pb-8 pt-20 sm:px-6 lg:px-8">
+                <div className="flex flex-col gap-6 lg:flex-row">
+                    <SearchSidebar
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        onSearch={applyFilters}
+                        onClear={clearFilters}
+                        onChatDetected={handleChatDetected}
+                    />
+
+                    <main className="min-w-0 flex-1">
+                        <section className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h1 className="text-2xl font-semibold">
+                                    Búsqueda de especialistas
+                                </h1>
+
+                                <p
+                                    className="mt-1 text-sm"
+                                    style={{ color: 'var(--text-muted)' }}
+                                >
+                                    Usa el chat o los filtros para encontrar especialistas médicos.
+                                </p>
+                            </div>
+
+                            {hasSearched && (
+                                <div
+                                    className="rounded-full border border-black/10 px-4 py-2 text-sm dark:border-white/10"
+                                    style={{ color: 'var(--text-muted)' }}
+                                >
+                                    {loading
+                                        ? 'Buscando...'
+                                        : `${sortedSpecialists.length} especialista${sortedSpecialists.length !== 1 ? 's' : ''
+                                        } encontrado${sortedSpecialists.length !== 1 ? 's' : ''
+                                        }`}
+                                </div>
+                            )}
+                        </section>
+
+                        {showInitialState && (
+                            <InitialSearchState />
+                        )}
+
+                        {loading && (
+                            <LoadingResults />
+                        )}
+
+                        {showResults && (
+                            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                {sortedSpecialists.map((specialist) => (
+                                    <SpecialistCard
+                                        key={getSpecialistId(specialist)}
+                                        specialist={specialist}
+                                    />
+                                ))}
+                            </section>
+                        )}
+
+                        {showEmptyState && (
+                            <EmptyResultsState onClear={clearFilters} />
+                        )}
+                    </main>
+                </div>
+            </div>
+        </PageWrapper>
+    );
+}
+
+function InitialSearchState() {
+    return (
+        <section className="glass-card overflow-hidden p-8 sm:p-10">
+            <div className="mx-auto max-w-2xl text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-royalBlue-600 text-white shadow-lg shadow-royalBlue-600/30">
+                    <RiRobot2Line className="text-3xl" />
+                </div>
+
+                <h2 className="mt-6 text-2xl font-semibold">
+                    Encuentra especialistas recomendados
+                </h2>
+
+                <p
+                    className="mt-3 text-sm leading-relaxed sm:text-base"
+                    style={{ color: 'var(--text-muted)' }}
+                >
+                    Describe tu molestia en el chat o usa la búsqueda tradicional por
+                    especialidad, ciudad y tipo de paciente. El sistema te ayudará a
+                    encontrar médicos evaluados con base en opiniones y análisis de
+                    recomendación.
+                </p>
+
+                <img
+                    src={img1}
+                    alt="Ilustración de búsqueda de especialistas"
+                    className="mx-auto mt-6 max-h-64 object-contain"
+                />
+
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                    <SuggestionChip text="Dolor de muela" />
+                    <SuggestionChip text="Dermatólogo en CDMX" />
+                    <SuggestionChip text="Cardiólogo" />
+                    <SuggestionChip text="Especialista para niños" />
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function SuggestionChip({ text }) {
+    return (
+        <span className="rounded-full border border-royalBlue-400/60 px-4 py-1.5 text-sm text-royalBlue-500 dark:text-royalBlue-300">
+            {text}
+        </span>
+    );
+}
+
+function LoadingResults() {
+    return (
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonCard key={index} />
+            ))}
+        </section>
+    );
+}
+
+function EmptyResultsState({ onClear }) {
+    return (
+        <section className="glass-card p-10 text-center">
+            <RiEmotionSadLine
+                className="mx-auto mb-4 text-5xl"
+                style={{ color: 'var(--text-muted)' }}
+            />
+
+            <h2 className="text-xl font-semibold">
+                No encontramos especialistas para tu búsqueda.
             </h2>
 
-            {/* Especialidad */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                Especialidad
-              </label>
-              <select
-                value={filtros.especialidad}
-                onChange={(e) => setFiltros({ ...filtros, especialidad: e.target.value })}
-                className="glass-input w-full px-3 py-2 text-sm"
-              >
-                <option value="">Todas</option>
-                <option value="Dentista">Dentista</option>
-                <option value="Endodoncia">Endodoncia</option>
-                <option value="Cardiología">Cardiología</option>
-                <option value="Dermatología">Dermatología</option>
-                <option value="Ortopedia">Ortopedia</option>
-              </select>
-            </div>
+            <p
+                className="mx-auto mt-2 max-w-md text-sm"
+                style={{ color: 'var(--text-muted)' }}
+            >
+                Intenta modificar la especialidad, ciudad o los filtros de análisis.
+            </p>
 
-            {/* Ciudad */}
-            <Input
-              id="filter-ciudad"
-              label="Ciudad"
-              placeholder="Ej: Ciudad de México"
-              value={filtros.ciudad}
-              onChange={(e) => setFiltros({ ...filtros, ciudad: e.target.value })}
-            />
-
-            {/* Rango de precio */}
-            <SliderRange
-              label="Rango de precio"
-              min={0}
-              max={30000}
-              step={500}
-              value={[filtros.precioMin, filtros.precioMax]}
-              onChange={([min, max]) => setFiltros({ ...filtros, precioMin: min, precioMax: max })}
-            />
-
-            {/* Checkboxes */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filtros.atiendeNinos}
-                  onChange={(e) => setFiltros({ ...filtros, atiendeNinos: e.target.checked })}
-                  className="w-4 h-4 rounded border-white/20 bg-white/10 text-royalBlue-600 focus:ring-royalBlue-500"
-                />
-                Atiende niños
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filtros.atiendeAdultos}
-                  onChange={(e) => setFiltros({ ...filtros, atiendeAdultos: e.target.checked })}
-                  className="w-4 h-4 rounded border-white/20 bg-white/10 text-royalBlue-600 focus:ring-royalBlue-500"
-                />
-                Atiende adultos
-              </label>
-            </div>
-
-            {/* Mínimo opiniones */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                Mínimo de opiniones
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={filtros.minOpiniones}
-                onChange={(e) => setFiltros({ ...filtros, minOpiniones: parseInt(e.target.value) || 0 })}
-                className="glass-input w-full px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Botones */}
-            <div className="space-y-2 pt-2">
-              <Button variant="primary" fullWidth onClick={applyFilters}>
-                Aplicar filtros
-              </Button>
-              <Button variant="ghost" fullWidth onClick={clearFilters}>
-                Limpiar
-              </Button>
-            </div>
-          </aside>
-
-          {/* Área principal */}
-          <main className="flex-1">
-            {/* Header: conteo + ordenamiento */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                {loading ? 'Buscando...' : `${sortedSpecialists.length} especialista${sortedSpecialists.length !== 1 ? 's' : ''} encontrado${sortedSpecialists.length !== 1 ? 's' : ''}`}
-              </p>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="glass-input px-3 py-2 text-sm w-full sm:w-auto"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Grid */}
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <SkeletonCard key={i} />
-                ))}
-              </div>
-            ) : sortedSpecialists.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedSpecialists.map((spec) => (
-                  <SpecialistCard key={spec._id} specialist={spec} />
-                ))}
-              </div>
-            ) : (
-              /* Estado vacío */
-              <div className="glass-card p-12 text-center">
-                <RiEmotionSadLine className="text-5xl mx-auto mb-4" style={{ color: 'var(--text-muted)' }} />
-                <p className="text-lg font-medium mb-2">No encontramos especialistas para tu búsqueda.</p>
-                <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-                  Intenta con otros filtros o una especialidad diferente.
-                </p>
-                <Button variant="outline" onClick={() => navigate('/')}>
-                  <RiArrowLeftLine /> Volver al inicio
+            <div className="mt-6 flex justify-center">
+                <Button variant="outline" onClick={onClear}>
+                    <RiSearchLine />
+                    Nueva búsqueda
                 </Button>
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
-    </PageWrapper>
-  );
+            </div>
+        </section>
+    );
 }

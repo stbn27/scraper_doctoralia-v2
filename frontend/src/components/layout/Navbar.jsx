@@ -1,138 +1,129 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React from 'react';
+import {Link, useLocation, useNavigate} from 'react-router-dom';
 import {
-  RiUserLine,
-  RiLoginBoxLine,
-  RiDashboardLine,
-  RiLogoutBoxRLine,
-  RiArrowLeftLine,
+    RiArrowLeftLine, RiHeartLine, RiLoginBoxLine, RiSearchLine,
 } from 'react-icons/ri';
-import { ThemeToggle } from '@/components/shared/ThemeToggle';
-import { useAuth } from '@/hooks/useAuth';
+
+import {ThemeToggle} from '@/components/shared/ThemeToggle';
+import {UserDropdown} from '@/components/layout/UserDropdown';
+import {useAuth} from '@/hooks/useAuth';
 import logo from '@/assets/logo.png';
 
 /**
- * Navbar — Barra de navegación principal.
- * Transparente en Home, visible en el resto de pantallas.
- * @example
- * <Navbar />
+ * Navbar principal del sistema.
+ *
+ * Muestra:
+ * - Logo y nombre del sistema.
+ * - Acceso rápido a búsqueda.
+ * - Cambio de tema.
+ * - Botón de login si no hay sesión.
+ * - Menú de usuario si hay sesión.
  */
 export function Navbar() {
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-  const isHome = location.pathname === '/';
+    const {user, logout} = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
 
-  // Cerrar menú al hacer clic fuera
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
+
+    const isHome = location.pathname === '/';
+    const isSearchPage = location.pathname === '/busqueda';
+
+    const shouldShowBackButton = !isHome && !isSearchPage && location.pathname !== '/dashboard' && location.pathname !== '/perfil' && location.pathname !== '/favoritos' && location.pathname !== '/historial';
+
+    const getSectionTitle = () => {
+        const path = location.pathname;
+
+        if (path === '/busqueda') return 'Búsqueda';
+        if (path.startsWith('/especialista')) return 'Detalle del especialista';
+        if (path === '/login') return 'Iniciar sesión';
+        if (path === '/perfil') return 'Mi perfil';
+        if (path === '/favoritos') return 'Mis favoritos';
+        if (path === '/historial') return 'Historial de búsqueda';
+
+        return '';
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
-  /**
-   * Obtiene el título de la sección actual.
-   * @returns {string}
-   */
-  const getSectionTitle = () => {
-    const path = location.pathname;
-    if (path === '/resultados') return 'Resultados';
-    if (path.startsWith('/especialista')) return 'Detalle del especialista';
-    if (path === '/login') return 'Iniciar sesión';
-    if (path === '/dashboard') return 'Panel de usuario';
-    return '';
-  };
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
 
-  return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 ${isHome
-        ? 'bg-transparent'
-        : 'glass-card rounded-none border-x-0 border-t-0'
-        }`}
+    return (<nav
+        className={`
+            fixed top-0 left-0 right-0 z-30
+            shadow-md shadow-blue-50 dark:shadow-none
+            transition-all duration-300 
+            ${isHome ? 'bg-transparent' : 'glass-card rounded-none border-x-0 border-t-0'}`
+        }
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Izquierda: Logo o botón back */}
-          <div className="flex items-center gap-3">
-            {!isHome && location.pathname !== '/resultados' && location.pathname !== '/dashboard' && (
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                aria-label="Volver"
-              >
-                <RiArrowLeftLine className="text-xl" />
-              </button>
-            )}
-            <Link to="/" className="flex items-center gap-2 group">
-              <img src={logo} alt="MedRec" className="w-8 h-8 rounded-lg" />
-              <span className="text-lg font-semibold group-hover:text-royalBlue-400 transition-colors">
-                MedRec
-              </span>
-            </Link>
-          </div>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex h-16 items-center justify-between">
 
-          {/* Centro: Título de sección */}
-          <span className="hidden md:block text-sm font-medium font-secondary" style={{ color: 'var(--text-muted)' }}>
-            {getSectionTitle()}
-          </span>
-
-          {/* Derecha: Theme toggle + auth */}
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-
-            {user ? (
-              <div className="relative" ref={menuRef}>
-                <button
-                  onClick={() => setMenuOpen(!menuOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-royalBlue-600 flex items-center justify-center text-white text-sm font-medium">
-                    {user.name?.charAt(0) || 'U'}
-                  </div>
-                  <span className="hidden sm:block text-sm">{user.name}</span>
-                </button>
-
-                {menuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 glass-card p-2 shadow-2xl">
-                    <Link
-                      to="/dashboard"
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-                      onClick={() => setMenuOpen(false)}
+                {/* Zona izquierda */}
+                <div className="flex items-center gap-3">
+                    {shouldShowBackButton && (<button
+                        type="button"
+                        onClick={() => navigate(-1)}
+                        className="rounded-lg p-2 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                        style={{color: 'var(--text-muted)'}}
+                        aria-label="Volver"
                     >
-                      <RiDashboardLine /> Panel de usuario
+                        <RiArrowLeftLine className="text-xl"/>
+                    </button>)}
+
+                    <Link to="/" className="group flex items-center gap-2">
+                        <img
+                            src={logo}
+                            alt="Logo de MedRec"
+                            className="h-8 w-8 rounded-lg"
+                        />
+
+                        <span className="text-lg font-semibold transition-colors group-hover:text-royalBlue-400">
+                            MedRec
+                        </span>
                     </Link>
-                    <button
-                      onClick={() => {
-                        logout();
-                        setMenuOpen(false);
-                        navigate('/');
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors w-full text-left text-red-400"
+                </div>
+
+                {/* Zona derecha */}
+                <div className="flex items-center gap-2">
+
+                    {!isSearchPage && (<Link
+                        to="/busqueda"
+                        className="rounded-xl p-2 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                        aria-label="Ir a búsqueda"
+                        title="Buscar especialistas"
                     >
-                      <RiLogoutBoxRLine /> Cerrar sesión
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-royalBlue-600 hover:bg-royalBlue-700 text-white text-sm font-medium transition-colors press-effect"
-              >
-                <RiLoginBoxLine />
-                <span className="hidden sm:inline">Iniciar sesión</span>
-              </Link>
-            )}
-          </div>
+                        <RiSearchLine className="text-xl"/>
+                    </Link>)}
+
+                    <ThemeToggle/>
+
+                    {user ? (<>
+                        <Link
+                            to="/favoritos"
+                            className="rounded-xl p-2 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                            aria-label="Mis favoritos"
+                            title="Mis favoritos"
+                        >
+                            <RiHeartLine className="text-xl"/>
+                        </Link>
+
+                        <UserDropdown user={user} onLogout={handleLogout}/>
+                    </>) : (<Link
+                        to="/login"
+                        className="
+                            flex items-center gap-2
+                            px-4 py-2
+                            border border-transparent rounded-xl
+                            bg-royalBlue-600 hover:bg-transparent hover:border hover:border-royalBlue-500
+                            text-sm font-medium text-white
+                            transition-colors duration-500"
+                    >
+                        <RiLoginBoxLine/>
+                        <span className="hidden sm:inline">Iniciar sesión</span>
+                    </Link>)}
+                </div>
+            </div>
         </div>
-      </div>
-    </nav>
-  );
+    </nav>);
 }

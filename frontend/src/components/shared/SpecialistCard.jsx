@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/useToast';
 import { addFavorite, removeFavorite, isFavorite } from '@/services/api';
 
 /**
- * SpecialistCard — Tarjeta de especialista reutilizable (Results y Dashboard).
+ * SpecialistCard — Tarjeta de especialista reutilizable (Search y Dashboard).
  * @param {{ specialist: Object, showDelete?: boolean, onDelete?: Function }} props
  * @example
  * <SpecialistCard specialist={specialist} />

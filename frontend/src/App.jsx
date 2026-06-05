@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 /* Lazy loading de páginas para code-splitting */
 const Home = lazy(() => import('@/pages/Home/index'));
-const Results = lazy(() => import('@/pages/Results/index'));
+const Search = lazy(() => import('@/pages/Search/index'));
 const Detail = lazy(() => import('@/pages/Detail/index'));
 const Login = lazy(() => import('@/pages/Login/index'));
 const Dashboard = lazy(() => import('@/pages/Dashboard/index'));
@@ -50,7 +50,7 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/resultados" element={<Results />} />
+          <Route path="/busqueda" element={<Search />} />
           <Route path="/especialista/:id" element={<Detail />} />
           <Route path="/login" element={<Login />} />
           <Route

@@ -11,7 +11,7 @@ import logo from '@/assets/logo.png';
 
 /**
  * Login — Pantalla de autenticación mockeada.
- * Credenciales válidas: josejulianstbn27@gmail.com / 1234
+ * Credenciales válidas: user@mx.com / 1234
  */
 export default function Login() {
   const navigate = useNavigate();

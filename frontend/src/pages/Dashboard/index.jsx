@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const [activeSection, setActiveSection] = useState('favoritos');
+  const [activeSection, setActiveSection] = useState('buscar');
 
   // Redirigir si no autenticado
   useEffect(() => {

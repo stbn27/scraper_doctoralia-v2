@@ -2,7 +2,7 @@ import React, { createContext, useState, useCallback } from 'react';
 
 /**
  * AuthContext — Maneja la autenticación mockeada de la aplicación.
- * Credenciales válidas: test@medrec.mx / 1234
+ * Credenciales válidas: user@mx / 1234
  * @typedef {{ name: string, email: string, avatar: string }} User
  */
 export const AuthContext = createContext(null);
@@ -10,7 +10,7 @@ export const AuthContext = createContext(null);
 /** Usuario mock predeterminado al autenticarse */
 const MOCK_USER = {
   name: 'Esteban',
-  email: 'josejulianstbn27@gmail.com',
+  email: 'user@mx.com',
   avatar: '👤',
 };
 
@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
    * @returns {{ success: boolean, message: string }}
    */
   const login = useCallback((email, password) => {
-    if (email === 'josejulianstbn27@gmail.com' && password === '1234') {
+    if (email === 'user@mx.com' && password === '1234') {
       const userData = { ...MOCK_USER, email };
       setUser(userData);
       localStorage.setItem('medrec_user', JSON.stringify(userData));

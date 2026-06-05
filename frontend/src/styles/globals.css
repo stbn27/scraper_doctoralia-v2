@@ -31,6 +31,7 @@
   --bg-body: #0f172a;
   --text-primary: #f1f5f9;
   --text-muted: #94a3b8;
+  --bubble-bg: radial-gradient(125% 125% at 50% 10%, #04010fff 40%, rgba(3, 50, 74, 1) 100%);
 
   /* Accesibilidad */
   --font-size-base: 16px;
@@ -63,21 +64,25 @@
   --preset-bg-1: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 50%, #e0e7ff 100%);
   --preset-bg-2: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #dbeafe 100%);
   --preset-bg-3: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  --bubble-bg: radial-gradient(125% 125% at 50% 10%, #fff 40%, rgba(10, 152, 200, 1) 100%);
 }
 
 /* ─── Base ─── */
 html {
   font-size: var(--font-size-base);
   scroll-behavior: smooth;
+  background: var(--bg-body);
 }
 
 body {
-  background: var(--bg-body);
   color: var(--text-primary);
   font-family: var(--font-primary), system-ui, -apple-system, sans-serif;
   font-weight: 400;
   min-height: 100vh;
-  transition: background-color 0.3s ease;
+  /*transition: background-color 0.3s ease;*/
+}
+
+#root {
 }
 
 /* ─── Glass Card ─── */
@@ -254,14 +259,16 @@ body {
   transform: translateY(0);
 }
 
-/* ─── View Transitions (entre páginas) ─── */
-::view-transition-old(root) {
-  animation: 0.3s ease-out both fade-out-slide;
-}
+/*====================================================*/
+/*========= View Transitions (entre páginas) =========*/
+/*====================================================*/
+/*::view-transition-old(root) {*/
+/*  animation: 0.3s ease-out both fade-out-slide;*/
+/*}*/
 
-::view-transition-new(root) {
-  animation: 0.3s ease-in both fade-in-slide;
-}
+/*::view-transition-new(root) {*/
+/*  animation: 0.3s ease-in both fade-in-slide;*/
+/*}*/
 
 @keyframes fade-out-slide {
   from {
@@ -287,25 +294,28 @@ body {
   }
 }
 
-/* ─── View Transition: Cambio de tema (clip-path circular) ─── */
-::view-transition-old(theme-transition) {
+/*====================================================*/
+/*========== View Transition: Cambio de tema =========*/
+/*====================================================*/
+
+/* View Transitions */
+::view-transition-old(root),
+::view-transition-new(root) {
   animation: none;
+  mix-blend-mode: normal;
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+::view-transition-new(root) {
   z-index: 999;
 }
 
-::view-transition-new(theme-transition) {
-  animation: theme-clip 0.7s ease-in-out;
-  z-index: 1000;
-}
-
-@keyframes theme-clip {
-  from {
-    clip-path: circle(0% at 50% 0%);
-  }
-
-  to {
-    clip-path: circle(150% at 50% 0%);
-  }
+::view-transition-old(root) {
+  z-index: 1;
 }
 
 /* ─── Micro-animaciones ─── */
@@ -343,12 +353,12 @@ body {
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    /*transform: translateY(16px);*/
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    /*transform: translateY(0);*/
   }
 }
 
