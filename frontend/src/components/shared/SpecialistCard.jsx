@@ -111,9 +111,8 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
 
   return (
     <div
-      className={`glass-card flex flex-col transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-      }`}
+      className={`glass-card rounded-tl-none flex flex-col transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+        }`}
       style={{ transitionDelay: `${index * 40}ms` }}
     >
       {/* Franja de acento superior */}
@@ -154,11 +153,10 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
           <button
             onClick={handleFavorite}
             disabled={favLoading}
-            className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
-              fav
+            className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${fav
                 ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
                 : 'hover:bg-black/5 dark:hover:bg-white/10'
-            }`}
+              }`}
             style={!fav ? { color: 'var(--text-muted)' } : {}}
             aria-label={fav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
           >

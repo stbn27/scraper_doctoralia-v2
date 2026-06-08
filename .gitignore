@@ -22,7 +22,13 @@ backup/**
 docs/agents/**
 docs/sugerencias/**
 docs/otros/**
+docs/general/**
+docs/db/**
 
 # Arquivos de configuración
 .env
 **/.env
+
+# Logs
+*.log
+**/**.out

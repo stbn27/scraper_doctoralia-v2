@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 import re
-import unicodedata
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -23,10 +22,48 @@ from app.models.schemas import (
 
 router = APIRouter(prefix="/catalogos", tags=["Catálogos"])
 
+# Mapa de slugs a nombres legibles con acentos correctos
+_SLUG_A_NOMBRE: dict[str, str] = {
+    "cirujano-general": "Cirujano General",
+    "dermatologo": "Dermatólogo",
+    "endodoncia": "Endodoncia",
+    "ginecologo": "Ginecólogo",
+    "implantologo": "Implantólogo",
+    "internista": "Internista",
+    "nutriologo": "Nutriólogo",
+    "oftalmologo": "Oftalmólogo",
+    "ortodoncista": "Ortodoncista",
+    "ortopedista": "Ortopedista",
+    "otorrinolaringologo": "Otorrinolaringólogo",
+    "pediatra": "Pediatra",
+    "periodoncia": "Periodoncia",
+    "psicologo": "Psicólogo",
+    "psiquiatra": "Psiquiatra",
+    "traumatologo": "Traumatólogo",
+    "urologo": "Urólogo",
+    "dentista": "Dentista",
+    "cardiologo": "Cardiólogo",
+    "endocrinologo": "Endocrinólogo",
+    "gastroenterologo": "Gastroenterólogo",
+    "neurologo": "Neurólogo",
+    "oncologo": "Oncólogo",
+    "reumatologo": "Reumatólogo",
+    "psicoterapeuta": "Psicoterapeuta",
+    "ciudad-de-mexico": "Ciudad de México",
+    "guadalajara": "Guadalajara",
+    "monterrey": "Monterrey",
+    "oaxaca-de-juarez": "Oaxaca de Juárez",
+    "puebla": "Puebla",
+    "tijuana": "Tijuana",
+    "merida": "Mérida",
+    "leon": "León",
+    "queretaro": "Querétaro",
+}
+
 
 def _slug_a_nombre(slug: str) -> str:
     """
-    Convierte un slug a nombre legible con capitalización.
+    Convierte un slug a nombre legible con capitalización y acentos correctos.
 
     Parámetros
     ----------
@@ -36,110 +73,77 @@ def _slug_a_nombre(slug: str) -> str:
     Retorna
     -------
     str
-        Nombre legible: 'Endodoncia', 'Ciudad De México'.
+        Nombre legible desde el mapa, o título capitalizado si no está en el mapa.
 
     Ejemplo
     -------
     >>> _slug_a_nombre("ginecologo")
     'Ginecólogo'
+    >>> _slug_a_nombre("ciudad-de-mexico")
+    'Ciudad de México'
     """
-    # Mapa de slugs con acentos especiales
-    _MAPA = {
-        "ginecologo": "Ginecólogo",
-        "psicologo": "Psicólogo",
-        "oftalmologo": "Oftalmólogo",
-        "otorrinolaringologo": "Otorrinolaringólogo",
-        "cardiologo": "Cardiólogo",
-        "dermatologo": "Dermatólogo",
-        "ortopedista": "Ortopedista",
-        "pediatra": "Pediatra",
-        "endodoncia": "Endodoncia",
-        "dentista": "Dentista",
-        "psicoterapeuta": "Psicoterapeuta",
-        "nutriologo": "Nutriólogo",
-        "endocrinologo": "Endocrinólogo",
-        "gastroenterologo": "Gastroenterólogo",
-        "urologo": "Urólogo",
-        "neurologo": "Neurólogo",
-        "hematólogo": "Hematólogo",
-        "reumatologo": "Reumatólogo",
-        "nefrologo": "Nefrólogo",
-        "oncologo": "Oncólogo",
-        "infectologo": "Infectólogo",
-        "inmunólogo": "Inmunólogo",
-        "proctólogo": "Proctólogo",
-        "neumólogo": "Neumólogo",
-        "psiquiatra": "Psiquiatra",
-        "ciudad-de-mexico": "Ciudad de México",
-        "guadalajara": "Guadalajara",
-        "monterrey": "Monterrey",
-        "puebla": "Puebla",
-        "tijuana": "Tijuana",
-        "merida": "Mérida",
-    }
-    if slug in _MAPA:
-        return _MAPA[slug]
-    return slug.replace("-", " ").title()
-
-
-def _limpiar_nombre_ciudad(nombre_raw: Optional[str], ciudad_slug: str) -> str:
-    """
-    Limpia el nombre de ciudad eliminando el sufijo de especialidad que Doctoralia adjunta.
-
-    En Doctoralia el campo `ciudad_nombre` suele venir como 'Ciudad de México Endodoncia'.
-    Se usa el slug como fuente primaria limpia.
-
-    Parámetros
-    ----------
-    nombre_raw : str o None
-        Nombre tal cual viene de la base de datos (puede tener especialidad adjunta).
-    ciudad_slug : str
-        Slug de la ciudad, usado como fuente limpia alternativa.
-
-    Retorna
-    -------
-    str
-        Nombre limpio de la ciudad.
-    """
-    return _slug_a_nombre(ciudad_slug)
+    return _SLUG_A_NOMBRE.get(slug, slug.replace("-", " ").title())
 
 
 async def _obtener_coleccion():
-    """Retorna la colección de catálogos de MongoDB."""
+    """Retorna la colección `catalogos` de MongoDB."""
     db = get_mongo_async_db()
     return db["catalogos"]
+
+
+def _filtro_con_busqueda(campo: str, q: Optional[str]) -> dict:
+    """
+    Construye el filtro MongoDB para un campo con búsqueda parcial opcional.
+
+    Parámetros
+    ----------
+    campo : str
+        Nombre del campo en MongoDB.
+    q : str o None
+        Texto de búsqueda parcial case-insensitive. Si es None, no aplica regex.
+
+    Retorna
+    -------
+    dict
+        Filtro MongoDB listo para usar en `find()` o `aggregate()`.
+    """
+    if q:
+        return {campo: {"$regex": re.escape(q.lower()), "$options": "i"}}
+    return {}
 
 
 @router.get("/especialidades", response_model=EspecialidadesListResponse)
 async def listar_especialidades(
     q: Optional[str] = Query(None, description="Búsqueda parcial por nombre o slug"),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(200, ge=1, le=500),
 ):
     """
-    Lista especialidades disponibles para autocompletado.
+    Lista especialidades médicas disponibles para autocompletado.
 
     Agrupa los documentos del catálogo por `especialidad_slug` y devuelve
-    el nombre legible de cada especialidad con el total de pares ciudad disponibles.
+    el nombre legible de cada especialidad con el total de ciudades disponibles.
 
     Parámetros
     ----------
     q : str, opcional
-        Filtro de búsqueda parcial sobre el slug de especialidad.
+        Filtro de búsqueda parcial sobre el slug (case-insensitive).
     limit : int
-        Máximo de especialidades a devolver. Por defecto 20.
+        Máximo de especialidades únicas a devolver. Por defecto 200.
 
     Retorna
     -------
     EspecialidadesListResponse
-        Total y lista de especialidades con nombre, slug y total de pares.
+        Total real y lista de especialidades con nombre, slug y total de pares.
     """
     col = await _obtener_coleccion()
+    filtro = _filtro_con_busqueda("especialidad_slug", q)
 
-    filtro: dict = {}
-    if q:
-        filtro["especialidad_slug"] = {"$regex": re.escape(q.lower()), "$options": "i"}
-
-    pipeline = [
+    pipeline_conteo = [
+        {"$match": filtro},
+        {"$group": {"_id": "$especialidad_slug"}},
+        {"$count": "total"},
+    ]
+    pipeline_datos = [
         {"$match": filtro},
         {
             "$group": {
@@ -152,10 +156,15 @@ async def listar_especialidades(
         {"$limit": limit},
     ]
 
-    cursor = col.aggregate(pipeline)
+    total_real = 0
+    async for doc in col.aggregate(pipeline_conteo):
+        total_real = doc.get("total", 0)
+
     especialidades = []
-    async for doc in cursor:
+    async for doc in col.aggregate(pipeline_datos):
         slug = doc["_id"] or ""
+        if not slug:
+            continue
         nombre = doc.get("especialidad_nombre") or _slug_a_nombre(slug)
         especialidades.append(
             {
@@ -165,16 +174,16 @@ async def listar_especialidades(
             }
         )
 
-    return {"total": len(especialidades), "especialidades": especialidades}
+    return {"total": total_real, "especialidades": especialidades}
 
 
 @router.get("/ciudades", response_model=CiudadesListResponse)
 async def listar_ciudades(
     q: Optional[str] = Query(None, description="Búsqueda parcial por slug de ciudad"),
     especialidad: Optional[str] = Query(
-        None, description="Filtrar ciudades por especialidad"
+        None, description="Filtrar por especialidad disponible"
     ),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(100, ge=1, le=500),
 ):
     """
     Lista ciudades disponibles para autocompletado, opcionalmente filtradas por especialidad.
@@ -182,62 +191,68 @@ async def listar_ciudades(
     Parámetros
     ----------
     q : str, opcional
-        Búsqueda parcial sobre el slug de ciudad.
+        Búsqueda parcial sobre el slug de ciudad (case-insensitive).
     especialidad : str, opcional
         Slug de especialidad para filtrar solo ciudades con esa especialidad disponible.
     limit : int
-        Máximo de ciudades a devolver. Por defecto 20.
+        Máximo de ciudades únicas a devolver. Por defecto 100.
 
     Retorna
     -------
     CiudadesListResponse
-        Total y lista de ciudades con nombre, slug y total de pares.
+        Total real de ciudades únicas y lista con nombre, slug y total de pares.
     """
     col = await _obtener_coleccion()
 
-    filtro: dict = {}
-    if q:
-        filtro["ciudad_slug"] = {"$regex": re.escape(q.lower()), "$options": "i"}
+    filtro = _filtro_con_busqueda("ciudad_slug", q)
     if especialidad:
         filtro["especialidad_slug"] = {
             "$regex": re.escape(especialidad.lower()),
             "$options": "i",
         }
 
-    pipeline = [
+    pipeline_conteo = [
+        {"$match": filtro},
+        {"$group": {"_id": "$ciudad_slug"}},
+        {"$count": "total"},
+    ]
+    pipeline_datos = [
         {"$match": filtro},
         {
             "$group": {
                 "_id": "$ciudad_slug",
                 "total_pares": {"$sum": 1},
-                "ciudad_nombre": {"$first": "$ciudad_nombre"},
             }
         },
         {"$sort": {"total_pares": -1, "_id": 1}},
         {"$limit": limit},
     ]
 
-    cursor = col.aggregate(pipeline)
+    total_real = 0
+    async for doc in col.aggregate(pipeline_conteo):
+        total_real = doc.get("total", 0)
+
     ciudades = []
-    async for doc in cursor:
+    async for doc in col.aggregate(pipeline_datos):
         slug = doc["_id"] or ""
-        nombre = _limpiar_nombre_ciudad(doc.get("ciudad_nombre"), slug)
+        if not slug:
+            continue
         ciudades.append(
             {
-                "nombre": nombre,
+                "nombre": _slug_a_nombre(slug),
                 "slug": slug,
                 "estado": None,
                 "total_pares": doc.get("total_pares", 0),
             }
         )
 
-    return {"total": len(ciudades), "ciudades": ciudades}
+    return {"total": total_real, "ciudades": ciudades}
 
 
 @router.get("/pares", response_model=ParesListResponse)
 async def listar_pares(
-    especialidad: Optional[str] = Query(None),
-    ciudad: Optional[str] = Query(None),
+    especialidad: Optional[str] = Query(None, description="Slug de especialidad"),
+    ciudad: Optional[str] = Query(None, description="Slug de ciudad"),
     modalidad: Optional[str] = Query(None, description="presencial | online"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
@@ -280,10 +295,8 @@ async def listar_pares(
     pages = math.ceil(total / limit) if limit and total else 0
     skip = (page - 1) * limit
 
-    cursor = col.find(filtro).skip(skip).limit(limit)
-
     pares = []
-    async for doc in cursor:
+    async for doc in col.find(filtro).skip(skip).limit(limit):
         esp_slug = doc.get("especialidad_slug", "")
         ciu_slug = doc.get("ciudad_slug", "")
         pares.append(
@@ -291,9 +304,7 @@ async def listar_pares(
                 "especialidad_nombre": doc.get("especialidad_nombre")
                 or _slug_a_nombre(esp_slug),
                 "especialidad_slug": esp_slug,
-                "ciudad_nombre": _limpiar_nombre_ciudad(
-                    doc.get("ciudad_nombre"), ciu_slug
-                ),
+                "ciudad_nombre": _slug_a_nombre(ciu_slug),
                 "ciudad_slug": ciu_slug,
                 "modalidad": doc.get("modalidad"),
                 "url": doc.get("url"),

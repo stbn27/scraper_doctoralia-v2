@@ -266,11 +266,10 @@ export default function Search() {
                     <>
                         <button
                             onClick={() => handlePageChange(1)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                                page === 1
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === 1
                                     ? 'bg-royalBlue-600 text-white'
                                     : 'hover:bg-white/10 text-slate-300'
-                            }`}
+                                }`}
                         >
                             1
                         </button>
@@ -282,11 +281,10 @@ export default function Search() {
                     <button
                         key={num}
                         onClick={() => handlePageChange(num)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                            page === num
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === num
                                 ? 'bg-royalBlue-600 text-white'
                                 : 'hover:bg-white/10 text-slate-300'
-                        }`}
+                            }`}
                     >
                         {num}
                     </button>
@@ -297,11 +295,10 @@ export default function Search() {
                         {endPage < pages - 1 && <span className="text-slate-500 text-xs px-1 select-none">...</span>}
                         <button
                             onClick={() => handlePageChange(pages)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                                page === pages
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === pages
                                     ? 'bg-royalBlue-600 text-white'
                                     : 'hover:bg-white/10 text-slate-300'
-                            }`}
+                                }`}
                         >
                             {pages}
                         </button>

@@ -481,7 +481,7 @@ export default function Detail() {
             </h2>
             <div className="flex items-start gap-3">
               <div className="mt-0.5 p-1.5 rounded-lg bg-royalBlue-500/10 shrink-0">
-                <RiHospitalLine className="text-royalBlue-400 text-base" />
+                <RiHospitalLine className="text-royalBlue-700 dark:text-royalBlue-400 text-base" />
               </div>
               <div>
                 {consultorio.clinica && (
@@ -490,7 +490,7 @@ export default function Detail() {
                 <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{consultorio.direccion}</p>
                 <button
                   onClick={() => openMap(consultorio.direccion)}
-                  className="mt-2 text-xs flex items-center gap-1.5 text-royalBlue-500 hover:text-royalBlue-400 transition-colors"
+                  className="mt-2 text-xs flex items-center gap-1.5 text-royal-800 dark:text-royalBlue-500 hover:text-royalBlue-900 dark:hover:text-royalBlue-400 transition-colors"
                 >
                   <RiExternalLinkLine /> Ver en Google Maps
                 </button>

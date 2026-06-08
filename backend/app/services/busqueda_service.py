@@ -42,7 +42,8 @@ def _normalizar(texto: str) -> str:
 
 def _regex_ci(valor: str) -> dict:
     """
-    Construye filtro MongoDB de regex case-insensitive escapado.
+    Construye filtro MongoDB de regex case-insensitive tolerante a acentos,
+    guiones/espacios y caracteres corruptos de codificación (como ).
 
     Parámetros
     ----------
@@ -54,7 +55,21 @@ def _regex_ci(valor: str) -> dict:
     dict
         Filtro MongoDB `{$regex: ..., $options: 'i'}`.
     """
-    return {"$regex": re.escape(valor), "$options": "i"}
+    # Reemplazar guiones por espacios y limpiar
+    valor_limpio = valor.lower().replace("-", " ").strip()
+
+    patron = ""
+    for char in valor_limpio:
+        if char in "aeiouáéíóúü":
+            # Reemplazar cualquier vocal por '.' para ser tolerante a acentos o caracteres corruptos
+            patron += "."
+        elif char == " ":
+            # Espacios coinciden con espacios, guiones o cualquier carácter de unión
+            patron += ".*"
+        else:
+            patron += re.escape(char)
+
+    return {"$regex": patron, "$options": "i"}
 
 
 # Mapa de aliases de ciudad frecuentes

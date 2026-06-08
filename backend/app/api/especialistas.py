@@ -359,42 +359,8 @@ async def obtener_opiniones_paginadas(
     }
 
 
-@router.get("/{especialista_id}", response_model=dict)
-async def obtener_especialista_detalle(especialista_id: str):
-    """
-    Obtiene el detalle completo de un especialista por ObjectId de MongoDB.
-
-    Parámetros
-    ----------
-    especialista_id : str
-        ObjectId de MongoDB del especialista.
-
-    Retorna
-    -------
-    dict
-        Detalle completo con todos los campos y análisis IA completo.
-
-    Excepciones
-    -----------
-    HTTPException 404
-        Si no se encuentra el especialista.
-    """
-    doc = await especialistas_repo.buscar_por_id(especialista_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Especialista no encontrado")
-
-    doc = _serializar_doc(doc)
-    doctoralia_id = doc.get("doctoralia_id")
-    analisis_doc = None
-    if doctoralia_id:
-        analisis_doc = await analisis_repo.obtener_por_doctoralia_id(doctoralia_id)
-
-    doc["analisis"] = _extraer_analisis_detalle(analisis_doc)
-    return doc
-
-
 # =============================================================================
-# ENDPOINTS LEGACY — Conservados para compatibilidad
+# ENDPOINTS LEGACY / BÚSQUEDA SCRAPING — Conservados para compatibilidad
 # =============================================================================
 
 
@@ -402,7 +368,7 @@ async def obtener_especialista_detalle(especialista_id: str):
 async def buscar_especialistas_legacy(
     especialidad: str = Query(...),
     ciudad: str = Query(...),
-    limite: int = Query(20, ge=1, le=100),
+    limite: int = Query(20, ge=1, le=500),
     forzar_scraping: bool = Query(False),
 ):
     """
@@ -439,6 +405,40 @@ async def buscar_especialistas_legacy(
     especialistas = [_serializar_doc(doc) for doc in resultado.get("especialistas", [])]
     resultado["especialistas"] = especialistas
     return resultado
+
+
+@router.get("/{especialista_id}", response_model=dict)
+async def obtener_especialista_detalle(especialista_id: str):
+    """
+    Obtiene el detalle completo de un especialista por ObjectId de MongoDB.
+
+    Parámetros
+    ----------
+    especialista_id : str
+        ObjectId de MongoDB del especialista.
+
+    Retorna
+    -------
+    dict
+        Detalle completo con todos los campos y análisis IA completo.
+
+    Excepciones
+    -----------
+    HTTPException 404
+        Si no se encuentra el especialista.
+    """
+    doc = await especialistas_repo.buscar_por_id(especialista_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Especialista no encontrado")
+
+    doc = _serializar_doc(doc)
+    doctoralia_id = doc.get("doctoralia_id")
+    analisis_doc = None
+    if doctoralia_id:
+        analisis_doc = await analisis_repo.obtener_por_doctoralia_id(doctoralia_id)
+
+    doc["analisis"] = _extraer_analisis_detalle(analisis_doc)
+    return doc
 
 
 @router.delete("/{especialista_id}")

@@ -50,3 +50,65 @@ def health():
     except Exception as e:
         resultados["mongodb"] = str(e)
     return resultados
+
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handler global para traducir mensajes de error de validación de Pydantic al español.
+    """
+    errores_traducidos = []
+    for err in exc.errors():
+        tipo = err.get("type")
+        msg = err.get("msg")
+        loc = err.get("loc")
+        ctx = err.get("ctx", {})
+        val_input = err.get("input")
+
+        # Traducciones comunes de tipos de error de Pydantic v2
+        if tipo == "less_than_equal":
+            le = ctx.get("le")
+            msg = f"El valor debe ser menor o igual a {le}"
+        elif tipo == "greater_than_equal":
+            ge = ctx.get("ge")
+            msg = f"El valor debe ser mayor o igual a {ge}"
+        elif tipo == "less_than":
+            lt = ctx.get("lt")
+            msg = f"El valor debe ser menor a {lt}"
+        elif tipo == "greater_than":
+            gt = ctx.get("gt")
+            msg = f"El valor debe ser mayor a {gt}"
+        elif tipo in ("missing", "value_error.missing"):
+            msg = "Este campo es obligatorio"
+        elif tipo == "string_too_short":
+            min_len = ctx.get("min_length")
+            msg = f"El texto debe tener al menos {min_len} caracteres"
+        elif tipo == "string_too_long":
+            max_len = ctx.get("max_length")
+            msg = f"El texto debe tener como máximo {max_len} caracteres"
+        elif tipo in ("integer_parsing", "int_parsing"):
+            msg = "El valor debe ser un número entero válido"
+        elif tipo in ("float_parsing", "decimal_parsing"):
+            msg = "El valor debe ser un número decimal válido"
+        elif tipo in ("bool_parsing", "boolean_parsing"):
+            msg = "El valor debe ser un valor booleano válido"
+        elif tipo == "json_invalid":
+            msg = "JSON no válido"
+        # Fallback genérico de substrings en inglés
+        elif msg and "should be less than or equal to" in msg:
+            val = msg.split("to")[-1].strip()
+            msg = f"El valor debe ser menor o igual a {val}"
+        elif msg and "should be greater than or equal to" in msg:
+            val = msg.split("to")[-1].strip()
+            msg = f"El valor debe ser mayor o igual a {val}"
+
+        errores_traducidos.append(
+            {"type": tipo, "loc": loc, "msg": msg, "input": val_input, "ctx": ctx}
+        )
+
+    return JSONResponse(status_code=422, content={"detail": errores_traducidos})

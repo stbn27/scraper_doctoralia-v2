@@ -20,7 +20,7 @@ const QUICK_CHIPS = ['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista'];
  */
 export default function Home() {
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState('chat'); // 'chat' | 'login'
+  const [viewMode, setViewMode] = useState('login'); // 'chat' | 'login'
 
   return (
     <PageWrapper name="home" className="relative">
@@ -51,10 +51,12 @@ export default function Home() {
           <p className='text-2xl'>Cuentanos que tienes y te podemos recomendar a los mejores especialistas médicos, cerca de tu <span className="text-royalBlue-500">zona</span></p>
           <p className='text-2xl'>O si prefieres, inicia sesión para poder guardar tus preferencias y recibir recomendaciones personalizadas.</p>
           <button
-            onClick={() => setViewMode((v) => (v === 'chat' ? 'login' : 'chat'))}
+            // onClick={() => setViewMode((v) => (v === 'chat' ? 'login' : 'chat'))}
+            onClick={() => navigate('/busqueda')}
             aria-label="Iniciar sesión"
             className="self-start bg-royalBlue-600 dark:bg-royalBlue-950/30 hover:bg-royalBlue-700 dark:hover:bg-royalBlue-900/30 text-white py-2 px-8 rounded-2xl transition-colors duration-200 text-lg press-effect backdrop-blur-md border border-royalBlue-500/60 dark:border-royalBlue-950/30 shadow-lg shadow-black/10">
-            {viewMode === 'chat' ? 'Iniciar sesión' : 'Busca especialista'}
+            {/* {viewMode === 'chat' ? 'Iniciar sesión' : 'Busca especialista'} */}
+            Busca especialista
           </button>
         </div>
 
