@@ -3,14 +3,23 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   RiArrowLeftLine,
   RiMapPinLine,
+  RiMapPin2Line,
   RiShieldCheckLine,
+  RiShieldLine,
   RiHeartLine,
   RiHeartFill,
   RiExternalLinkLine,
   RiArrowDownSLine,
+  RiArrowUpSLine,
   RiAlertFill,
+  RiAlertLine,
   RiCheckboxCircleLine,
-  RiCloseCircleLine
+  RiCloseCircleLine,
+  RiStarFill,
+  RiUserLine,
+  RiHospitalLine,
+  RiStethoscopeLine,
+  RiSparkling2Line
 } from 'react-icons/ri';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
@@ -45,6 +54,7 @@ export default function Detail() {
   const [loading, setLoading] = useState(true);
   const [fav, setFav] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
+  const [showAllExp, setShowAllExp] = useState(false);
 
   // Cargar datos del especialista
   useEffect(() => {
@@ -164,164 +174,197 @@ export default function Detail() {
           <RiArrowLeftLine /> Volver a la búsqueda
         </button>
 
-        {/* Hero Section */}
-        <section className="glass-card p-6 sm:p-8 scroll-reveal">
-          <div className="flex flex-col sm:flex-row gap-6">
-            <div className="flex-1">
-              <div className="flex items-start gap-4 mb-4">
-                <Avatar name={specialist.nombre} id={specialist._id} src={specialist.foto_perfil_url} size={96} className="text-2xl" />
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-bold leading-tight">{specialist.nombre}</h1>
-                  {specialist.especialidad && <Badge variant="blue" className="mt-2">{specialist.especialidad}</Badge>}
+        {/* Hero Section — editorial */}
+        <section className="glass-card overflow-hidden scroll-reveal">
+          {/* Franja superior de color */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-royalBlue-500/60 via-royalBlue-400/40 to-transparent" />
 
-                  <div className="flex items-center gap-2 mt-3">
+          <div className="p-6 sm:p-8">
+            {/* Cabecera: foto + datos + score inline */}
+            <div className="flex flex-col sm:flex-row gap-5 sm:gap-8 items-start">
+
+              {/* Foto */}
+              <div className="shrink-0">
+                <Avatar
+                  name={specialist.nombre}
+                  id={specialist._id}
+                  src={specialist.foto_perfil_url}
+                  size={88}
+                  className="text-2xl ring-2 ring-royalBlue-500/20"
+                />
+              </div>
+
+              {/* Info principal */}
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold leading-snug tracking-tight">
+                      {specialist.nombre}
+                    </h1>
+                    {specialist.especialidad && (
+                      <p className="text-sm mt-0.5 font-medium text-royalBlue-400 flex items-center gap-1.5">
+                        <RiStethoscopeLine className="text-base" />
+                        {specialist.especialidad}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Score compacto en línea */}
+                  {hasIa && specialist.analisis?.puntuacion_recomendacion != null && (
+                    <div className="flex flex-col items-center gap-0.5 shrink-0">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-extrabold text-royalBlue-400 leading-none">
+                          {Math.round(specialist.analisis.puntuacion_recomendacion)}
+                        </span>
+                        <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>/10</span>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-widest font-semibold opacity-60" style={{ color: 'var(--text-muted)' }}>
+                        Score IA
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rating + ubicación */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <div className="flex items-center gap-1.5">
                     <StarRating rating={specialist.rating_global} />
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {specialist.total_opiniones} opiniones en Doctoralia
+                      {specialist.total_opiniones} opiniones
                     </span>
                   </div>
+                  <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <RiMapPin2Line className="shrink-0" />
+                    {specialist.ciudad}
+                  </span>
+                  {consultorio?.precio_minimo && (
+                    <span className="text-xs text-royalBlue-400 font-medium">
+                      Desde ${consultorio.precio_minimo.toLocaleString()}
+                    </span>
+                  )}
+                </div>
 
-                  <div className="flex items-center gap-1.5 mt-2" style={{ color: 'var(--text-muted)' }}>
-                    <RiMapPinLine className="shrink-0" />
-                    <span className="text-sm">{specialist.ciudad}</span>
-                    {consultorio && <span className="text-sm">— {consultorio.direccion}</span>}
-                  </div>
+                {/* Metadatos en fila */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {specialist.pacientes?.atiende_ninos && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <RiUserLine className="text-xs" /> Niños
+                    </span>
+                  )}
+                  {specialist.pacientes?.atiende_adultos && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <RiUserLine className="text-xs" /> Adultos
+                    </span>
+                  )}
+                  {specialist.pacientes?.atiende_adolescentes && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <RiUserLine className="text-xs" /> Adolescentes
+                    </span>
+                  )}
+                  {specialist.cedula && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-royalBlue-500/10 text-royalBlue-500 dark:text-royalBlue-300 border border-royalBlue-500/20">
+                      <RiShieldCheckLine className="text-xs" /> Cédula {specialist.cedula}
+                    </span>
+                  )}
                 </div>
               </div>
-
-              {/* Chips de tipo de paciente */}
-              <div className="flex flex-wrap gap-2 mt-4">
-                {specialist.pacientes?.atiende_ninos && (
-                  <Badge variant="emerald">Atiende niños</Badge>
-                )}
-                {specialist.pacientes?.atiende_adultos && (
-                  <Badge variant="emerald">Atiende adultos</Badge>
-                )}
-                {specialist.pacientes?.atiende_adolescentes && (
-                  <Badge variant="emerald">Atiende adolescentes</Badge>
-                )}
-              </div>
-
-              {/* Cédula */}
-              {specialist.cedula && (
-                <div className="flex items-center gap-2 mt-4 text-sm text-emerald-400">
-                  <RiShieldCheckLine />
-                  <span>Cédula profesional: {specialist.cedula}</span>
-                </div>
-              )}
-
-              {/* Botón favorito */}
-              <Button
-                variant={fav ? 'outline' : 'primary'}
-                icon={fav ? <RiHeartFill className="text-red-400" /> : <RiHeartLine />}
-                onClick={handleFavorite}
-                className="mt-5"
-              >
-                {fav ? 'Guardado en favoritos' : 'Guardar favorito'}
-              </Button>
             </div>
 
-            {/* Score donut */}
-            <div className="flex flex-col items-center justify-center sm:border-l sm:border-white/10 sm:pl-8">
-              <ScoreDonut score={specialist.analisis?.puntuacion_recomendacion} size={120} strokeWidth={6} />
-              <p className="text-xs mt-3 text-center font-medium" style={{ color: 'var(--text-muted)' }}>
-                Score de recomendación
-              </p>
-              {hasIa && (
-                <p className="text-[10px] mt-1 text-center opacity-65" style={{ color: 'var(--text-muted)' }}>
-                  Generado por {ia.modelo_usado || 'NLP model'}
-                </p>
-              )}
+            {/* Separador + acción favorito */}
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/5">
+              {profileUrl ? (
+                <a
+                  href={profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs flex items-center gap-1.5 hover:text-royalBlue-400 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <RiExternalLinkLine />
+                  Ver perfil en Doctoralia
+                </a>
+              ) : <span />}
+
+              <button
+                onClick={handleFavorite}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                  fav
+                    ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
+                    : 'hover:bg-white/5'
+                }`}
+                style={!fav ? { color: 'var(--text-muted)' } : {}}
+              >
+                {fav ? <RiHeartFill className="text-sm" /> : <RiHeartLine className="text-sm" />}
+                {fav ? 'En favoritos' : 'Guardar'}
+              </button>
             </div>
           </div>
         </section>
 
-        {/* Enlace original de Doctoralia */}
-        {profileUrl && (
-          <div className="glass-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-royalBlue-500/20 bg-royalBlue-600/5 hover:bg-royalBlue-600/10 dark:border-royalBlue-500/10 dark:bg-royalBlue-500/5 dark:hover:bg-royalBlue-500/10 transition-colors scroll-reveal">
-            <div className="space-y-1">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                <RiExternalLinkLine className="text-royalBlue-400 text-base" />
-                Perfil original en Doctoralia
-              </h4>
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                Puedes consultar la disponibilidad, agendar una cita o ver opiniones completas visitando el perfil directo en la plataforma original.
-              </p>
+        {/* Análisis IA */}
+        <section className="glass-card p-6 sm:p-8 space-y-5 scroll-reveal">
+          {/* Encabezado */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <RiSparkling2Line className="text-royalBlue-400 text-lg shrink-0" />
+              <h2 className="text-base font-semibold">Resumen de recomendación</h2>
             </div>
-            <a
-              href={profileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-white bg-royalBlue-600 hover:bg-royalBlue-500 active:bg-royalBlue-700 transition-colors px-4 py-2.5 rounded-xl shrink-0 shadow-lg shadow-royalBlue-600/25"
-            >
-              Visitar Perfil Médico
-            </a>
-          </div>
-        )}
-
-        {/* Sección de Análisis IA */}
-        <section className="glass-card p-6 sm:p-8 space-y-6 scroll-reveal">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-royalBlue-400"></span>
-              Análisis Inteligente Local (IA)
-            </h2>
             {hasIa ? (
-              <Badge variant={
-                ia.confiabilidad_opiniones === 'alta' ? 'emerald' : 
-                ia.confiabilidad_opiniones === 'media' ? 'blue' : 'amber'
-              }>
-                Confiabilidad: {ia.confiabilidad_opiniones?.toUpperCase() || 'MEDIA'}
-              </Badge>
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                ia.confiabilidad_opiniones === 'alta'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  : ia.confiabilidad_opiniones === 'baja' || ia.confiabilidad_opiniones === 'sospechosa'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                  : 'bg-royalBlue-500/10 text-royalBlue-600 dark:text-royalBlue-300 border-royalBlue-500/20'
+              }`}>
+                Confiabilidad {ia.confiabilidad_opiniones || 'media'}
+              </span>
             ) : (
-              <Badge variant="gray">Sin procesar</Badge>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border bg-white/5 border-white/10" style={{ color: 'var(--text-muted)' }}>
+                Sin análisis
+              </span>
             )}
           </div>
 
           {hasIa ? (
-            <div className="space-y-6">
-              {/* Resumen */}
-              <div 
-                className="p-5 sm:p-6 rounded-xl bg-royalBlue-50/50 dark:bg-royalBlue-950/20 border border-royalBlue-100 dark:border-royalBlue-900/30 italic text-base sm:text-lg leading-relaxed shadow-sm"
-                style={{ 
-                  fontFamily: 'var(--font-primary)',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                "{ia.resumen || 'Sin resumen disponible.'}"
-              </div>
+            <div className="space-y-5">
+              {/* Resumen en párrafo, no en cita gigante */}
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-primary)' }}>
+                {ia.resumen || 'Sin resumen disponible.'}
+              </p>
 
-              {/* Puntos Fuertes y Débiles */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-emerald-500 dark:text-emerald-400 flex items-center gap-1.5">
-                    <RiCheckboxCircleLine className="text-lg" /> Puntos fuertes destacados
-                  </h3>
+              {/* Puntos fuertes y débiles — tarjetas pequeñas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-widest font-bold mb-2 text-emerald-600 dark:text-emerald-400">
+                    Puntos fuertes
+                  </p>
                   {ia.puntos_fuertes?.length > 0 ? (
-                     <ul className="space-y-2">
-                       {ia.puntos_fuertes.map((punto, idx) => (
-                         <li key={idx} className="text-xs pl-2 border-l-2 border-emerald-500/50" style={{ color: 'var(--text-primary)' }}>
-                           {punto}
-                         </li>
-                       ))}
-                     </ul>
+                    <ul className="space-y-1.5">
+                      {ia.puntos_fuertes.map((p, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                          <RiCheckboxCircleLine className="text-emerald-500 shrink-0 mt-0.5 text-sm" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Ninguno detectado</p>
                   )}
                 </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
-                    <RiCloseCircleLine className="text-lg" /> Puntos débiles detectados
-                  </h3>
+                <div>
+                  <p className="text-[11px] uppercase tracking-widest font-bold mb-2 text-amber-600 dark:text-amber-400">
+                    Puntos a considerar
+                  </p>
                   {ia.puntos_debiles?.length > 0 ? (
-                     <ul className="space-y-2">
-                       {ia.puntos_debiles.map((punto, idx) => (
-                         <li key={idx} className="text-xs pl-2 border-l-2 border-amber-500/50" style={{ color: 'var(--text-primary)' }}>
-                           {punto}
-                         </li>
-                       ))}
-                     </ul>
+                    <ul className="space-y-1.5">
+                      {ia.puntos_debiles.map((p, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                          <RiCloseCircleLine className="text-amber-500 shrink-0 mt-0.5 text-sm" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Ninguno detectado</p>
                   )}
@@ -330,129 +373,131 @@ export default function Detail() {
 
               {/* Justificación */}
               {ia.justificacion_puntuacion && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Justificación del score</h3>
+                <div className="pt-1">
+                  <p className="text-[11px] uppercase tracking-widest font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Justificación del score
+                  </p>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                     {ia.justificacion_puntuacion}
                   </p>
                 </div>
               )}
 
-              {/* Sospecha de Fraude */}
+              {/* Alerta de fraude — sutil */}
               {localMetrics.sospecha_fraude && (
-                <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 text-sm space-y-2" style={{ color: 'var(--text-primary)' }}>
-                  <div className="flex items-center gap-2 font-bold text-red-600 dark:text-red-400">
-                    <RiAlertFill className="text-xl shrink-0" />
-                    <span>ALERTA: Sospecha de anomalías o fraude en opiniones</span>
+                <div className="flex gap-3 p-3 rounded-lg bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/30">
+                  <RiAlertLine className="text-amber-500 shrink-0 mt-0.5 text-base" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">
+                      Posibles anomalías detectadas en opiniones
+                    </p>
+                    {localMetrics.razones_fraude?.length > 0 && (
+                      <ul className="space-y-0.5">
+                        {localMetrics.razones_fraude.map((r, i) => (
+                          <li key={i} className="text-xs text-amber-700 dark:text-amber-300">{r}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                  {localMetrics.razones_fraude?.length > 0 && (
-                    <ul className="list-disc list-inside space-y-1 text-xs text-red-700 dark:text-red-300">
-                      {localMetrics.razones_fraude.map((razon, idx) => (
-                        <li key={idx}>{razon}</li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               )}
 
-              {/* Métricas de opiniones */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Métricas de opiniones locales</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <MetricCard
-                    label="Opiniones en BD"
-                    value={localMetrics.total_opiniones_bd ?? 0}
-                  />
-                  <MetricCard
-                    label="Verificadas"
-                    value={`${(localMetrics.porcentaje_verificadas || 0).toFixed(1).replace('.0', '')}%`}
-                  />
-                  <MetricCard
-                    label="Longitud promedio"
-                    value={`${Math.round(localMetrics.longitud_promedio_palabras || 0)} palabras`}
-                  />
-                  <MetricCard
-                    label="Textos cortos"
-                    value={`${(localMetrics.porcentaje_texto_corto || 0).toFixed(1).replace('.0', '')}%`}
-                  />
-                </div>
+              {/* Métricas — fila limpia */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <MetricCard label="Opiniones" value={localMetrics.total_opiniones_bd ?? 0} />
+                <MetricCard label="Verificadas" value={`${(localMetrics.porcentaje_verificadas || 0).toFixed(1).replace('.0', '')}%`} />
+                <MetricCard label="Long. promedio" value={`${Math.round(localMetrics.longitud_promedio_palabras || 0)} pal.`} />
+                <MetricCard label="Textos cortos" value={`${(localMetrics.porcentaje_texto_corto || 0).toFixed(1).replace('.0', '')}%`} />
               </div>
             </div>
           ) : (
-            <div className="text-center py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
-              El especialista no cuenta con análisis de IA generado todavía.
-            </div>
+            <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>
+              Este especialista no cuenta con análisis de IA generado todavía.
+            </p>
           )}
         </section>
 
-        {/* Experiencia */}
-        <section className="glass-card p-6 scroll-reveal">
-          <h2 className="text-lg font-semibold mb-4 border-b border-white/10 pb-2">Experiencia y trayectoria</h2>
-          {specialist.experiencia?.length > 0 ? (
-            <div className="space-y-3">
-              {specialist.experiencia.map((text, i) => (
-                <p key={i} className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+        {/* Experiencia — con "Leer más" */}
+        {specialist.experiencia?.length > 0 && (
+          <section className="scroll-reveal px-1">
+            <h2 className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+              Trayectoria profesional
+            </h2>
+            <div className="space-y-2">
+              {(showAllExp ? specialist.experiencia : specialist.experiencia.slice(0, 2)).map((text, i) => (
+                <p key={i} className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                   {text}
                 </p>
               ))}
             </div>
-          ) : (
-            <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>
-              Sin trayectoria cargada en el perfil.
-            </p>
-          )}
-        </section>
-
-        {/* Servicios y precios */}
-        <section className="glass-card p-6 scroll-reveal">
-          <h2 className="text-lg font-semibold mb-4 border-b border-white/10 pb-2">Servicios y precios</h2>
-          {specialist.servicios?.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {visibleServices.map((serv, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 transition-all">
-                    <span className="text-sm font-medium">{serv.nombre}</span>
-                    <span className="text-sm font-semibold text-royalBlue-300">{serv.precio_texto}</span>
-                  </div>
-                ))}
-              </div>
-              {specialist.servicios.length > 6 && !showAllServices && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowAllServices(true)}
-                  className="mt-3 text-xs"
-                  icon={<RiArrowDownSLine />}
-                >
-                  Ver todos ({specialist.servicios.length})
-                </Button>
-              )}
-            </>
-          ) : (
-            <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>Sin servicios registrados.</p>
-          )}
-        </section>
-
-        {/* Consultorio */}
-        {consultorio && (
-          <section className="glass-card p-6 scroll-reveal">
-            <h2 className="text-lg font-semibold mb-4 border-b border-white/10 pb-2">Ubicación y consultorio</h2>
-            {consultorio.clinica && (
-              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{consultorio.clinica}</p>
+            {specialist.experiencia.length > 2 && (
+              <button
+                onClick={() => setShowAllExp(v => !v)}
+                className="mt-3 text-xs flex items-center gap-1 hover:text-royalBlue-400 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                {showAllExp ? <><RiArrowUpSLine /> Mostrar menos</> : <><RiArrowDownSLine /> Leer más</>}
+              </button>
             )}
-            <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              {consultorio.direccion}
-            </p>
-            <Button
-              variant="outline"
-              icon={<RiExternalLinkLine />}
-              onClick={() => openMap(consultorio.direccion)}
-              className="text-xs"
-            >
-              Ver en Google Maps
-            </Button>
           </section>
         )}
 
+        {/* Servicios — lista limpia */}
+        {specialist.servicios?.length > 0 && (
+          <section className="glass-card p-6 scroll-reveal">
+            <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>
+              Servicios y precios
+            </h2>
+            <div className="divide-y divide-white/5">
+              {visibleServices.map((serv, i) => (
+                <div key={i} className="flex items-center justify-between py-2.5 gap-4">
+                  <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{serv.nombre}</span>
+                  <span className={`text-xs font-semibold shrink-0 ${serv.precio_texto ? 'text-royalBlue-400' : ''}`} style={!serv.precio_texto ? { color: 'var(--text-muted)' } : {}}>
+                    {serv.precio_texto || 'Precio no publicado'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {specialist.servicios.length > 6 && (
+              <button
+                onClick={() => setShowAllServices(v => !v)}
+                className="mt-3 text-xs flex items-center gap-1 hover:text-royalBlue-400 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                {showAllServices
+                  ? <><RiArrowUpSLine /> Ver menos</>
+                  : <><RiArrowDownSLine /> Ver todos ({specialist.servicios.length})</>
+                }
+              </button>
+            )}
+          </section>
+        )}
+
+        {/* Ubicación — práctica, sin card gigante */}
+        {consultorio && (
+          <section className="scroll-reveal px-1">
+            <h2 className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+              Ubicación
+            </h2>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 p-1.5 rounded-lg bg-royalBlue-500/10 shrink-0">
+                <RiHospitalLine className="text-royalBlue-400 text-base" />
+              </div>
+              <div>
+                {consultorio.clinica && (
+                  <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>{consultorio.clinica}</p>
+                )}
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{consultorio.direccion}</p>
+                <button
+                  onClick={() => openMap(consultorio.direccion)}
+                  className="mt-2 text-xs flex items-center gap-1.5 text-royalBlue-500 hover:text-royalBlue-400 transition-colors"
+                >
+                  <RiExternalLinkLine /> Ver en Google Maps
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
       </div>
     </PageWrapper>
@@ -461,14 +506,15 @@ export default function Detail() {
 
 /**
  * Tarjeta pequeña para métricas de opiniones.
+ * @param {{ label: string, value: string|number }} props
  */
 function MetricCard({ label, value }) {
   return (
-    <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col justify-between">
-      <span className="text-[10px] uppercase font-bold tracking-wider opacity-60" style={{ color: 'var(--text-muted)' }}>
+    <div className="p-3 rounded-lg bg-white/4 border border-white/5 flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
         {label}
       </span>
-      <span className="text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+      <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
         {value}
       </span>
     </div>
