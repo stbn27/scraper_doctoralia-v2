@@ -175,6 +175,8 @@ export default function Detail() {
   const localMetrics = ia.metricas_locales || {};
   const hasIa = ia.tiene_analisis;
 
+  const profileUrl = specialist.scraping_meta?.url_origen || specialist.url_origen || specialist.url || (specialist.doctoralia_id ? `https://www.doctoralia.com.mx/doctor/id/${specialist.doctoralia_id}` : null);
+
   return (
     <PageWrapper name="detail">
       <BubbleBackground />
@@ -195,10 +197,10 @@ export default function Detail() {
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="flex-1">
               <div className="flex items-start gap-4 mb-4">
-                <Avatar name={specialist.nombre} id={specialist._id} size={96} className="text-2xl" />
+                <Avatar name={specialist.nombre} id={specialist._id} src={specialist.foto_perfil_url} size={96} className="text-2xl" />
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl sm:text-2xl font-bold leading-tight">{specialist.nombre}</h1>
-                  <Badge variant="blue" className="mt-2">{specialist.especialidad}</Badge>
+                  {specialist.especialidad && <Badge variant="blue" className="mt-2">{specialist.especialidad}</Badge>}
 
                   <div className="flex items-center gap-2 mt-3">
                     <StarRating rating={specialist.rating_global} />
@@ -249,7 +251,7 @@ export default function Detail() {
 
             {/* Score donut */}
             <div className="flex flex-col items-center justify-center sm:border-l sm:border-white/10 sm:pl-8">
-              <ScoreDonut score={specialist.score_recomendacion} size={120} strokeWidth={6} />
+              <ScoreDonut score={specialist.analisis?.puntuacion_recomendacion} size={120} strokeWidth={6} />
               <p className="text-xs mt-3 text-center font-medium" style={{ color: 'var(--text-muted)' }}>
                 Score de recomendación
               </p>
@@ -261,6 +263,29 @@ export default function Detail() {
             </div>
           </div>
         </section>
+
+        {/* Enlace original de Doctoralia */}
+        {profileUrl && (
+          <div className="glass-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-royalBlue-500/20 bg-royalBlue-550/5 hover:bg-royalBlue-550/10 transition-colors scroll-reveal">
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
+                <RiExternalLinkLine className="text-royalBlue-400 text-base" />
+                Perfil original en Doctoralia
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Puedes consultar la disponibilidad, agendar una cita o ver opiniones completas visitando el perfil directo en la plataforma original.
+              </p>
+            </div>
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-white bg-royalBlue-600 hover:bg-royalBlue-500 active:bg-royalBlue-700 transition-colors px-4 py-2.5 rounded-xl shrink-0 shadow-lg shadow-royalBlue-600/25"
+            >
+              Visitar Perfil Médico
+            </a>
+          </div>
+        )}
 
         {/* Sección de Análisis IA */}
         <section className="glass-card p-6 sm:p-8 space-y-6 scroll-reveal">

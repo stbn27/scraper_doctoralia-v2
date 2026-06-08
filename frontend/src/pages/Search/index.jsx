@@ -183,6 +183,13 @@ export default function Search() {
         doSearch({ ...filters, page: 1 });
     }, [doSearch, filters]);
 
+    const handlePageChange = useCallback((newPage) => {
+        if (newPage < 1 || newPage > pagination.pages) return;
+        const updated = { ...filters, page: newPage };
+        setFilters(updated);
+        doSearch(updated);
+    }, [filters, pagination.pages, doSearch]);
+
     const clearFilters = useCallback(() => {
         setFilters(DEFAULT_FILTERS);
         setSpecialists([]);
@@ -227,6 +234,92 @@ export default function Search() {
     const showEmptyState = !loading && hasSearched && sortedSpecialists.length === 0;
     const showResults = !loading && sortedSpecialists.length > 0;
 
+    const renderPagination = () => {
+        const { page, pages } = pagination;
+        if (pages <= 1) return null;
+
+        const pageNumbers = [];
+        const maxVisible = 5;
+        let startPage = Math.max(1, page - 2);
+        let endPage = Math.min(pages, startPage + maxVisible - 1);
+
+        if (endPage - startPage + 1 < maxVisible) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pageNumbers.push(i);
+        }
+
+        return (
+            <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
+                <Button
+                    variant="outline"
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 text-xs rounded-xl"
+                >
+                    Anterior
+                </Button>
+
+                {startPage > 1 && (
+                    <>
+                        <button
+                            onClick={() => handlePageChange(1)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                                page === 1
+                                    ? 'bg-royalBlue-600 text-white'
+                                    : 'hover:bg-white/10 text-slate-300'
+                            }`}
+                        >
+                            1
+                        </button>
+                        {startPage > 2 && <span className="text-slate-500 text-xs px-1 select-none">...</span>}
+                    </>
+                )}
+
+                {pageNumbers.map(num => (
+                    <button
+                        key={num}
+                        onClick={() => handlePageChange(num)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                            page === num
+                                ? 'bg-royalBlue-600 text-white'
+                                : 'hover:bg-white/10 text-slate-300'
+                        }`}
+                    >
+                        {num}
+                    </button>
+                ))}
+
+                {endPage < pages && (
+                    <>
+                        {endPage < pages - 1 && <span className="text-slate-500 text-xs px-1 select-none">...</span>}
+                        <button
+                            onClick={() => handlePageChange(pages)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                                page === pages
+                                    ? 'bg-royalBlue-600 text-white'
+                                    : 'hover:bg-white/10 text-slate-300'
+                            }`}
+                        >
+                            {pages}
+                        </button>
+                    </>
+                )}
+
+                <Button
+                    variant="outline"
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page === pages}
+                    className="px-3 py-1.5 text-xs rounded-xl"
+                >
+                    Siguiente
+                </Button>
+            </div>
+        );
+    };
+
     return (
         <PageWrapper name="search" className="relative">
             <BubbleBackground />
@@ -267,8 +360,8 @@ export default function Search() {
                                 >
                                     {loading
                                         ? 'Buscando...'
-                                        : `${sortedSpecialists.length} especialista${sortedSpecialists.length !== 1 ? 's' : ''
-                                        } encontrado${sortedSpecialists.length !== 1 ? 's' : ''
+                                        : `${pagination.total} especialista${pagination.total !== 1 ? 's' : ''
+                                        } encontrado${pagination.total !== 1 ? 's' : ''
                                         }`}
                                 </div>
                             )}
@@ -283,14 +376,17 @@ export default function Search() {
                         )}
 
                         {showResults && (
-                            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                {sortedSpecialists.map((specialist) => (
-                                    <SpecialistCard
-                                        key={getSpecialistId(specialist)}
-                                        specialist={specialist}
-                                    />
-                                ))}
-                            </section>
+                            <>
+                                <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {sortedSpecialists.map((specialist) => (
+                                        <SpecialistCard
+                                            key={getSpecialistId(specialist)}
+                                            specialist={specialist}
+                                        />
+                                    ))}
+                                </section>
+                                {renderPagination()}
+                            </>
                         )}
 
                         {showEmptyState && (

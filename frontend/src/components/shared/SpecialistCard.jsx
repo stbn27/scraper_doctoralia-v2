@@ -80,7 +80,7 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
     <div className="glass-card p-5 hover-lift flex flex-col gap-3.5 transition-all">
       {/* Header: Avatar, Info de Nombre y Favorito */}
       <div className="flex items-start gap-3">
-        <Avatar name={specialist.nombre} id={specialist._id} size={48} />
+        <Avatar name={specialist.nombre} id={specialist._id} src={specialist.foto_perfil_url} size={48} />
         <div className="flex-1 min-w-0">
           <h3
             className="font-bold text-sm leading-tight text-slate-100 truncate cursor-pointer hover:text-royalBlue-400 transition-colors"

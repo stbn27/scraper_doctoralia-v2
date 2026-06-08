@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 /**
  * Genera un color HSL determinista basado en un string (hash).
@@ -6,6 +6,7 @@ import React from 'react';
  * @returns {string} Color HSL.
  */
 function stringToColor(str) {
+  if (!str) return 'hsl(220, 60%, 45%)';
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -21,26 +22,52 @@ function stringToColor(str) {
  */
 function getInitials(name) {
   if (!name) return '?';
-  const parts = name.split(' ').filter((p) => p.length > 0 && p[0] === p[0].toUpperCase());
+  
+  // Guardar contra nombres que sean URLs accidentales
+  const str = String(name).trim();
+  if (str.startsWith('http://') || str.startsWith('https://') || str.includes('/') || str.includes('.')) {
+    return 'MC'; // Fallback genérico: "Médico / Consultorio"
+  }
+
+  // Filtrar palabras que comiencen con mayúscula
+  const parts = str.split(/\s+/).filter((p) => p.length > 0 && p[0] === p[0].toUpperCase());
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
-  return name.slice(0, 2).toUpperCase();
+  return str.slice(0, 2).toUpperCase();
 }
 
 /**
- * Avatar — Componente de avatar con iniciales y color generado por hash.
- * @param {{ name: string, id?: string, size?: number, className?: string }} props
+ * Avatar — Componente de avatar con imagen (foto_perfil_url), fallback a iniciales con color determinista.
+ * @param {{ name: string, id?: string, src?: string, size?: number, className?: string }} props
  * @example
- * <Avatar name="Dra. María Aquino" id="6a13b0c4" size={48} />
+ * <Avatar name="Dra. María Aquino" id="6a13b0c4" src="http://..." size={48} />
  */
-export function Avatar({ name, id = '', size = 48, className = '' }) {
+export function Avatar({ name, id = '', src = '', size = 48, className = '' }) {
+  const [hasError, setHasError] = useState(false);
   const bgColor = stringToColor(id || name);
   const initials = getInitials(name);
 
+  // Si tiene URL de imagen y no ha fallado la carga, renderizar la imagen
+  if (src && !hasError) {
+    return (
+      <img
+        src={src}
+        alt={`Avatar de ${name}`}
+        onError={() => setHasError(true)}
+        className={`rounded-full object-cover shrink-0 select-none border border-white/10 ${className}`}
+        style={{
+          width: size,
+          height: size,
+        }}
+      />
+    );
+  }
+
+  // Fallback a iniciales con color de fondo determinista
   return (
     <div
-      className={`flex items-center justify-center rounded-full font-semibold text-white select-none shrink-0 ${className}`}
+      className={`flex items-center justify-center rounded-full font-semibold text-white select-none shrink-0 border border-white/5 ${className}`}
       style={{
         width: size,
         height: size,
