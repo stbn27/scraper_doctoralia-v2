@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   RiArrowLeftLine,
@@ -10,10 +10,7 @@ import {
   RiArrowDownSLine,
   RiAlertFill,
   RiCheckboxCircleLine,
-  RiCloseCircleLine,
-  RiMessage2Line,
-  RiCalendarLine,
-  RiUser3Line
+  RiCloseCircleLine
 } from 'react-icons/ri';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
@@ -28,7 +25,6 @@ import { useToast } from '@/hooks/useToast';
 import { useAuth } from '@/hooks/useAuth';
 import {
   obtenerDetalleEspecialista,
-  obtenerOpinionesEspecialista,
   addFavorite,
   removeFavorite,
   isFavorite
@@ -49,13 +45,6 @@ export default function Detail() {
   const [loading, setLoading] = useState(true);
   const [fav, setFav] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
-
-  // Estados de opiniones
-  const [opinions, setOpinions] = useState([]);
-  const [opinionsLoading, setOpinionsLoading] = useState(true);
-  const [opinionsPage, setOpinionsPage] = useState(1);
-  const [opinionsTotal, setOpinionsTotal] = useState(0);
-  const [opinionsPages, setOpinionsPages] = useState(0);
 
   // Cargar datos del especialista
   useEffect(() => {
@@ -78,31 +67,6 @@ export default function Detail() {
     };
     loadSpecialist();
   }, [id, addToast]);
-
-  // Cargar opiniones paginadas
-  const loadOpinions = useCallback(async () => {
-    if (!specialist?._id) return;
-    setOpinionsLoading(true);
-    try {
-      const data = await obtenerOpinionesEspecialista(specialist._id, {
-        page: opinionsPage,
-        limit: 5
-      });
-      if (data) {
-        setOpinions(data.results || []);
-        setOpinionsTotal(data.total || 0);
-        setOpinionsPages(data.pages || 0);
-      }
-    } catch (err) {
-      console.error('Error al cargar opiniones:', err);
-    } finally {
-      setOpinionsLoading(false);
-    }
-  }, [specialist?._id, opinionsPage]);
-
-  useEffect(() => {
-    loadOpinions();
-  }, [loadOpinions]);
 
   /**
    * Maneja el toggle de favorito.
@@ -475,97 +439,7 @@ export default function Detail() {
           </section>
         )}
 
-        {/* Opiniones de Pacientes */}
-        <section className="glass-card p-6 sm:p-8 space-y-6 scroll-reveal">
-          <h2 className="text-lg font-semibold flex items-center gap-2 border-b border-white/10 pb-4">
-            <RiMessage2Line /> Opiniones de pacientes ({opinionsTotal})
-          </h2>
 
-          {opinionsLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 2 }).map((_, idx) => (
-                <div key={idx} className="p-4 rounded-xl bg-white/5 space-y-2 animate-pulse">
-                  <div className="h-4 bg-white/10 rounded w-1/4"></div>
-                  <div className="h-3 bg-white/10 rounded w-full"></div>
-                  <div className="h-3 bg-white/10 rounded w-2/3"></div>
-                </div>
-              ))}
-            </div>
-          ) : opinions.length > 0 ? (
-            <div className="space-y-4">
-              {opinions.map((opinion) => (
-                <div key={opinion._id} className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-royalBlue-600/30 flex items-center justify-center text-royalBlue-400">
-                        <RiUser3Line />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-200">
-                          {opinion.nombre_usuario || 'Paciente anónimo'}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <StarRating rating={opinion.rating} />
-                          <span className="text-[10px] text-slate-400">({opinion.rating}/5)</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {opinion.es_verificada && (
-                        <span className="text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                          <RiShieldCheckLine /> Verificada
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <RiCalendarLine /> {opinion.fecha_publicacion ? new Date(opinion.fecha_publicacion).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Reciente'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {opinion.servicio_consultado && (
-                    <p className="text-xs text-royalBlue-300 font-medium">
-                      Servicio: {opinion.servicio_consultado}
-                    </p>
-                  )}
-
-                  <p className="text-sm leading-relaxed text-slate-300 font-light italic">
-                    "{opinion.comentario || opinion.opinion || 'Sin comentarios adicionales.'}"
-                  </p>
-                </div>
-              ))}
-
-              {/* Controles de paginación */}
-              {opinionsPages > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                  <Button
-                    variant="outline"
-                    className="text-xs px-3 py-1.5"
-                    disabled={opinionsPage === 1}
-                    onClick={() => setOpinionsPage(prev => Math.max(prev - 1, 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Página {opinionsPage} de {opinionsPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    className="text-xs px-3 py-1.5"
-                    disabled={opinionsPage === opinionsPages}
-                    onClick={() => setOpinionsPage(prev => Math.min(prev + 1, opinionsPages))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
-              No se encontraron opiniones registradas en la base de datos local.
-            </p>
-          )}
-        </section>
       </div>
     </PageWrapper>
   );
