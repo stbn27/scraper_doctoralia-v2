@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RiMapPinLine, RiHeartLine, RiHeartFill } from 'react-icons/ri';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -18,6 +18,7 @@ import { addFavorite, removeFavorite, isFavorite } from '@/services/api';
  */
 export function SpecialistCard({ specialist, showDelete = false, onDelete = null }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [fav, setFav] = useState(isFavorite(specialist._id));
@@ -33,7 +34,7 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
   const handleFavorite = async () => {
     if (!user) {
       addToast({ type: 'info', message: 'Inicia sesión para guardar favoritos.' });
-      navigate('/login');
+      navigate('/login', { state: { from: location.pathname } });
       return;
     }
 

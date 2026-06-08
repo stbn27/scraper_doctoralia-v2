@@ -9,17 +9,26 @@ const Home = lazy(() => import('@/pages/Home/index'));
 const Search = lazy(() => import('@/pages/Search/index'));
 const Detail = lazy(() => import('@/pages/Detail/index'));
 const Login = lazy(() => import('@/pages/Login/index'));
-const Dashboard = lazy(() => import('@/pages/Dashboard/index'));
+const Perfil = lazy(() => import('@/pages/Perfil/index'));
+const Favoritos = lazy(() => import('@/pages/Favoritos/index'));
+const Historial = lazy(() => import('@/pages/Historial/index'));
 
 /**
  * ProtectedRoute — Redirige a /login si no hay sesión activa.
+ * Muestra el loader mientras se revalida la sesión.
  * @param {{ children: React.ReactNode }} props
  */
 function ProtectedRoute({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <PageLoader />;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
   return children;
 }
 
@@ -51,21 +60,42 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/busqueda" element={<Search />} />
+          {/* Soportar ambas variantes de ruta para el detalle de especialista */}
           <Route path="/especialista/:id" element={<Detail />} />
+          <Route path="/especialistas/:id" element={<Detail />} />
           <Route path="/login" element={<Login />} />
+          
           <Route
-            path="/dashboard"
+            path="/perfil"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <Perfil />
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/favoritos"
+            element={
+              <ProtectedRoute>
+                <Favoritos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/historial"
+            element={
+              <ProtectedRoute>
+                <Historial />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Redirección del dashboard legacy hacia el perfil */}
+          <Route path="/dashboard" element={<Navigate to="/perfil" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
       <ToastContainer />
-      <AccessibilityBar />
     </BrowserRouter>
   );
 }

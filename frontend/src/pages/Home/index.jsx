@@ -40,7 +40,7 @@ export default function Home() {
             <div
               className={`absolute inset-0 flex items-center justify-center p-6 transition-all duration-300 ease-out ${viewMode === 'login' ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-4 pointer-events-none'}`}
             >
-              <InlineLogin onSuccess={() => navigate('/dashboard')} />
+              <InlineLogin onSuccess={() => navigate('/perfil')} />
             </div>
           </div>
         </div>

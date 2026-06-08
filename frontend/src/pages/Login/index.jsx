@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { RiGoogleFill, RiLoginBoxLine } from 'react-icons/ri';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { RiGoogleFill, RiLoginBoxLine, RiUserAddLine } from 'react-icons/ri';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { Button } from '@/components/ui/Button';
@@ -10,19 +10,24 @@ import { useToast } from '@/hooks/useToast';
 import logo from '@/assets/logo.png';
 
 /**
- * Login — Pantalla de autenticación mockeada.
- * Credenciales válidas: user@mx.com / 1234
+ * Login — Pantalla de autenticación y registro.
  */
 export default function Login() {
   const navigate = useNavigate();
-  const { login, loginWithGoogle } = useAuth();
+  const location = useLocation();
+  const { iniciarSesion, registrarUsuario, loginWithGoogle } = useAuth();
   const { addToast } = useToast();
 
+  const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Determinar la redirección tras login
+  const from = location.state?.from || '/perfil';
 
   /**
    * Valida los campos del formulario.
@@ -39,6 +44,16 @@ export default function Login() {
 
     if (!password.trim()) {
       newErrors.password = 'La contraseña es obligatoria.';
+    } else if (password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
+    }
+
+    if (isRegister) {
+      if (!confirmPassword.trim()) {
+        newErrors.confirmPassword = 'Debes confirmar la contraseña.';
+      } else if (confirmPassword !== password) {
+        newErrors.confirmPassword = 'Las contraseñas no coinciden.';
+      }
     }
 
     setErrors(newErrors);
@@ -46,23 +61,38 @@ export default function Login() {
   };
 
   /**
-   * Maneja el submit del formulario de login.
+   * Maneja el submit del formulario de login / registro.
    */
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     setLoading(true);
-    // Simular delay
-    setTimeout(() => {
-      const result = login(email, password);
-      if (result.success) {
-        addToast({ type: 'success', message: result.message });
-        navigate('/dashboard');
+    try {
+      if (isRegister) {
+        const result = await registrarUsuario(email, password);
+        if (result.success) {
+          addToast({ type: 'success', message: result.message });
+          // Cambiar a pestaña de login y limpiar password
+          setIsRegister(false);
+          setPassword('');
+          setConfirmPassword('');
+        } else {
+          addToast({ type: 'error', message: result.message });
+        }
       } else {
-        addToast({ type: 'error', message: result.message });
+        const result = await iniciarSesion(email, password);
+        if (result.success) {
+          addToast({ type: 'success', message: result.message });
+          navigate(from, { replace: true });
+        } else {
+          addToast({ type: 'error', message: result.message });
+        }
       }
+    } catch (err) {
+      addToast({ type: 'error', message: 'Ocurrió un error inesperado.' });
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   /**
@@ -74,7 +104,9 @@ export default function Login() {
       const result = await loginWithGoogle();
       if (result.success) {
         addToast({ type: 'success', message: result.message });
-        navigate('/dashboard');
+        navigate(from, { replace: true });
+      } else {
+        addToast({ type: 'error', message: result.message });
       }
     } catch {
       addToast({ type: 'error', message: 'Error al conectar con Google.' });
@@ -97,18 +129,44 @@ export default function Login() {
       <BubbleBackground />
 
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="glass-card w-full max-w-[440px] p-8">
+        <div className="glass-card w-full max-w-[440px] p-8 transition-all duration-300">
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <img src={logo} alt="MedRec" className="w-14 h-14 rounded-xl mx-auto mb-4" />
-            <h1 className="text-2xl font-bold">Iniciar sesión</h1>
+            <h1 className="text-2xl font-bold">{isRegister ? 'Crear cuenta' : 'Iniciar sesión'}</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-              Accede a tu cuenta de MedRec
+              {isRegister ? 'Regístrate para guardar favoritos e historial' : 'Accede a tu cuenta de MedRec'}
             </p>
           </div>
 
+          {/* Tabs */}
+          <div className="flex border-b border-white/10 mb-6">
+            <button
+              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
+                !isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setIsRegister(false);
+                setErrors({});
+              }}
+            >
+              Ingresar
+            </button>
+            <button
+              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
+                isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setIsRegister(true);
+                setErrors({});
+              }}
+            >
+              Registrarse
+            </button>
+          </div>
+
           {/* Formulario */}
-          <div className="space-y-5">
+          <div className="space-y-4">
             <Input
               id="login-email"
               label="Correo electrónico"
@@ -131,14 +189,27 @@ export default function Login() {
               error={errors.password}
             />
 
+            {isRegister && (
+              <Input
+                id="login-confirm-password"
+                label="Confirmar contraseña"
+                type="password"
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+                error={errors.confirmPassword}
+              />
+            )}
+
             <Button
               variant="primary"
               fullWidth
               loading={loading}
-              icon={<RiLoginBoxLine />}
+              icon={isRegister ? <RiUserAddLine /> : <RiLoginBoxLine />}
               onClick={handleSubmit}
             >
-              Entrar
+              {isRegister ? 'Crear cuenta' : 'Entrar'}
             </Button>
           </div>
 
@@ -161,14 +232,17 @@ export default function Login() {
             Continuar con Google
           </Button>
 
-          {/* Enlace registro */}
+          {/* Enlace alternar */}
           <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>
-            ¿No tienes cuenta?{' '}
+            {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes cuenta?'}{' '}
             <button
-              onClick={() => addToast({ type: 'info', message: 'Registro próximamente disponible.' })}
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setErrors({});
+              }}
               className="text-royalBlue-400 hover:text-royalBlue-300 transition-colors font-medium"
             >
-              Regístrate
+              {isRegister ? 'Inicia sesión' : 'Regístrate'}
             </button>
           </p>
         </div>

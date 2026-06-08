@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     RiSearchLine,
@@ -14,19 +14,32 @@ import { SpecialistCard } from '@/components/shared/SpecialistCard';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
-import { searchSpecialists } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth';
+import { searchSpecialists, guardarBusquedaHistorial } from '@/services/api';
+import { useCatalogs } from '@/hooks/useCatalogs';
 import img1 from '@/assets/doctors/doctor1.svg';
+
+const DEFAULT_FILTERS = {
+    especialidad: '',
+    ciudad: '',
+    tipoPaciente: 'todos',
+    orden: 'puntuacion_desc',
+    confiabilidad: '',
+    soloAnalizados: false,
+    page: 1,
+    limit: 12,
+};
 
 function createInitialFilters(searchParams) {
     return {
         especialidad: searchParams.get('especialidad') || searchParams.get('q') || '',
         ciudad: searchParams.get('ciudad') || '',
-        atiendeNinos: false,
-        atiendeAdultos: false,
-        atiendeAdolescentes: false,
-        orden: searchParams.get('orden') || 'puntuacion',
+        tipoPaciente: searchParams.get('tipoPaciente') || 'todos',
+        orden: searchParams.get('orden') || 'puntuacion_desc',
         soloAnalizados: searchParams.get('solo_analizados') === 'true',
         confiabilidad: searchParams.get('confiabilidad') || '',
+        page: Number(searchParams.get('page')) || 1,
+        limit: Number(searchParams.get('limit')) || 12,
     };
 }
 
@@ -34,32 +47,10 @@ function hasSearchIntent(filters) {
     return Boolean(
         filters.especialidad ||
         filters.ciudad ||
-        filters.atiendeNinos ||
-        filters.atiendeAdultos ||
-        filters.atiendeAdolescentes ||
+        (filters.tipoPaciente && filters.tipoPaciente !== 'todos') ||
         filters.confiabilidad ||
         filters.soloAnalizados
     );
-}
-
-function normalizeApiResults(response) {
-    if (Array.isArray(response)) {
-        return response;
-    }
-
-    if (Array.isArray(response?.results)) {
-        return response.results;
-    }
-
-    if (Array.isArray(response?.especialistas)) {
-        return response.especialistas;
-    }
-
-    if (Array.isArray(response?.favoritos)) {
-        return response.favoritos;
-    }
-
-    return [];
 }
 
 function getSpecialistId(specialist) {
@@ -78,11 +69,14 @@ function getSpecialistId(specialist) {
 export default function Search() {
     const [searchParams, setSearchParams] = useSearchParams();
     const { addToast } = useToast();
+    const { user } = useAuth();
+    const { specialties, cities, loading: catalogsLoading } = useCatalogs();
 
     const [filters, setFilters] = useState(() => createInitialFilters(searchParams));
     const [specialists, setSpecialists] = useState([]);
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 12, pages: 0 });
 
     const updateUrlParams = useCallback(
         (nextFilters) => {
@@ -96,7 +90,11 @@ export default function Search() {
                 params.set('ciudad', nextFilters.ciudad);
             }
 
-            if (nextFilters.orden) {
+            if (nextFilters.tipoPaciente && nextFilters.tipoPaciente !== 'todos') {
+                params.set('tipoPaciente', nextFilters.tipoPaciente);
+            }
+
+            if (nextFilters.orden && nextFilters.orden !== 'puntuacion_desc') {
                 params.set('orden', nextFilters.orden);
             }
 
@@ -108,7 +106,11 @@ export default function Search() {
                 params.set('confiabilidad', nextFilters.confiabilidad);
             }
 
-            setSearchParams(params);
+            if (nextFilters.page && nextFilters.page > 1) {
+                params.set('page', String(nextFilters.page));
+            }
+
+            setSearchParams(params, { replace: true });
         },
         [setSearchParams]
     );
@@ -117,6 +119,7 @@ export default function Search() {
         async (nextFilters) => {
             if (!hasSearchIntent(nextFilters)) {
                 setSpecialists([]);
+                setPagination({ total: 0, page: 1, limit: 12, pages: 0 });
                 setLoading(false);
                 setHasSearched(false);
                 return;
@@ -127,10 +130,38 @@ export default function Search() {
 
             try {
                 const response = await searchSpecialists(nextFilters);
-                const results = normalizeApiResults(response);
 
-                setSpecialists(results);
+                console.log('[Search] Respuesta del backend:', response);
+
+                setSpecialists(response.results);
+                setPagination({
+                    total: response.total,
+                    page: response.page,
+                    limit: response.limit,
+                    pages: response.pages,
+                });
                 updateUrlParams(nextFilters);
+
+                if (user) {
+                    try {
+                        await guardarBusquedaHistorial({
+                            especialidad: nextFilters.especialidad || null,
+                            ubicacion: nextFilters.ciudad || null,
+                            consulta_texto: null,
+                            filtros: {
+                                especialidad: nextFilters.especialidad || null,
+                                ciudad: nextFilters.ciudad || null,
+                                orden: nextFilters.orden || 'puntuacion_desc',
+                                solo_analizados: nextFilters.soloAnalizados || false,
+                                confiabilidad: nextFilters.confiabilidad || null,
+                            },
+                            origen: 'tradicional',
+                            total_resultados: response.total
+                        });
+                    } catch (historyErr) {
+                        console.error('[Search] Error guardando historial:', historyErr);
+                    }
+                }
             } catch (error) {
                 console.error('Error al buscar especialistas:', error);
 
@@ -140,31 +171,22 @@ export default function Search() {
                 });
 
                 setSpecialists([]);
+                setPagination({ total: 0, page: 1, limit: 12, pages: 0 });
             } finally {
                 setLoading(false);
             }
         },
-        [addToast, updateUrlParams]
+        [addToast, updateUrlParams, user]
     );
 
     const applyFilters = useCallback(() => {
-        doSearch(filters);
+        doSearch({ ...filters, page: 1 });
     }, [doSearch, filters]);
 
     const clearFilters = useCallback(() => {
-        const clearedFilters = {
-            especialidad: '',
-            ciudad: '',
-            atiendeNinos: false,
-            atiendeAdultos: false,
-            atiendeAdolescentes: false,
-            orden: 'puntuacion',
-            soloAnalizados: false,
-            confiabilidad: '',
-        };
-
-        setFilters(clearedFilters);
+        setFilters(DEFAULT_FILTERS);
         setSpecialists([]);
+        setPagination({ total: 0, page: 1, limit: 12, pages: 0 });
         setLoading(false);
         setHasSearched(false);
         setSearchParams({});
@@ -187,26 +209,9 @@ export default function Search() {
         [doSearch, filters]
     );
 
-    const sortedSpecialists = useMemo(() => {
-        return [...specialists].sort((a, b) => {
-            switch (filters.orden) {
-                case 'puntuacion':
-                    return (
-                        (b.puntuacion_recomendacion ?? b.score_recomendacion ?? 0) -
-                        (a.puntuacion_recomendacion ?? a.score_recomendacion ?? 0)
-                    );
-
-                case 'rating':
-                    return (b.rating_global ?? 0) - (a.rating_global ?? 0);
-
-                case 'opiniones':
-                    return (b.total_opiniones ?? 0) - (a.total_opiniones ?? 0);
-
-                default:
-                    return 0;
-            }
-        });
-    }, [specialists, filters.orden]);
+    // El backend ya ordena, no necesitamos sort local.
+    // Pero mantenemos la referencia para que el resto del código funcione.
+    const sortedSpecialists = specialists;
 
     useEffect(() => {
         const initialFilters = createInitialFilters(searchParams);
@@ -235,6 +240,9 @@ export default function Search() {
                         onSearch={applyFilters}
                         onClear={clearFilters}
                         onChatDetected={handleChatDetected}
+                        specialties={specialties}
+                        cities={cities}
+                        catalogsLoading={catalogsLoading}
                     />
 
                     <main className="min-w-0 flex-1">
