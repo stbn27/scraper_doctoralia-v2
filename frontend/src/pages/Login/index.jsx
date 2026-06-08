@@ -27,7 +27,7 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Determinar la redirección tras login
-  const from = location.state?.from || '/perfil';
+  const from = location.state?.from || '/busqueda';
 
   /**
    * Valida los campos del formulario.

@@ -45,7 +45,7 @@ export function InlineLogin({ onSuccess }) {
         if (onSuccess) {
           onSuccess();
         } else {
-          navigate('/perfil');
+          navigate('/busqueda');
         }
       } else {
         addToast({ type: 'error', message: result.message });
@@ -66,7 +66,7 @@ export function InlineLogin({ onSuccess }) {
         if (onSuccess) {
           onSuccess();
         } else {
-          navigate('/perfil');
+          navigate('/busqueda');
         }
       } else {
         addToast({ type: 'error', message: result.message });

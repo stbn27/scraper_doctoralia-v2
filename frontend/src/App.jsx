@@ -33,6 +33,25 @@ function ProtectedRoute({ children }) {
 }
 
 /**
+ * PublicRoute — Redirige a /busqueda si el usuario ya tiene sesión activa.
+ * Muestra el loader mientras se revalida la sesión.
+ * @param {{ children: React.ReactNode }} props
+ */
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <PageLoader />;
+  }
+
+  if (user) {
+    return <Navigate to="/busqueda" replace />;
+  }
+
+  return children;
+}
+
+/**
  * PageLoader — Spinner de carga para lazy loading.
  */
 function PageLoader() {
@@ -58,12 +77,12 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
           <Route path="/busqueda" element={<Search />} />
           {/* Soportar ambas variantes de ruta para el detalle de especialista */}
           <Route path="/especialista/:id" element={<Detail />} />
           <Route path="/especialistas/:id" element={<Detail />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           
           <Route
             path="/perfil"

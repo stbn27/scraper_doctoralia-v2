@@ -365,7 +365,7 @@ export default function Detail() {
                   />
                   <MetricCard
                     label="Verificadas"
-                    value={`${((localMetrics.porcentaje_verificadas || 0) * 100).toFixed(0)}%`}
+                    value={`${(localMetrics.porcentaje_verificadas || 0).toFixed(1).replace('.0', '')}%`}
                   />
                   <MetricCard
                     label="Longitud promedio"
@@ -373,7 +373,7 @@ export default function Detail() {
                   />
                   <MetricCard
                     label="Textos cortos"
-                    value={`${((localMetrics.porcentaje_texto_corto || 0) * 100).toFixed(0)}%`}
+                    value={`${(localMetrics.porcentaje_texto_corto || 0).toFixed(1).replace('.0', '')}%`}
                   />
                 </div>
               </div>
