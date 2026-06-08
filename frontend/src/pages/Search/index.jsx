@@ -377,11 +377,12 @@ export default function Search() {
 
                         {showResults && (
                             <>
-                                <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {sortedSpecialists.map((specialist) => (
+                                <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                    {sortedSpecialists.map((specialist, idx) => (
                                         <SpecialistCard
                                             key={getSpecialistId(specialist)}
                                             specialist={specialist}
+                                            index={idx}
                                         />
                                     ))}
                                 </section>
