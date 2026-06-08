@@ -10,15 +10,18 @@ export function SearchSidebar({
     onSearch,
     onClear,
     onChatDetected,
+    specialties,
+    cities,
+    catalogsLoading,
 }) {
-    const [mode, setMode] = useState('chat');
+    const [mode, setMode] = useState('traditional');
 
     const isChatMode = mode === 'chat';
 
     return (
+        // ${isChatMode ? 'w-full lg:w-[430px]' : 'w-full lg:w-[320px]'}
         <aside
-            className={`glass-card shrink-0 overflow-hidden transition-all duration-300 ease-out lg:sticky lg:top-24 lg:self-start ${isChatMode ? 'w-full lg:w-[430px]' : 'w-full lg:w-[320px]'
-                }`}
+            className={`glass-card shrink-0 overflow-hidden transition-all duration-300 ease-out lg:sticky lg:top-24 lg:self-start w-full lg:w-80`}
         >
             <div className="border-b border-black/10 p-4 dark:border-white/10">
 
@@ -56,10 +59,10 @@ export function SearchSidebar({
             <div className="relative">
                 {isChatMode ? (
                     <div className="h-[620px]">
-                        <ChatPanel
+                        {<ChatPanel
                             compact
                             onDetectedChange={onChatDetected}
-                        />
+                        />}
                     </div>
                 ) : (
                     <div className="p-4">
@@ -68,6 +71,9 @@ export function SearchSidebar({
                             onFiltersChange={onFiltersChange}
                             onSearch={onSearch}
                             onClear={onClear}
+                            specialties={specialties}
+                            cities={cities}
+                            catalogsLoading={catalogsLoading}
                         />
                     </div>
                 )}
