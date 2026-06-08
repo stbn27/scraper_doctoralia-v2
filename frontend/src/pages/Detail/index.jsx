@@ -141,6 +141,14 @@ export default function Detail() {
 
   const profileUrl = specialist.scraping_meta?.url_origen || specialist.url_origen || specialist.url || (specialist.doctoralia_id ? `https://www.doctoralia.com.mx/doctor/id/${specialist.doctoralia_id}` : null);
 
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/busqueda');
+    }
+  };
+
   return (
     <PageWrapper name="detail">
       <BubbleBackground />
@@ -149,7 +157,7 @@ export default function Detail() {
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
         {/* Botón volver */}
         <button
-          onClick={() => navigate('/busqueda')}
+          onClick={handleBack}
           className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
           style={{ color: 'var(--text-muted)' }}
         >
@@ -230,13 +238,13 @@ export default function Detail() {
 
         {/* Enlace original de Doctoralia */}
         {profileUrl && (
-          <div className="glass-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-royalBlue-500/20 bg-royalBlue-550/5 hover:bg-royalBlue-550/10 transition-colors scroll-reveal">
+          <div className="glass-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-royalBlue-500/20 bg-royalBlue-600/5 hover:bg-royalBlue-600/10 dark:border-royalBlue-500/10 dark:bg-royalBlue-500/5 dark:hover:bg-royalBlue-500/10 transition-colors scroll-reveal">
             <div className="space-y-1">
-              <h4 className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
                 <RiExternalLinkLine className="text-royalBlue-400 text-base" />
                 Perfil original en Doctoralia
               </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 Puedes consultar la disponibilidad, agendar una cita o ver opiniones completas visitando el perfil directo en la plataforma original.
               </p>
             </div>
@@ -273,41 +281,47 @@ export default function Detail() {
           {hasIa ? (
             <div className="space-y-6">
               {/* Resumen */}
-              <div className="p-4 rounded-xl bg-royalBlue-900/20 border border-royalBlue-500/10 italic text-sm text-slate-200 leading-relaxed">
+              <div 
+                className="p-5 sm:p-6 rounded-xl bg-royalBlue-50/50 dark:bg-royalBlue-950/20 border border-royalBlue-100 dark:border-royalBlue-900/30 italic text-base sm:text-lg leading-relaxed shadow-sm"
+                style={{ 
+                  fontFamily: 'var(--font-primary)',
+                  color: 'var(--text-primary)'
+                }}
+              >
                 "{ia.resumen || 'Sin resumen disponible.'}"
               </div>
 
               {/* Puntos Fuertes y Débiles */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <h3 className="text-sm font-semibold text-emerald-500 dark:text-emerald-400 flex items-center gap-1.5">
                     <RiCheckboxCircleLine className="text-lg" /> Puntos fuertes destacados
                   </h3>
                   {ia.puntos_fuertes?.length > 0 ? (
-                    <ul className="space-y-2">
-                      {ia.puntos_fuertes.map((punto, idx) => (
-                        <li key={idx} className="text-xs text-slate-300 pl-2 border-l-2 border-emerald-500/50">
-                          {punto}
-                        </li>
-                      ))}
-                    </ul>
+                     <ul className="space-y-2">
+                       {ia.puntos_fuertes.map((punto, idx) => (
+                         <li key={idx} className="text-xs pl-2 border-l-2 border-emerald-500/50" style={{ color: 'var(--text-primary)' }}>
+                           {punto}
+                         </li>
+                       ))}
+                     </ul>
                   ) : (
                     <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Ninguno detectado</p>
                   )}
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-1.5">
+                  <h3 className="text-sm font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
                     <RiCloseCircleLine className="text-lg" /> Puntos débiles detectados
                   </h3>
                   {ia.puntos_debiles?.length > 0 ? (
-                    <ul className="space-y-2">
-                      {ia.puntos_debiles.map((punto, idx) => (
-                        <li key={idx} className="text-xs text-slate-300 pl-2 border-l-2 border-amber-500/50">
-                          {punto}
-                        </li>
-                      ))}
-                    </ul>
+                     <ul className="space-y-2">
+                       {ia.puntos_debiles.map((punto, idx) => (
+                         <li key={idx} className="text-xs pl-2 border-l-2 border-amber-500/50" style={{ color: 'var(--text-primary)' }}>
+                           {punto}
+                         </li>
+                       ))}
+                     </ul>
                   ) : (
                     <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Ninguno detectado</p>
                   )}
@@ -326,13 +340,13 @@ export default function Detail() {
 
               {/* Sospecha de Fraude */}
               {localMetrics.sospecha_fraude && (
-                <div className="p-4 rounded-xl bg-red-900/30 border border-red-500/30 text-red-200 text-sm space-y-2">
-                  <div className="flex items-center gap-2 font-bold text-red-400">
+                <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 text-sm space-y-2" style={{ color: 'var(--text-primary)' }}>
+                  <div className="flex items-center gap-2 font-bold text-red-600 dark:text-red-400">
                     <RiAlertFill className="text-xl shrink-0" />
                     <span>ALERTA: Sospecha de anomalías o fraude en opiniones</span>
                   </div>
                   {localMetrics.razones_fraude?.length > 0 && (
-                    <ul className="list-disc list-inside space-y-1 text-xs text-red-300">
+                    <ul className="list-disc list-inside space-y-1 text-xs text-red-700 dark:text-red-300">
                       {localMetrics.razones_fraude.map((razon, idx) => (
                         <li key={idx}>{razon}</li>
                       ))}
@@ -423,7 +437,7 @@ export default function Detail() {
           <section className="glass-card p-6 scroll-reveal">
             <h2 className="text-lg font-semibold mb-4 border-b border-white/10 pb-2">Ubicación y consultorio</h2>
             {consultorio.clinica && (
-              <p className="text-sm font-semibold mb-1 text-slate-100">{consultorio.clinica}</p>
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{consultorio.clinica}</p>
             )}
             <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               {consultorio.direccion}
@@ -454,7 +468,7 @@ function MetricCard({ label, value }) {
       <span className="text-[10px] uppercase font-bold tracking-wider opacity-60" style={{ color: 'var(--text-muted)' }}>
         {label}
       </span>
-      <span className="text-sm font-semibold mt-1 text-slate-100">
+      <span className="text-sm font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
         {value}
       </span>
     </div>

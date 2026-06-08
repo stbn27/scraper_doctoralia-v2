@@ -28,7 +28,7 @@ export function Navbar() {
     const isHome = location.pathname === '/';
     const isSearchPage = location.pathname === '/busqueda';
 
-    const shouldShowBackButton = !isHome && !isSearchPage && location.pathname !== '/dashboard' && location.pathname !== '/perfil' && location.pathname !== '/favoritos' && location.pathname !== '/historial';
+    const shouldShowBackButton = false;
 
     const getSectionTitle = () => {
         const path = location.pathname;
