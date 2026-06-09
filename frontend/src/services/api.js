@@ -153,10 +153,10 @@ export async function iniciarSesion(email, password) {
 /**
  * Registra un nuevo usuario en la base de datos.
  */
-export async function registrarUsuario(email, password) {
+export async function registrarUsuario(email, password, extraFields = {}) {
   return realizarPeticion('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, ...extraFields }),
   });
 }
 

@@ -22,12 +22,34 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // Campos de registro extendidos
+  const [nombre, setNombre] = useState('');
+  const [apellidos, setApellidos] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Determinar la redirección tras login
   const from = location.state?.from || '/busqueda';
+
+  /**
+   * Valida si una URL apunta a una imagen (extensión o parámetro conocido).
+   * @param {string} url
+   * @returns {boolean}
+   */
+  const isImageUrl = (url) => {
+    try {
+      const u = new URL(url);
+      const path = u.pathname.toLowerCase();
+      return /\.(jpg|jpeg|png|gif|webp|avif|svg)$/.test(path) ||
+        u.searchParams.has('format') ||
+        u.searchParams.has('ext');
+    } catch {
+      return false;
+    }
+  };
 
   /**
    * Valida los campos del formulario.
@@ -49,6 +71,25 @@ export default function Login() {
     }
 
     if (isRegister) {
+      if (!nombre.trim()) {
+        newErrors.nombre = 'El nombre es obligatorio.';
+      }
+      if (!apellidos.trim()) {
+        newErrors.apellidos = 'Los apellidos son obligatorios.';
+      }
+      if (telefono.trim() && !/^\+?[\d\s\-()]{7,15}$/.test(telefono.trim())) {
+        newErrors.telefono = 'Ingresa un teléfono válido (7–15 dígitos).';
+      }
+      if (avatarUrl.trim()) {
+        try {
+          new URL(avatarUrl.trim());
+          if (!isImageUrl(avatarUrl.trim())) {
+            newErrors.avatarUrl = 'La URL debe apuntar a una imagen (jpg, png, webp…).';
+          }
+        } catch {
+          newErrors.avatarUrl = 'Ingresa una URL válida (https://…).';
+        }
+      }
       if (!confirmPassword.trim()) {
         newErrors.confirmPassword = 'Debes confirmar la contraseña.';
       } else if (confirmPassword !== password) {
@@ -69,13 +110,22 @@ export default function Login() {
     setLoading(true);
     try {
       if (isRegister) {
-        const result = await registrarUsuario(email, password);
+        const result = await registrarUsuario(email, password, {
+          nombre: nombre.trim(),
+          apellido: apellidos.trim(),
+          telefono: telefono.trim() || undefined,
+          avatar_url: avatarUrl.trim() || undefined,
+        });
         if (result.success) {
           addToast({ type: 'success', message: result.message });
-          // Cambiar a pestaña de login y limpiar password
+          // Limpiar y cambiar a login
           setIsRegister(false);
           setPassword('');
           setConfirmPassword('');
+          setNombre('');
+          setApellidos('');
+          setTelefono('');
+          setAvatarUrl('');
         } else {
           addToast({ type: 'error', message: result.message });
         }
@@ -142,9 +192,8 @@ export default function Login() {
           {/* Tabs */}
           <div className="flex border-b border-white/10 mb-6">
             <button
-              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
-                !isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
-              }`}
+              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${!isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
               onClick={() => {
                 setIsRegister(false);
                 setErrors({});
@@ -153,9 +202,8 @@ export default function Login() {
               Ingresar
             </button>
             <button
-              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
-                isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
-              }`}
+              className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${isRegister ? 'border-royalBlue-500 text-royalBlue-400' : 'border-transparent text-slate-400 hover:text-white'
+                }`}
               onClick={() => {
                 setIsRegister(true);
                 setErrors({});
@@ -167,6 +215,42 @@ export default function Login() {
 
           {/* Formulario */}
           <div className="space-y-4">
+            {/* Campos solo en registro */}
+            {isRegister && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    id="reg-nombre"
+                    label="Nombre *"
+                    placeholder="Ej. José"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    error={errors.nombre}
+                  />
+                  <Input
+                    id="reg-apellidos"
+                    label="Apellidos *"
+                    placeholder="Ej. García Pérez"
+                    value={apellidos}
+                    onChange={(e) => setApellidos(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    error={errors.apellidos}
+                  />
+                </div>
+                <Input
+                  id="reg-telefono"
+                  label="Teléfono (opcional)"
+                  type="tel"
+                  placeholder="Ej. 5512345678"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  error={errors.telefono}
+                />
+              </>
+            )}
+
             <Input
               id="login-email"
               label="Correo electrónico"
@@ -190,16 +274,41 @@ export default function Login() {
             />
 
             {isRegister && (
-              <Input
-                id="login-confirm-password"
-                label="Confirmar contraseña"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                onKeyDown={handleKeyDown}
-                error={errors.confirmPassword}
-              />
+              <>
+                <Input
+                  id="login-confirm-password"
+                  label="Confirmar contraseña"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  error={errors.confirmPassword}
+                />
+                <div className="space-y-1">
+                  <Input
+                    id="reg-avatar-url"
+                    label="URL de foto de perfil (opcional)"
+                    type="url"
+                    placeholder="https://ejemplo.com/mi-foto.jpg"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    error={errors.avatarUrl}
+                  />
+                  {avatarUrl && !errors.avatarUrl && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <img
+                        src={avatarUrl}
+                        alt="Vista previa"
+                        className="w-8 h-8 rounded-full object-cover border border-white/15"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Vista previa</span>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             <Button

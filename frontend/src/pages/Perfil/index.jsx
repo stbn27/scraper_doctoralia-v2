@@ -73,7 +73,11 @@ export default function Perfil() {
     setDirsLoading(true);
     try {
       const data = await listarDirecciones();
-      setDirecciones(data || []);
+      // La API puede devolver un array directo o un wrapper { items: [], data: [] }
+      const list = Array.isArray(data)
+        ? data
+        : (data?.items || data?.data || data?.direcciones || []);
+      setDirecciones(list);
     } catch (err) {
       console.error('Error al cargar direcciones:', err);
     } finally {
@@ -344,6 +348,29 @@ export default function Perfil() {
                     className="glass-input w-full px-4 py-2.5 text-sm opacity-60 cursor-not-allowed"
                   />
                 </div>
+              </div>
+
+              {/* Avatar URL */}
+              <div className="space-y-1.5">
+                <Input
+                  id="profile-avatar-url"
+                  label="URL de foto de perfil (opcional)"
+                  type="url"
+                  value={avatarUrl.startsWith('http') ? avatarUrl : ''}
+                  onChange={(e) => setAvatarUrl(e.target.value || '👤')}
+                  placeholder="https://ejemplo.com/mi-foto.jpg"
+                />
+                {avatarUrl.startsWith('http') && (
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <img
+                      src={avatarUrl}
+                      alt="Vista previa"
+                      className="w-8 h-8 rounded-full object-cover border border-white/15"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Vista previa del avatar</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end pt-2">

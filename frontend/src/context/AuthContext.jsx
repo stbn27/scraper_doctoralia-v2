@@ -74,11 +74,14 @@ export function AuthProvider({ children }) {
 
   /**
    * Registra un nuevo usuario en la API del backend.
+   * @param {string} email
+   * @param {string} password
+   * @param {Object} extraFields — nombre, apellido, telefono, avatar_url opcionales
    */
-  const registrarUsuario = useCallback(async (email, password) => {
+  const registrarUsuario = useCallback(async (email, password, extraFields = {}) => {
     setLoading(true);
     try {
-      await apiRegistrarUsuario(email, password);
+      await apiRegistrarUsuario(email, password, extraFields);
       return { success: true, message: 'Usuario registrado con éxito. Ahora puedes iniciar sesión.' };
     } catch (error) {
       console.error("Error de registro:", error);
