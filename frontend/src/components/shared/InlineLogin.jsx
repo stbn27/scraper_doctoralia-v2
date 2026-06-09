@@ -118,7 +118,7 @@ export function InlineLogin({ onSuccess }) {
         >
           Entrar
         </Button>
-        <Button
+        {/* <Button
           variant="outline"
           fullWidth
           loading={googleLoading}
@@ -127,7 +127,7 @@ export function InlineLogin({ onSuccess }) {
           className="bg-white/5 hover:bg-white/10"
         >
           Continuar con Google
-        </Button>
+        </Button> */}
       </div>
 
       <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>

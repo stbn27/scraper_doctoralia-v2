@@ -277,7 +277,7 @@ export default function Detail() {
                   href={profileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs flex items-center gap-1.5 hover:text-royalBlue-400 transition-colors"
+                  className="text-xs flex items-center gap-1.5 hover:text-royalBlue-400 bg-white/4 border border-royalBlue-500/10 hover:bg-royalBlue-500/15 rounded-lg px-4 py-2 transition-colors"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   <RiExternalLinkLine />
@@ -287,11 +287,10 @@ export default function Detail() {
 
               <button
                 onClick={handleFavorite}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
-                  fav
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${fav
                     ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
                     : 'hover:bg-white/5'
-                }`}
+                  }`}
                 style={!fav ? { color: 'var(--text-muted)' } : {}}
               >
                 {fav ? <RiHeartFill className="text-sm" /> : <RiHeartLine className="text-sm" />}
@@ -310,13 +309,12 @@ export default function Detail() {
               <h2 className="text-base font-semibold">Resumen de recomendación</h2>
             </div>
             {hasIa ? (
-              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                ia.confiabilidad_opiniones === 'alta'
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${ia.confiabilidad_opiniones === 'alta'
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                   : ia.confiabilidad_opiniones === 'baja' || ia.confiabilidad_opiniones === 'sospechosa'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                  : 'bg-royalBlue-500/10 text-royalBlue-600 dark:text-royalBlue-300 border-royalBlue-500/20'
-              }`}>
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                    : 'bg-royalBlue-500/10 text-royalBlue-600 dark:text-royalBlue-300 border-royalBlue-500/20'
+                }`}>
                 Confiabilidad {ia.confiabilidad_opiniones || 'media'}
               </span>
             ) : (

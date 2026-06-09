@@ -254,7 +254,7 @@ export default function Search() {
         return (
             <div className="mt-8 flex items-center justify-center gap-1.5 flex-wrap">
                 <Button
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => handlePageChange(page - 1)}
                     disabled={page === 1}
                     className="px-3 py-1.5 text-xs rounded-xl"
@@ -267,8 +267,8 @@ export default function Search() {
                         <button
                             onClick={() => handlePageChange(1)}
                             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === 1
-                                    ? 'bg-royalBlue-600 text-white'
-                                    : 'hover:bg-white/10 text-slate-300'
+                                ? 'bg-royalBlue-600 text-white'
+                                : 'hover:bg-white/10 text-slate-300'
                                 }`}
                         >
                             1
@@ -282,8 +282,8 @@ export default function Search() {
                         key={num}
                         onClick={() => handlePageChange(num)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === num
-                                ? 'bg-royalBlue-600 text-white'
-                                : 'hover:bg-white/10 text-slate-300'
+                            ? 'bg-royalBlue-600 text-white'
+                            : 'hover:bg-royalBlue-400 hover:text-royalBlue-50 dark:hover:bg-white/10 text-royalBlue-800 dark:text-slate-300'
                             }`}
                     >
                         {num}
@@ -296,8 +296,8 @@ export default function Search() {
                         <button
                             onClick={() => handlePageChange(pages)}
                             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${page === pages
-                                    ? 'bg-royalBlue-600 text-white'
-                                    : 'hover:bg-white/10 text-slate-300'
+                                ? 'bg-royalBlue-600 text-white'
+                                : 'hover:bg-royalBlue-400 dark:hover:bg-white/10 hover:text-royalBlue-50 text-royalBlue-800 dark:text-slate-300'
                                 }`}
                         >
                             {pages}
@@ -306,7 +306,7 @@ export default function Search() {
                 )}
 
                 <Button
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => handlePageChange(page + 1)}
                     disabled={page === pages}
                     className="px-3 py-1.5 text-xs rounded-xl"
@@ -425,12 +425,13 @@ function InitialSearchState() {
                     className="mx-auto mt-6 max-h-64 object-contain"
                 />
 
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {/* Recomendaciones básicas, podría usarce en base al historial */}
+                {/* <div className="mt-6 flex flex-wrap justify-center gap-2">
                     <SuggestionChip text="Dolor de muela" />
                     <SuggestionChip text="Dermatólogo en CDMX" />
                     <SuggestionChip text="Cardiólogo" />
                     <SuggestionChip text="Especialista para niños" />
-                </div>
+                </div> */}
             </div>
         </section>
     );
