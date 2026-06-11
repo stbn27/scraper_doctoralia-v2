@@ -8,6 +8,7 @@ import re
 
 def construir_prompt_sistema() -> str:
     """Retorna el prompt del sistema con reglas críticas y formato JSON."""
+
     return """Eres un sistema experto en evaluación de calidad de atención médica.
 Analiza especialistas médicos cruzando opiniones, servicios, precios, consultorios,
 perfil profesional, flags de pacientes, métricas locales y metadatos de muestreo.
@@ -75,30 +76,32 @@ def construir_prompt_usuario(datos_preparados: dict) -> str:
     }
 
     return f"""DATOS PARA ANALIZAR
-{json.dumps(payload, ensure_ascii=False, indent=2)}
+    {json.dumps(payload, ensure_ascii=False, indent=2)}
 
-INSTRUCCIONES ESPECÍFICAS PARA ESTE CASO
-- Usa la nota de muestreo para no confundir el subconjunto enviado con el volumen real.
-- Si hay muestra parcial, evalúa representatividad y menciona el total real de opiniones.
-- Si `perfil.perfil_detalla_pacientes` es false, escribe literalmente que el perfil no detalla qué tipos de pacientes atiende.
-- Si `perfil.perfil_detalla_pacientes` es true, menciona en el resumen los grupos que sí aparecen como atendidos; si solo atiende adultos, dilo explícitamente.
-- Evalúa transparencia de precios con `perfil.integridad_perfil.servicios_con_precio` y `servicios_sin_precio`.
-- Si hay servicios con precio, explica que puede revisar esos precios en el perfil; si faltan muchos precios, úsalo como cautela.
-- No inventes datos clínicos ni poblaciones atendidas.
+    INSTRUCCIONES ESPECÍFICAS PARA ESTE CASO
+    - Usa la nota de muestreo para no confundir el subconjunto enviado con el volumen real.
+    - Si hay muestra parcial, evalúa representatividad y menciona el total real de opiniones.
+    - Si `perfil.perfil_detalla_pacientes` es false, escribe literalmente que el perfil no detalla qué tipos de pacientes atiende.
+    - Si `perfil.perfil_detalla_pacientes` es true, menciona en el resumen los grupos que sí aparecen como atendidos; si solo atiende adultos, dilo explícitamente.
+    - Evalúa transparencia de precios con `perfil.integridad_perfil.servicios_con_precio` y `servicios_sin_precio`.
+    - Si hay servicios con precio, explica que puede revisar esos precios en el perfil; si faltan muchos precios, úsalo como cautela.
+    - No inventes datos clínicos ni poblaciones atendidas.
 
-RESPONDE EXACTAMENTE CON ESTE JSON:
-{{
-  "puntuacion_recomendacion": float (1.0-10.0),
-  "resumen": "string de máximo 5 oraciones/líneas, específico y útil para usuario final; la primera no repite nombre completo ni especialidad",
-  "puntos_fuertes": ["máximo 4 puntos concretos"],
-  "puntos_debiles": ["mínimo 1, máximo 4 puntos concretos y variables"],
-  "confiabilidad_opiniones": "alta|media|baja|sospechosa",
-  "justificacion_puntuacion": "string breve explicando el score asignado con evidencia"
-}}"""
+    RESPONDE EXACTAMENTE CON ESTE JSON:
+    {{
+      "puntuacion_recomendacion": float (1.0-10.0),
+      "resumen": "string de máximo 5 oraciones/líneas, específico y útil para usuario final; la primera no repite nombre completo ni especialidad",
+      "puntos_fuertes": ["máximo 4 puntos concretos"],
+      "puntos_debiles": ["mínimo 1, máximo 4 puntos concretos y variables"],
+      "confiabilidad_opiniones": "alta|media|baja|sospechosa",
+      "justificacion_puntuacion": "string breve explicando el score asignado con evidencia"
+    }}"""
 
 
 def construir_analisis_minimo(especialista: dict, razon: str) -> dict:
+
     """Genera un análisis sin IA para médicos no aptos."""
+    
     nombre = especialista.get("nombre", "Sin nombre")
     especialidad = especialista.get("especialidad", "Sin especialidad")
 
@@ -140,9 +143,15 @@ def construir_analisis_fraude_local(datos_preparados: dict) -> dict:
 
     puntos_debiles = [f"Sospecha de manipulación: {razon}" for razon in razones[:2]]
     if pct_corto:
-        puntos_debiles.append(f"{pct_corto}% de las opiniones son muy cortas, lo que reduce profundidad útil.")
-    if integridad.get("servicios_sin_precio", 0) > integridad.get("servicios_con_precio", 0):
-        puntos_debiles.append("La mayoría de servicios no publica precio, limitando transparencia comercial.")
+        puntos_debiles.append(
+            f"{pct_corto}% de las opiniones son muy cortas, lo que reduce profundidad útil."
+        )
+    if integridad.get("servicios_sin_precio", 0) > integridad.get(
+        "servicios_con_precio", 0
+    ):
+        puntos_debiles.append(
+            "La mayoría de servicios no publica precio, limitando transparencia comercial."
+        )
     if not perfil.get("perfil_detalla_pacientes"):
         puntos_debiles.append("El perfil no detalla qué tipos de pacientes atiende.")
 
@@ -152,9 +161,13 @@ def construir_analisis_fraude_local(datos_preparados: dict) -> dict:
 
     puntos_fuertes = []
     if pct_verif:
-        puntos_fuertes.append(f"{pct_verif}% de opiniones declaran algún tipo de verificación.")
+        puntos_fuertes.append(
+            f"{pct_verif}% de opiniones declaran algún tipo de verificación."
+        )
     if integridad.get("servicios_con_precio", 0) > 0:
-        puntos_fuertes.append(f"Publica precios en {integridad.get('servicios_con_precio')} servicios.")
+        puntos_fuertes.append(
+            f"Publica precios en {integridad.get('servicios_con_precio')} servicios."
+        )
     puntos_fuertes = puntos_fuertes[:4]
 
     resumen = (
@@ -162,17 +175,20 @@ def construir_analisis_fraude_local(datos_preparados: dict) -> dict:
         f"La evaluación queda penalizada por {', '.join(razones[:2]) if razones else 'homogeneidad anómala de reseñas'} y debe revisarse antes de usarla en ranking."
     )
 
-    return reforzar_resultado_analisis({
-        "puntuacion_recomendacion": 3.0,
-        "resumen": resumen,
-        "puntos_fuertes": puntos_fuertes,
-        "puntos_debiles": puntos_debiles,
-        "confiabilidad_opiniones": "sospechosa",
-        "justificacion_puntuacion": (
-            "La puntuación se mantiene baja porque la detección local de fraude pesa más "
-            "que los ratings positivos o la verificación declarada."
-        ),
-    }, datos_preparados)
+    return reforzar_resultado_analisis(
+        {
+            "puntuacion_recomendacion": 3.0,
+            "resumen": resumen,
+            "puntos_fuertes": puntos_fuertes,
+            "puntos_debiles": puntos_debiles,
+            "confiabilidad_opiniones": "sospechosa",
+            "justificacion_puntuacion": (
+                "La puntuación se mantiene baja porque la detección local de fraude pesa más "
+                "que los ratings positivos o la verificación declarada."
+            ),
+        },
+        datos_preparados,
+    )
 
 
 def _frase_pacientes(perfil: dict) -> str:
@@ -198,7 +214,9 @@ def _frase_pacientes(perfil: dict) -> str:
 
 
 def _limitar_resumen(resumen: str, max_oraciones: int = 5) -> str:
-    partes = [p.strip() for p in re.split(r"(?<=[.!?])\s+", resumen.strip()) if p.strip()]
+    partes = [
+        p.strip() for p in re.split(r"(?<=[.!?])\s+", resumen.strip()) if p.strip()
+    ]
     if len(partes) <= max_oraciones:
         return resumen.strip()
     return " ".join(partes[:max_oraciones]).strip()
@@ -214,8 +232,12 @@ def reforzar_resultado_analisis(resultado: dict, datos_preparados: dict) -> dict
     perfil = datos_preparados.get("perfil_limpio", {})
     integridad = perfil.get("integridad_perfil", {})
     resumen = str(resultado.get("resumen") or "").strip()
-    debiles = [str(p).strip() for p in resultado.get("puntos_debiles", []) if str(p).strip()]
-    fuertes = [str(p).strip() for p in resultado.get("puntos_fuertes", []) if str(p).strip()]
+    debiles = [
+        str(p).strip() for p in resultado.get("puntos_debiles", []) if str(p).strip()
+    ]
+    fuertes = [
+        str(p).strip() for p in resultado.get("puntos_fuertes", []) if str(p).strip()
+    ]
 
     if not perfil.get("perfil_detalla_pacientes"):
         frase = "el perfil no detalla qué tipos de pacientes atiende"
@@ -237,12 +259,16 @@ def reforzar_resultado_analisis(resultado: dict, datos_preparados: dict) -> dict
             resumen = f"{resumen} {frase_precio}".strip()
         fuertes.append(frase_precio)
     if sin_precio > con_precio and sin_precio > 0:
-        debiles.append(f"{sin_precio} servicios no muestran precio, lo que reduce transparencia para comparar costos.")
+        debiles.append(
+            f"{sin_precio} servicios no muestran precio, lo que reduce transparencia para comparar costos."
+        )
 
     duplicados = integridad.get("servicios_duplicados_detectados") or []
     if duplicados:
         muestra = ", ".join(duplicados[:3])
-        debiles.append(f"Servicios duplicados o mal estructurados detectados: {muestra}.")
+        debiles.append(
+            f"Servicios duplicados o mal estructurados detectados: {muestra}."
+        )
 
     resultado["resumen"] = _limitar_resumen(resumen, max_oraciones=5)
     resultado["puntos_fuertes"] = list(dict.fromkeys(fuertes))[:4]

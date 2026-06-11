@@ -10,7 +10,7 @@ services:
 
   mongodb:
     image: mongo:6
-    ports: ["27017:27017"]
+    ports: ["27018:27017"]
     volumes:
       - mongo_data:/data/db
     command: --wiredTigerCacheSizeGB 0.5 # limita cache a 512MB
