@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -376,19 +377,18 @@ class ChatInterpretResponse(BaseModel):
     """
     Respuesta del endpoint de interpretación médica.
 
-    Contiene la respuesta textual del asistente, los filtros detectados,
-    campos faltantes, sugerencias rápidas y parámetros de búsqueda listos
-    para enviar al endpoint `GET /especialistas`.
+    Contiene la respuesta en formato de mensajes, filtros SQL/Mongo,
+    y sugerencias de próximos pasos.
     """
 
-    reply: str
+    mensaje: str
+    respuesta: list[str]
+    mongo: Optional[Any] = None
+    sql: Optional[list[str]] = None
+    filtros: Optional[dict[str, Any]] = None
+    sugerencias: list[str] = []
+    historial_mensajes: Optional[list[Any]] = None
     ready: bool = False
-    should_search: bool = False
-    detected: Optional[DetectadoChat] = None
-    missing_fields: list[str] = []
-    suggestions: list[SugerenciaChat] = []
-    search_params: Optional[dict[str, Any]] = None
-    safety: SafetyChat = SafetyChat()
     model: Optional[ModeloInfoChat] = None
 
 

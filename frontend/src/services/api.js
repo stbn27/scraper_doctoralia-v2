@@ -41,19 +41,19 @@ function writeStoredArray(key, value) {
  */
 export async function realizarPeticion(endpoint, opciones = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const headers = { ...opciones.headers };
   if (!(opciones.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  
+
   if (canUseStorage()) {
     const token = window.localStorage.getItem('medrec_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
-  
+
   const response = await fetch(url, {
     ...opciones,
     headers,
@@ -77,7 +77,7 @@ export async function realizarPeticion(endpoint, opciones = {}) {
       if (errorJson?.detail) {
         mensaje = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
       }
-    } catch (_) {}
+    } catch (_) { }
     throw new Error(mensaje);
   }
 
@@ -135,7 +135,7 @@ export async function iniciarSesion(email, password) {
     if (canUseStorage()) {
       window.localStorage.setItem('medrec_user', JSON.stringify(perfil));
     }
-    
+
     // Cargar favoritos del backend al iniciar sesión
     try {
       const favs = await listarFavoritos();
@@ -305,7 +305,7 @@ export const getFavoriteSpecialists = async () => {
  */
 export async function agregarFavorito(medicoId) {
   const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
-  
+
   // Guardar localmente
   const favorites = readStoredArray(FAVORITES_STORAGE_KEY);
   if (!favorites.includes(medicoId)) {
@@ -373,7 +373,7 @@ export async function listarHistorial(page = 1, limit = 20) {
 export const getSearchHistory = async (filtrosLocales = {}) => {
   const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
   let history = [];
-  
+
   if (token) {
     const data = await listarHistorial(1, 100);
     history = Array.isArray(data) ? data : (data.results || data.historial || []);
@@ -406,7 +406,7 @@ export const getSearchHistory = async (filtrosLocales = {}) => {
  */
 export async function guardarBusquedaHistorial(busqueda) {
   const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
-  
+
   const nuevoItem = {
     id: String(Date.now()),
     query: busqueda.consulta_texto || busqueda.especialidad || '',
@@ -439,7 +439,7 @@ export async function guardarBusquedaHistorial(busqueda) {
  */
 export async function limpiarHistorial() {
   const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
-  
+
   writeStoredArray(SEARCH_HISTORY_STORAGE_KEY, []);
 
   if (!token) {
@@ -481,17 +481,17 @@ export async function chatMessage(history = []) {
     }),
   });
 
-  const detected = data?.detected ?? {};
-  const searchParams = data?.search_params ?? {};
+  const filtros = data?.filtros ?? {};
 
   return {
     role: 'assistant',
-    content: data?.reply ?? 'No pude procesar tu mensaje.',
-    especialidad: searchParams.especialidad ?? detected.especialidad_slug ?? null,
-    ciudad: searchParams.ciudad ?? detected.ciudad_slug ?? null,
+    content: data?.mensaje ?? 'No pude procesar tu mensaje.',
+    respuesta: Array.isArray(data?.respuesta) ? data.respuesta : ['Lo siento, hubo un error procesando el mensaje.'],
+    especialidad: filtros?.especialidad ?? null,
+    ciudad: filtros?.ubicacion ?? null,
+    filtros: filtros,
+    sql: data?.sql ?? null,
     ready: Boolean(data?.ready),
-    suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
-    missingFields: Array.isArray(data?.missing_fields) ? data.missing_fields : [],
-    safety: data?.safety ?? null,
+    suggestions: Array.isArray(data?.sugerencias) ? data.sugerencias : [],
   };
 }

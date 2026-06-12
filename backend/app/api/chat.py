@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.schemas import (
@@ -179,25 +180,24 @@ async def recomendar(body: RecomendarRequest):
         return {
             "interpretacion": {
                 "ready": False,
-                "missing_fields": interpretacion.get("missing_fields", []),
-                "reply": interpretacion.get("reply", ""),
+                "mensaje": interpretacion.get("mensaje", ""),
+                "respuesta": interpretacion.get("respuesta", []),
             },
             "results": [],
         }
 
-    search_params = interpretacion.get("search_params") or {}
-    detected = interpretacion.get("detected") or {}
+    filtros = interpretacion.get("filtros") or {}
+    otros = filtros.get("otros") or {}
 
     params_busqueda = {
-        "especialidad": search_params.get("especialidad")
-        or detected.get("especialidad_slug"),
-        "ciudad": search_params.get("ciudad") or detected.get("ciudad_slug"),
-        "orden": search_params.get("orden", "puntuacion_desc"),
-        "solo_analizados": search_params.get("solo_analizados", True),
-        "solo_con_opiniones": search_params.get("solo_con_opiniones", True),
-        "atiende_ninos": search_params.get("atiende_ninos", False),
-        "atiende_adultos": search_params.get("atiende_adultos", True),
-        "atiende_adolescentes": search_params.get("atiende_adolescentes", False),
+        "especialidad": filtros.get("especialidad"),
+        "ciudad": filtros.get("ubicacion"),
+        "orden": "puntuacion_desc",
+        "solo_analizados": True,
+        "solo_con_opiniones": True,
+        "atiende_ninos": otros.get("atiende_ninos", False),
+        "atiende_adultos": otros.get("atiende_adultos", True),
+        "atiende_adolescentes": otros.get("atiende_adolescentes", False),
     }
 
     resultado_busqueda = await busqueda_service.buscar_especialistas_paginado(
@@ -209,11 +209,9 @@ async def recomendar(body: RecomendarRequest):
     return {
         "interpretacion": {
             "ready": True,
-            "especialidad": detected.get("especialidad"),
-            "especialidad_slug": detected.get("especialidad_slug"),
-            "ciudad": detected.get("ciudad"),
-            "ciudad_slug": detected.get("ciudad_slug"),
-            "search_params": search_params,
+            "especialidad": filtros.get("especialidad"),
+            "ciudad": filtros.get("ubicacion"),
+            "filtros": filtros,
         },
         "results": resultado_busqueda.get("results", []),
     }

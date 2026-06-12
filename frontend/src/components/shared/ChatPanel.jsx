@@ -16,6 +16,8 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
         const [input, setInput] = useState('');
         const [isTyping, setIsTyping] = useState(false);
         const [detectedData, setDetectedData] = useState({ especialidad: null, ciudad: null, ready: false });
+        const [currentSuggestions, setCurrentSuggestions] = useState(['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista']);
+        const [showLocationBtn, setShowLocationBtn] = useState(false);
         const messagesEndRef = useRef(null);
         const textareaRef = useRef(null);
 
@@ -41,7 +43,22 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
 
                         try {
                                 const response = await chatMessage(newHistory);
-                                setMessages((prev) => [...prev, response]);
+
+                                const responseMessages = (response.respuesta && response.respuesta.length > 0)
+                                        ? response.respuesta.map(msg => ({ role: 'assistant', content: msg }))
+                                        : [{ role: 'assistant', content: response.content }];
+
+                                setMessages((prev) => [...prev, ...responseMessages]);
+
+                                if (response.suggestions && response.suggestions.length > 0) {
+                                        setCurrentSuggestions(response.suggestions);
+                                }
+
+                                if (response.sql && response.sql.includes('UBICACION_USUARIO')) {
+                                        setShowLocationBtn(true);
+                                } else {
+                                        setShowLocationBtn(false);
+                                }
 
                                 setDetectedData((prev) => {
                                         const next = {
@@ -150,15 +167,42 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
 
                         {showChips && (
                                 <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
-                                        {['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista'].map((chip) => (
+                                        {currentSuggestions.map((chip, idx) => (
                                                 <button
-                                                        key={chip}
+                                                        key={`${chip}-${idx}`}
                                                         onClick={() => sendMessage(chip)}
                                                         className="border border-royalBlue-400/80 dark:border-royalBlue-400/50 text-royalBlue-500 dark:text-royalBlue-300 rounded-full px-3 py-1 text-xs hover:bg-royalBlue-600/20 transition-all duration-200 hover:scale-105 press-effect"
                                                 >
                                                         {chip}
                                                 </button>
                                         ))}
+                                </div>
+                        )}
+
+                        {showLocationBtn && !isTyping && (
+                                <div className="px-4 pb-2 shrink-0 flex">
+                                        <button
+                                                onClick={() => {
+                                                        const user = localStorage.getItem('medrec_user');
+                                                        let userCity = null;
+                                                        if (user) {
+                                                                try {
+                                                                        const parsed = JSON.parse(user);
+                                                                        userCity = parsed?.direccion_principal?.ciudad || parsed?.direccion_principal?.estado;
+                                                                } catch (e) { }
+                                                        }
+                                                        if (userCity) {
+                                                                sendMessage(`Mi ubicación es ${userCity}`);
+                                                        } else {
+                                                                setMessages(prev => [...prev, { role: 'assistant', content: 'No pude encontrar una ubicación en tu perfil. ¿Puedes escribirla por favor?' }]);
+                                                        }
+                                                        setShowLocationBtn(false);
+                                                }}
+                                                className="bg-royalBlue-600 text-white rounded-full px-4 py-1.5 text-xs hover:bg-royalBlue-700 transition-all duration-200 flex items-center gap-1 press-effect"
+                                        >
+                                                <RiSearchLine className="text-xs" />
+                                                Usar mi ubicación registrada
+                                        </button>
                                 </div>
                         )}
 

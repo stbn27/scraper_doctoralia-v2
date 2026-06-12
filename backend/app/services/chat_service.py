@@ -33,67 +33,50 @@ Debes responder SIEMPRE en JSON válido. No uses Markdown. No escribas texto fue
 Campos obligatorios de salida:
 
 {
-  "reply": string,
-  "ready": boolean,
-  "should_search": boolean,
-  "detected": {
-    "especialidad": string | null,
-    "especialidad_slug": string | null,
-    "ciudad": string | null,
-    "ciudad_slug": string | null,
-    "tipo_paciente": "nino" | "adulto" | "adolescente" | null,
-    "atiende_ninos": boolean,
-    "atiende_adultos": boolean,
-    "atiende_adolescentes": boolean,
-    "servicio": string | null,
-    "orden": "puntuacion_desc" | "opiniones_desc" | "rating_desc" | null,
-    "solo_analizados": boolean,
-    "solo_con_opiniones": boolean,
-    "confiabilidad": "alta" | "media" | "baja" | "sospechosa" | null,
-    "sospecha_fraude": boolean | null,
-    "precio_min": number | null,
-    "precio_max": number | null
-  },
-  "missing_fields": string[],
-  "suggestions": [
-    {
-      "type": "city" | "specialty" | "patient_type" | "action",
-      "label": string,
-      "value": string
-    }
+  "mensaje": "Resumen breve de lo que el usuario dijo o síntoma principal identificado",
+  "respuesta": [
+    "Mensaje 1 para mostrar al usuario",
+    "Mensaje 2 (por ejemplo, recomendaciones o preguntas adicionales)"
   ],
-  "search_params": object | null,
-  "safety": {
-    "is_emergency": boolean,
-    "message": string | null
-  }
+  "mongo": null,
+  "sql": null,
+  "filtros": {
+    "especialidad": "slug_de_la_especialidad" | null,
+    "ubicacion": "ciudad" | null,
+    "otros": {
+      "tipo_paciente": "nino" | "adulto" | "adolescente" | null,
+      "atiende_ninos": boolean,
+      "atiende_adultos": boolean,
+      "atiende_adolescentes": boolean,
+      "is_emergency": boolean
+    }
+  },
+  "sugerencias": [
+    "especialidad o síntoma sugerido",
+    "otra opción"
+  ],
+  "historial_mensajes": null
 }
 
 Reglas:
-1. Si el usuario menciona síntomas o molestias, sugiere una especialidad probable.
-2. Si falta ciudad o ubicación, pregunta por ciudad, estado o código postal.
-3. Si falta suficiente información para determinar especialidad, pregunta de forma concreta.
-4. Si hay especialidad y ubicación, ready debe ser true y should_search debe ser true.
-5. Si falta especialidad o ubicación, ready debe ser false y should_search debe ser false.
-6. Si el usuario menciona una urgencia grave, safety.is_emergency debe ser true y reply debe recomendar acudir a urgencias.
+1. Divide tu respuesta en varios mensajes cortos dentro del array `respuesta` para simular un chat natural.
+2. Si el usuario menciona síntomas o molestias, sugiere una especialidad probable en `sugerencias`.
+3. Si falta ciudad o ubicación, en uno de tus mensajes (`respuesta`) pregunta por ciudad, estado o código postal.
+4. Si falta información, formula preguntas en `respuesta`.
+5. Si el usuario ya indicó especialidad y ubicación (o las detectas con certeza), puedes colocar ["UBICACION_USUARIO"] en el campo `sql` si crees que hace falta confirmar la ubicación guardada, o simplemente pon los datos en `filtros`.
+6. Si el usuario menciona una urgencia grave (ej: dolor de pecho, sangrado), `is_emergency` en `otros` debe ser true, y en `respuesta` recomienda acudir a urgencias.
 7. No inventes ciudades ni especialistas que no estén claros.
-8. Normaliza especialidades a slugs cuando sea posible:
-   - dolor de muela, caries, endodoncia, diente -> endodoncia o dentista
-   - problemas de pareja, ansiedad, depresión, estrés emocional -> psicologo
-   - embarazo, menstruación, revisión ginecológica -> ginecologo
-   - corazón, dolor de pecho, presión alta -> cardiologo
-   - piel, acné, manchas, ronchas -> dermatologo
-   - huesos, articulaciones, rodilla, columna -> ortopedista
+8. Normaliza especialidades a slugs en `filtros.especialidad`:
+   - dolor de muela, caries, endodoncia -> endodoncia o dentista
+   - ansiedad, depresión, estrés emocional -> psicologo
+   - embarazo, menstruación -> ginecologo
+   - corazón, presión alta -> cardiologo
+   - piel, acné -> dermatologo
+   - huesos, articulaciones -> ortopedista
    - niños, pediatría -> pediatra
    - ojos, visión -> oftalmologo
    - oídos, nariz, garganta -> otorrinolaringologo
-9. Si hay duda entre dos especialidades, haz una pregunta.
-10. Señales de emergencia (is_emergency=true):
-    - dolor de pecho intenso, dificultad para respirar, pérdida de conciencia,
-      sangrado abundante, idea suicida, violencia física, abuso sexual,
-      embarazo con sangrado intenso, dolor súbito e intenso, síntomas neurológicos graves.
-11. Si el usuario tiene una ubicación registrada y se proporciona, úsala como sugerencia de ciudad.
-12. search_params solo se incluye cuando ready=true con los filtros mínimos para buscar.
+9. Si el usuario tiene una ubicación registrada y se proporciona en el contexto, úsala como sugerencia de ciudad.
 """
 
 
@@ -140,17 +123,20 @@ def _construir_prompt_usuario(
 def _respuesta_emergencia() -> dict:
     """Retorna respuesta estándar de emergencia médica."""
     return {
-        "reply": (
-            "Lo que describes puede requerir atención inmediata. "
-            "Te recomiendo acudir a urgencias o llamar a servicios de emergencia de tu localidad."
-        ),
-        "ready": False,
-        "should_search": False,
-        "detected": None,
-        "missing_fields": [],
-        "suggestions": [],
-        "search_params": None,
-        "safety": {"is_emergency": True, "message": "Recomendar atención urgente."},
+        "mensaje": "Emergencia médica detectada",
+        "respuesta": [
+            "Lo que describes puede requerir atención inmediata.",
+            "Te recomiendo acudir a urgencias o llamar a los servicios de emergencia de tu localidad lo antes posible.",
+        ],
+        "mongo": None,
+        "sql": None,
+        "filtros": {
+            "especialidad": None,
+            "ubicacion": None,
+            "otros": {"is_emergency": True},
+        },
+        "sugerencias": [],
+        "historial_mensajes": None,
     }
 
 
@@ -168,7 +154,8 @@ def _construir_instancia_modelo(provider: str):
     tuple[BaseModelo, str, str]
         Tupla de (instancia_modelo, nombre_proveedor, nombre_modelo).
     """
-    modelo_activo = os.getenv("MODELO_ACTIVO", "groq")
+    #modelo_activo = os.getenv("MODELO_ACTIVO", "groq")
+    modelo_activo = "gemini"
 
     if provider == "auto":
         provider = modelo_activo
@@ -252,8 +239,10 @@ async def interpretar_consulta_medica(
             ) from exc_principal
 
     # Verificar emergencia primero
-    safety = resultado.get("safety") or {}
-    if safety.get("is_emergency"):
+    filtros = resultado.get("filtros", {})
+    otros = filtros.get("otros", {}) if isinstance(filtros, dict) else {}
+
+    if isinstance(otros, dict) and otros.get("is_emergency"):
         respuesta = _respuesta_emergencia()
         respuesta["model"] = {"provider": proveedor_nombre, "name": modelo_nombre}
         return respuesta
@@ -262,13 +251,25 @@ async def interpretar_consulta_medica(
     resultado["model"] = {"provider": proveedor_nombre, "name": modelo_nombre}
 
     # Asegurar campos obligatorios con defaults
-    resultado.setdefault("reply", "")
-    resultado.setdefault("ready", False)
-    resultado.setdefault("should_search", False)
-    resultado.setdefault("detected", {})
-    resultado.setdefault("missing_fields", [])
-    resultado.setdefault("suggestions", [])
-    resultado.setdefault("search_params", None)
-    resultado.setdefault("safety", {"is_emergency": False, "message": None})
+    resultado.setdefault("mensaje", consulta)
+    resultado.setdefault("respuesta", ["Lo siento, no pude entender tu mensaje."])
+    if not isinstance(resultado["respuesta"], list):
+        resultado["respuesta"] = [str(resultado["respuesta"])]
+
+    resultado.setdefault("mongo", None)
+    resultado.setdefault("sql", None)
+    resultado.setdefault(
+        "filtros", {"especialidad": None, "ubicacion": None, "otros": None}
+    )
+    resultado.setdefault("sugerencias", [])
+    resultado.setdefault("historial_mensajes", None)
+
+    # Añadir flags calculados de retrocompatibilidad
+    f = resultado.get("filtros") or {}
+    esp = f.get("especialidad")
+    ubi = f.get("ubicacion")
+
+    # Ready si tiene especialidad. La ubicación puede ser opcional o complementaria
+    resultado["ready"] = bool(esp)
 
     return resultado

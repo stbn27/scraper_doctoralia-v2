@@ -19,7 +19,7 @@ backend/**/__pycache__/**
 backup/**
 
 # Documentos
-docs/agents/**
+docs/ia/**
 docs/sugerencias/**
 docs/otros/**
 docs/general/**
