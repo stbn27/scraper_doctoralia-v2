@@ -14,11 +14,13 @@ from datetime import datetime, timezone
 
 VENTANA_RECIENTE_DIAS = 180
 MAX_OPINIONES_MODELO = 50
+MIN_OPINIONES_IA = 5
 
 
 def preparar_datos_para_analisis(
     especialista: dict,
     opiniones: list[dict],
+    min_opiniones_ia: int = MIN_OPINIONES_IA,
 ) -> dict:
     """
     Prepara y limpia los datos de un especialista y sus opiniones
@@ -30,18 +32,25 @@ def preparar_datos_para_analisis(
     alertas: list[str] = []
     ahora = datetime.now(timezone.utc)
     total_opiniones = len(opiniones)
+    total_reportado_perfil = _entero_seguro(especialista.get("total_opiniones"))
 
-    if total_opiniones < 3:
-        perfil = _limpiar_perfil(especialista, total_opiniones)
+    if total_opiniones < min_opiniones_ia:
+        perfil = _limpiar_perfil(especialista, total_opiniones, total_reportado_perfil)
         return {
             "apto_para_ia": False,
             "razon_no_apto": "sin_opiniones_suficientes",
             "perfil_limpio": perfil,
             "opiniones_procesadas": [],
             "metricas_locales": _calcular_metricas(
-                opiniones, [], {"sospecha": False, "razones": []}, ahora
+                opiniones,
+                [],
+                {"sospecha": False, "razones": [], "severidad": "ninguna"},
+                ahora,
+                total_reportado_perfil,
             ),
-            "metadatos_muestreo": _metadatos_muestreo_vacio(total_opiniones),
+            "metadatos_muestreo": _metadatos_muestreo_vacio(
+                total_opiniones, total_reportado_perfil
+            ),
             "alertas": alertas,
         }
 
@@ -52,7 +61,9 @@ def preparar_datos_para_analisis(
 
     opiniones_limpias = _deduplicar_opiniones(_limpiar_opiniones(opiniones, ahora))
 
-    recientes = [o for o in opiniones_limpias if o["dias_antiguedad"] <= VENTANA_RECIENTE_DIAS]
+    recientes = [
+        o for o in opiniones_limpias if o["dias_antiguedad"] <= VENTANA_RECIENTE_DIAS
+    ]
     if len(recientes) == 0:
         alertas.append("opiniones_desactualizadas: todas tienen más de 6 meses")
 
@@ -65,11 +76,17 @@ def preparar_datos_para_analisis(
 
     fraude = detectar_sospecha_fraude(opiniones)
 
-    resultado_muestreo = _muestreo_inteligente(opiniones_limpias, total_opiniones)
+    resultado_muestreo = _muestreo_inteligente(
+        opiniones_limpias,
+        total_opiniones,
+        total_reportado_perfil,
+    )
     opiniones_enviadas = resultado_muestreo["opiniones"]
 
-    metricas = _calcular_metricas(opiniones, opiniones_enviadas, fraude, ahora)
-    perfil = _limpiar_perfil(especialista, total_opiniones)
+    metricas = _calcular_metricas(
+        opiniones, opiniones_enviadas, fraude, ahora, total_reportado_perfil
+    )
+    perfil = _limpiar_perfil(especialista, total_opiniones, total_reportado_perfil)
 
     return {
         "apto_para_ia": True,
@@ -122,10 +139,12 @@ def detectar_sospecha_fraude(opiniones: list[dict]) -> dict:
             razones.append(f"Nombre '{autor}' aparece {cantidad} veces")
 
     opiniones_con_autor = [
-        o for o in opiniones if o.get("autor") and (o.get("fecha") or o.get("fecha_publicacion"))
+        o
+        for o in opiniones
+        if o.get("autor") and (o.get("fecha") or o.get("fecha_publicacion"))
     ]
     for i, op_a in enumerate(opiniones_con_autor):
-        for op_b in opiniones_con_autor[i + 1:]:
+        for op_b in opiniones_con_autor[i + 1 :]:
             nombre_a = op_a["autor"].strip().lower()
             nombre_b = op_b["autor"].strip().lower()
             if nombre_a == nombre_b:
@@ -163,7 +182,16 @@ def detectar_sospecha_fraude(opiniones: list[dict]) -> dict:
                 break
 
     razones_unicas: list[str] = list(dict.fromkeys(razones))
-    return {"sospecha": len(razones_unicas) > 0, "razones": razones_unicas}
+    severidad = "ninguna"
+    if len(razones_unicas) >= 2:
+        severidad = "media"
+    if len(razones_unicas) >= 3:
+        severidad = "alta"
+    return {
+        "sospecha": len(razones_unicas) > 0,
+        "razones": razones_unicas,
+        "severidad": severidad,
+    }
 
 
 def _parsear_fecha(valor) -> datetime | None:
@@ -185,9 +213,15 @@ def _parsear_fecha(valor) -> datetime | None:
     return None
 
 
-def _limpiar_perfil(especialista: dict, total_opiniones: int) -> dict:
+def _limpiar_perfil(
+    especialista: dict,
+    total_opiniones_disponibles: int,
+    total_opiniones_reportadas: int | None = None,
+) -> dict:
     """Normaliza el perfil conservando campos útiles para el análisis."""
-    servicios_normalizados = _normalizar_servicios(especialista.get("servicios", []) or [])
+    servicios_normalizados = _normalizar_servicios(
+        especialista.get("servicios", []) or []
+    )
     servicios_procesados: list[dict] = []
     servicios_duplicados: list[str] = []
     nombres_vistos: set[str] = set()
@@ -203,12 +237,14 @@ def _limpiar_perfil(especialista: dict, total_opiniones: int) -> dict:
         nombres_vistos.add(nombre_norm)
         precio_desde = servicio.get("precio_desde")
         precio_texto = servicio.get("precio_texto")
-        servicios_procesados.append({
-            "nombre": nombre,
-            "precio_desde": precio_desde,
-            "precio_texto": precio_texto,
-            "tiene_precio": bool(precio_desde or precio_texto),
-        })
+        servicios_procesados.append(
+            {
+                "nombre": nombre,
+                "precio_desde": precio_desde,
+                "precio_texto": precio_texto,
+                "tiene_precio": bool(precio_desde or precio_texto),
+            }
+        )
 
     experiencia_raw = especialista.get("experiencia", []) or []
     if isinstance(experiencia_raw, str):
@@ -249,7 +285,8 @@ def _limpiar_perfil(especialista: dict, total_opiniones: int) -> dict:
         "atiende_adolescentes": atiende_adolescentes,
         "perfil_detalla_pacientes": perfil_detalla_pacientes,
         "integridad_perfil": integridad,
-        "total_opiniones_en_bd": total_opiniones,
+        "opiniones_disponibles_en_bd": total_opiniones_disponibles,
+        "total_opiniones_reportadas_perfil": total_opiniones_reportadas,
     }
 
 
@@ -267,33 +304,38 @@ def _limpiar_opiniones(opiniones: list[dict], ahora: datetime) -> list[dict]:
 
         tipo_verif = (op.get("tipo_verificacion") or "").strip()
         es_verificada = tipo_verif in [
-            "Cita verificada", "Número de teléfono verificado"
+            "Cita verificada",
+            "Número de teléfono verificado",
         ]
         palabras = len(texto.split())
 
-        resultado.append({
-            "opinion_id": op.get("opinion_id"),
-            "autor": op.get("autor"),
-            "rating": op.get("rating"),
-            "texto": texto,
-            "fecha_publicacion": fecha_pub.isoformat() if fecha_pub else None,
-            "dias_antiguedad": max(dias_antiguedad, 0),
-            "es_verificada": es_verificada,
-            "tipo_verificacion": tipo_verif or None,
-            "servicio_consultado": op.get("servicio_consultado"),
-            "consultorio": op.get("consultorio"),
-            "texto_corto": palabras < 15,
-            "antigua": dias_antiguedad > VENTANA_RECIENTE_DIAS,
-            "_dedup_key": _clave_opinion_estable(op),
-            "_fecha_orden": fecha_pub.timestamp() if fecha_pub else 0,
-            "_palabras": palabras,
-        })
+        resultado.append(
+            {
+                "opinion_id": op.get("opinion_id"),
+                "autor": op.get("autor"),
+                "rating": op.get("rating"),
+                "texto": texto,
+                "fecha_publicacion": fecha_pub.isoformat() if fecha_pub else None,
+                "dias_antiguedad": max(dias_antiguedad, 0),
+                "es_verificada": es_verificada,
+                "tipo_verificacion": tipo_verif or None,
+                "servicio_consultado": op.get("servicio_consultado"),
+                "consultorio": op.get("consultorio"),
+                "texto_corto": palabras < 15,
+                "antigua": dias_antiguedad > VENTANA_RECIENTE_DIAS,
+                "_dedup_key": _clave_opinion_estable(op),
+                "_fecha_orden": fecha_pub.timestamp() if fecha_pub else 0,
+                "_palabras": palabras,
+            }
+        )
 
     return resultado
 
 
 def _muestreo_inteligente(
-    opiniones_limpias: list[dict], total_original: int
+    opiniones_limpias: list[dict],
+    total_original: int,
+    total_reportado_perfil: int | None = None,
 ) -> dict:
     """
     Selecciona máximo 50 opiniones con muestreo estratificado.
@@ -311,13 +353,20 @@ def _muestreo_inteligente(
     if total <= MAX_OPINIONES_MODELO:
         seleccionadas = sorted(opiniones_unicas, key=lambda o: o["dias_antiguedad"])
         bloques = {
-            "recientes": len(seleccionadas), "largas": 0,
-            "no_verificadas": 0, "antiguas": 0, "relleno": 0,
+            "recientes": len(seleccionadas),
+            "largas": 0,
+            "no_verificadas": 0,
+            "antiguas": 0,
+            "relleno": 0,
         }
         return {
             "opiniones": _eliminar_campos_auxiliares(seleccionadas),
             "metadatos": _construir_metadatos_muestreo(
-                total_original, len(seleccionadas), "todas_las_opiniones_disponibles", bloques
+                total_original,
+                len(seleccionadas),
+                "todas_las_opiniones_disponibles",
+                bloques,
+                total_reportado_perfil,
             ),
         }
 
@@ -327,11 +376,19 @@ def _muestreo_inteligente(
         [o for o in opiniones_unicas if not o["es_verificada"]],
         key=lambda o: o["dias_antiguedad"],
     )
-    por_antiguedad = sorted(opiniones_unicas, key=lambda o: o["dias_antiguedad"], reverse=True)
+    por_antiguedad = sorted(
+        opiniones_unicas, key=lambda o: o["dias_antiguedad"], reverse=True
+    )
 
     seleccionadas: list[dict] = []
     claves_vistas: set[str] = set()
-    bloques = {"recientes": 0, "largas": 0, "no_verificadas": 0, "antiguas": 0, "relleno": 0}
+    bloques = {
+        "recientes": 0,
+        "largas": 0,
+        "no_verificadas": 0,
+        "antiguas": 0,
+        "relleno": 0,
+    }
 
     def agregar(lista: list[dict], cantidad: int, bloque: str) -> None:
         agregadas = 0
@@ -368,7 +425,11 @@ def _muestreo_inteligente(
     return {
         "opiniones": _eliminar_campos_auxiliares(seleccionadas),
         "metadatos": _construir_metadatos_muestreo(
-            total_original, len(seleccionadas), estrategia, bloques
+            total_original,
+            len(seleccionadas),
+            estrategia,
+            bloques,
+            total_reportado_perfil,
         ),
     }
 
@@ -412,9 +473,12 @@ def _construir_metadatos_muestreo(
     total_enviadas: int,
     estrategia: str,
     bloques: dict,
+    total_reportado_perfil: int | None = None,
 ) -> dict:
     return {
         "total_opiniones_original": total_original,
+        "opiniones_disponibles_en_bd": total_original,
+        "total_opiniones_reportadas_perfil": total_reportado_perfil,
         "total_opiniones_enviadas": total_enviadas,
         "estrategia_muestreo": estrategia,
         "bloques_muestreo": bloques,
@@ -424,12 +488,15 @@ def _construir_metadatos_muestreo(
     }
 
 
-def _metadatos_muestreo_vacio(total_original: int) -> dict:
+def _metadatos_muestreo_vacio(
+    total_original: int, total_reportado_perfil: int | None = None
+) -> dict:
     return _construir_metadatos_muestreo(
         total_original,
         0,
         "sin_muestreo_no_apto_para_ia",
         {"recientes": 0, "largas": 0, "no_verificadas": 0, "antiguas": 0, "relleno": 0},
+        total_reportado_perfil,
     )
 
 
@@ -438,6 +505,7 @@ def _calcular_metricas(
     opiniones_enviadas: list[dict],
     fraude: dict,
     ahora: datetime,
+    total_reportado_perfil: int | None = None,
 ) -> dict:
     """Calcula métricas locales para incluir en el análisis y persistencia."""
     total = len(opiniones_originales)
@@ -445,6 +513,8 @@ def _calcular_metricas(
     if total == 0:
         return {
             "total_opiniones_bd": 0,
+            "opiniones_disponibles_en_bd": 0,
+            "total_opiniones_reportadas_perfil": total_reportado_perfil,
             "opiniones_enviadas_al_modelo": len(opiniones_enviadas),
             "porcentaje_verificadas": 0.0,
             "recencia_promedio_dias": 0.0,
@@ -454,13 +524,14 @@ def _calcular_metricas(
             "rating_promedio": 0.0,
             "sospecha_fraude": fraude.get("sospecha", False),
             "razones_fraude": fraude.get("razones", []),
+            "severidad_sospecha_fraude": fraude.get("severidad", "ninguna"),
         }
 
     verificadas = sum(
-        1 for o in opiniones_originales
-        if (o.get("tipo_verificacion") or "").strip() in [
-            "Cita verificada", "Número de teléfono verificado"
-        ]
+        1
+        for o in opiniones_originales
+        if (o.get("tipo_verificacion") or "").strip()
+        in ["Cita verificada", "Número de teléfono verificado"]
     )
     pct_verificadas = round((verificadas / total) * 100, 1)
 
@@ -490,11 +561,15 @@ def _calcular_metricas(
     long_prom = round(sum(longitudes) / len(longitudes), 1) if longitudes else 0.0
     pct_corto = round((textos_cortos / total) * 100, 1)
 
-    ratings = [o.get("rating", 0) for o in opiniones_originales if o.get("rating") is not None]
+    ratings = [
+        o.get("rating", 0) for o in opiniones_originales if o.get("rating") is not None
+    ]
     rating_prom = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
 
     return {
         "total_opiniones_bd": total,
+        "opiniones_disponibles_en_bd": total,
+        "total_opiniones_reportadas_perfil": total_reportado_perfil,
         "opiniones_enviadas_al_modelo": len(opiniones_enviadas),
         "porcentaje_verificadas": pct_verificadas,
         "recencia_promedio_dias": recencia_prom,
@@ -504,7 +579,17 @@ def _calcular_metricas(
         "rating_promedio": rating_prom,
         "sospecha_fraude": fraude.get("sospecha", False),
         "razones_fraude": fraude.get("razones", []),
+        "severidad_sospecha_fraude": fraude.get("severidad", "ninguna"),
     }
+
+
+def _entero_seguro(valor) -> int | None:
+    if valor in (None, ""):
+        return None
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalizar_texto(valor: str) -> str:
@@ -535,11 +620,17 @@ def _normalizar_servicios(servicios_raw) -> list[dict]:
                 precio_desde = int(float(precio_desde_raw.replace(",", "")))
             except ValueError:
                 precio_desde = None
-        servicios.append({
-            "nombre": None if not nombre or nombre.lower() == "null" else nombre,
-            "precio_desde": precio_desde,
-            "precio_texto": None if not precio_texto or precio_texto.lower() == "null" else precio_texto,
-        })
+        servicios.append(
+            {
+                "nombre": None if not nombre or nombre.lower() == "null" else nombre,
+                "precio_desde": precio_desde,
+                "precio_texto": (
+                    None
+                    if not precio_texto or precio_texto.lower() == "null"
+                    else precio_texto
+                ),
+            }
+        )
     return servicios
 
 
@@ -552,10 +643,16 @@ def _normalizar_consultorios(consultorios_raw) -> list[dict]:
     for bloque in re.findall(r"\{([^{}]+)\}", consultorios_raw):
         direccion = _extraer_campo_bloque(bloque, "direccion", "clinica")
         clinica = _extraer_campo_bloque(bloque, "clinica", None)
-        consultorios.append({
-            "direccion": None if not direccion or direccion.lower() == "null" else direccion,
-            "clinica": None if not clinica or clinica.lower() == "null" else clinica,
-        })
+        consultorios.append(
+            {
+                "direccion": (
+                    None if not direccion or direccion.lower() == "null" else direccion
+                ),
+                "clinica": (
+                    None if not clinica or clinica.lower() == "null" else clinica
+                ),
+            }
+        )
     return consultorios
 
 
@@ -565,9 +662,17 @@ def _normalizar_pacientes(pacientes_raw) -> dict:
     if not isinstance(pacientes_raw, str):
         return {}
     return {
-        "atiende_ninos": _parse_bool(_extraer_campo_bloque(pacientes_raw, "atiende_ninos", "atiende_adultos")),
-        "atiende_adultos": _parse_bool(_extraer_campo_bloque(pacientes_raw, "atiende_adultos", "atiende_adolescentes")),
-        "atiende_adolescentes": _parse_bool(_extraer_campo_bloque(pacientes_raw, "atiende_adolescentes", None)),
+        "atiende_ninos": _parse_bool(
+            _extraer_campo_bloque(pacientes_raw, "atiende_ninos", "atiende_adultos")
+        ),
+        "atiende_adultos": _parse_bool(
+            _extraer_campo_bloque(
+                pacientes_raw, "atiende_adultos", "atiende_adolescentes"
+            )
+        ),
+        "atiende_adolescentes": _parse_bool(
+            _extraer_campo_bloque(pacientes_raw, "atiende_adolescentes", None)
+        ),
     }
 
 

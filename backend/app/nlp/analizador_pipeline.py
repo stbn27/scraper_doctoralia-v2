@@ -31,7 +31,6 @@ from app.nlp.nlp_logger import (
 )
 from app.nlp.preprocesador import preparar_datos_para_analisis
 from app.nlp.prompt_builder import (
-    construir_analisis_fraude_local,
     construir_analisis_minimo,
     construir_prompt_sistema,
     construir_prompt_usuario,
@@ -85,6 +84,21 @@ def _parsear_argumentos() -> argparse.Namespace:
     parser.add_argument("--todos", action="store_true", default=False, help="Procesa todos los especialistas")
     parser.add_argument("--reintentar-errores", action="store_true", default=False, help="Solo procesa estado=error")
     parser.add_argument("--modelo", type=str, default=None, help="Sobreescribe MODELO_ACTIVO del .env")
+    parser.add_argument(
+        "--min-opiniones-ia",
+        type=int,
+        default=5,
+        help="Mínimo de opiniones descargadas en Mongo para llamar al modelo. Default: 5.",
+    )
+    parser.add_argument(
+        "--reanalizar-sospecha-fraude",
+        action="store_true",
+        default=False,
+        help=(
+            "No trata estado=sospecha_fraude reciente como finalizado, para regenerarlo "
+            "con el modelo IA bajo los criterios actuales."
+        ),
+    )
     parser.add_argument(
         "--concurrencia",
         type=int,
@@ -185,7 +199,14 @@ def _resultado(doctor_id: int, nombre: str, estado: str, detalle: str = "", requ
     }
 
 
-def _procesar_especialista(especialista: dict, modelo, prompt_sistema: str, analisis_finalizados: set[int], forzar_reanalisis: bool) -> dict:
+def _procesar_especialista(
+    especialista: dict,
+    modelo,
+    prompt_sistema: str,
+    analisis_finalizados: set[int],
+    forzar_reanalisis: bool,
+    min_opiniones_ia: int,
+) -> dict:
     global _logger_nlp
 
     doctor_id = especialista.get("doctoralia_id", 0)
@@ -202,7 +223,11 @@ def _procesar_especialista(especialista: dict, modelo, prompt_sistema: str, anal
                 return _resultado(doctor_id, nombre, "skip", "análisis finalizado reciente", requests_antes, modelo.requests_remotos_realizados)
 
         opiniones = _obtener_opiniones_doctor(doctor_id)
-        datos = preparar_datos_para_analisis(especialista, opiniones)
+        datos = preparar_datos_para_analisis(
+            especialista,
+            opiniones,
+            min_opiniones_ia=min_opiniones_ia,
+        )
 
         if not datos["apto_para_ia"]:
             razon = datos["razon_no_apto"] or "desconocida"
@@ -212,10 +237,13 @@ def _procesar_especialista(especialista: dict, modelo, prompt_sistema: str, anal
             return _resultado(doctor_id, nombre, "sin_opiniones", razon, requests_antes, modelo.requests_remotos_realizados)
 
         if datos["metricas_locales"].get("sospecha_fraude"):
-            analisis_fraude = construir_analisis_fraude_local(datos)
-            guardar_analisis(_doc_base(especialista, doctor_id, nombre, "sospecha_fraude", datos, analisis_fraude, "ninguno"))
-            logger.warning("%s | id=%d | sospecha_fraude → análisis local sin LLM", nombre, doctor_id)
-            return _resultado(doctor_id, nombre, "sospecha_fraude", "fraude local", requests_antes, modelo.requests_remotos_realizados)
+            razones = datos["metricas_locales"].get("razones_fraude", [])
+            logger.warning(
+                "%s | id=%d | sospecha_fraude local → se enviará al LLM con penalización contextual: %s",
+                nombre,
+                doctor_id,
+                "; ".join(razones[:2]) or "sin detalle",
+            )
 
         prompt_usuario = construir_prompt_usuario(datos)
         respuesta_raw = None
@@ -336,15 +364,28 @@ def main() -> None:
         modo = f"limitado | Límite requests LLM: {limite_llm}"
         modo_log = "limitado"
     logger.info("Modo: %s", modo)
+    logger.info("Mínimo opiniones para IA: %d", args.min_opiniones_ia)
+    if args.reanalizar_sospecha_fraude:
+        logger.info("Reanálisis de estado=sospecha_fraude habilitado")
 
     modelo_corto = modelo.nombre_modelo().split(" ")[0]
     _logger_nlp = iniciar_sesion_log(modelo=modelo_corto, modo=modo_log, particion="completo")
     _logger_nlp.info("Modelo activo: %s", modelo.nombre_modelo())
     _logger_nlp.info("Modo: %s", modo)
+    _logger_nlp.info("Mínimo opiniones para IA: %d", args.min_opiniones_ia)
+    if args.reanalizar_sospecha_fraude:
+        _logger_nlp.info("Reanálisis de estado=sospecha_fraude habilitado")
 
     estado_persistido = cargar_estado()
-    analisis_finalizados = set(estado_persistido.get("nlp", {}).get("analisis_finalizados", []))
-    analisis_finalizados.update(listar_ids_finalizados_recientes())
+    analisis_finalizados = set()
+    if not args.reanalizar_sospecha_fraude:
+        analisis_finalizados.update(estado_persistido.get("nlp", {}).get("analisis_finalizados", []))
+    estados_finalizados = ("completado", "sin_opiniones")
+    if not args.reanalizar_sospecha_fraude:
+        estados_finalizados = ("completado", "sospecha_fraude", "sin_opiniones")
+    analisis_finalizados.update(
+        listar_ids_finalizados_recientes(estados_finalizados=estados_finalizados)
+    )
     logger.info("Análisis finalizados recientes precargados: %d", len(analisis_finalizados))
     _logger_nlp.info("Análisis finalizados recientes precargados: %d", len(analisis_finalizados))
     especialistas = _obtener_especialistas(args, limite_llm)
@@ -372,6 +413,7 @@ def main() -> None:
             prompt_sistema,
             analisis_finalizados,
             args.forzar_reanalisis,
+            args.min_opiniones_ia,
         )
         actualizar_estadisticas(stats, resultado)
 
@@ -382,7 +424,9 @@ def main() -> None:
             doctor_id_finalizado = resultado["doctor_id"]
             if doctor_id_finalizado not in analisis_finalizados:
                 analisis_finalizados.add(doctor_id_finalizado)
-                estado_persistido.setdefault("nlp", {}).setdefault("analisis_finalizados", []).append(doctor_id_finalizado)
+                finalizados_estado = estado_persistido.setdefault("nlp", {}).setdefault("analisis_finalizados", [])
+                if doctor_id_finalizado not in finalizados_estado:
+                    finalizados_estado.append(doctor_id_finalizado)
 
         tiempo_total = time.time() - tiempo_inicio
         debe_persistir_estado = (

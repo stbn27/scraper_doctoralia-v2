@@ -114,7 +114,11 @@ def analisis_existente_reciente(doctor_id: int, dias: int = 30) -> bool:
     return analisis_finalizado_reciente(doctor_id, dias=dias)
 
 
-def analisis_finalizado_reciente(doctor_id: int, dias: int = 30) -> bool:
+def analisis_finalizado_reciente(
+    doctor_id: int,
+    dias: int = 30,
+    estados_finalizados: tuple[str, ...] = ("completado", "sospecha_fraude", "sin_opiniones"),
+) -> bool:
     """Retorna True si el doctor tiene análisis reciente no reanalizable."""
     _asegurar_indices()
     coleccion = _obtener_coleccion()
@@ -122,14 +126,17 @@ def analisis_finalizado_reciente(doctor_id: int, dias: int = 30) -> bool:
 
     doc = coleccion.find_one({
         "doctor_id": doctor_id,
-        "estado": {"$in": ["completado", "sospecha_fraude", "sin_opiniones"]},
+        "estado": {"$in": list(estados_finalizados)},
         "fecha_analisis": {"$gte": fecha_limite},
         "resultado_ia": {"$exists": True},
     })
     return doc is not None
 
 
-def listar_ids_finalizados_recientes(dias: int = 30) -> set[int]:
+def listar_ids_finalizados_recientes(
+    dias: int = 30,
+    estados_finalizados: tuple[str, ...] = ("completado", "sospecha_fraude", "sin_opiniones"),
+) -> set[int]:
     """Retorna IDs con análisis finalizado reciente para evitar consultas por candidato."""
     _asegurar_indices()
     coleccion = _obtener_coleccion()
@@ -137,7 +144,7 @@ def listar_ids_finalizados_recientes(dias: int = 30) -> set[int]:
 
     cursor = coleccion.find(
         {
-            "estado": {"$in": ["completado", "sospecha_fraude", "sin_opiniones"]},
+            "estado": {"$in": list(estados_finalizados)},
             "fecha_analisis": {"$gte": fecha_limite},
             "resultado_ia": {"$exists": True},
             "doctor_id": {"$exists": True},

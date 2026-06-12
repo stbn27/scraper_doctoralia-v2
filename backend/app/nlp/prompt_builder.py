@@ -23,6 +23,9 @@ CRITERIOS DE PUNTUACIÓN (escala 1-10):
   de consultorio, ausencia de precios, y sospecha de manipulación.
 - La puntuacion_recomendacion NO debe ser el promedio de ratings. Debe reflejar calidad,
   confiabilidad y utilidad real de la evidencia.
+- Si `metricas_locales.sospecha_fraude` es true, trátalo como una señal de cautela.
+  No asumas fraude definitivo ni asignes automáticamente 3/10: evalúa severidad,
+  razones concretas, volumen, verificación, recencia, contenido y perfil.
 
 REGLAS DE RESUMEN:
 1. La primera oración NO debe repetir el nombre completo del médico ni la especialidad;
@@ -79,9 +82,10 @@ def construir_prompt_usuario(datos_preparados: dict) -> str:
     {json.dumps(payload, ensure_ascii=False, indent=2)}
 
     INSTRUCCIONES ESPECÍFICAS PARA ESTE CASO
-    - Usa la nota de muestreo para no confundir el subconjunto enviado con el volumen real.
-    - Si hay muestra parcial, evalúa representatividad y menciona el total real de opiniones.
-    - Si `perfil.perfil_detalla_pacientes` es false, escribe literalmente que el perfil no detalla qué tipos de pacientes atiende.
+- Usa la nota de muestreo para no confundir el subconjunto enviado con el volumen real.
+- Si hay muestra parcial, evalúa representatividad y menciona el total real de opiniones.
+- Distingue `opiniones_disponibles_en_bd` de `total_opiniones_reportadas_perfil`: si el perfil reporta más opiniones que las descargadas, aclara que el análisis se basa en las disponibles localmente.
+- Si `perfil.perfil_detalla_pacientes` es false, escribe literalmente que el perfil no detalla qué tipos de pacientes atiende.
     - Si `perfil.perfil_detalla_pacientes` es true, menciona en el resumen los grupos que sí aparecen como atendidos; si solo atiende adultos, dilo explícitamente.
     - Evalúa transparencia de precios con `perfil.integridad_perfil.servicios_con_precio` y `servicios_sin_precio`.
     - Si hay servicios con precio, explica que puede revisar esos precios en el perfil; si faltan muchos precios, úsalo como cautela.
@@ -280,6 +284,7 @@ def reforzar_resultado_analisis(resultado: dict, datos_preparados: dict) -> dict
 
 def _construir_nota_muestreo(metadatos: dict) -> str:
     total = metadatos.get("total_opiniones_original", 0)
+    total_reportado = metadatos.get("total_opiniones_reportadas_perfil")
     enviadas = metadatos.get("total_opiniones_enviadas", 0)
     bloques = metadatos.get("bloques_muestreo", {}) or {}
     estrategia = metadatos.get("estrategia_muestreo", "sin_muestreo")
@@ -290,9 +295,14 @@ def _construir_nota_muestreo(metadatos: dict) -> str:
             partes.append(f"{cantidad} {clave.replace('_', ' ')}")
     detalle = ", ".join(partes) if partes else estrategia
     nota = (
-        f"El médico tiene {total} opiniones totales. Se comparten {enviadas} "
+        f"Hay {total} opiniones descargadas en la base local. Se comparten {enviadas} "
         f"seleccionadas mediante muestreo estratificado: {detalle}."
     )
+    if total_reportado and total_reportado > total:
+        nota += (
+            f" El perfil reporta {total_reportado} opiniones totales en la fuente, "
+            f"pero este análisis solo usa las {total} disponibles localmente."
+        )
     if bloques.get("antiguas", 0):
         nota += f" Se incluyen {bloques['antiguas']} opiniones antiguas para detectar consistencia histórica."
     return nota

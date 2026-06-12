@@ -7,12 +7,13 @@ Esta guía documenta el pipeline que analiza especialistas médicos con opinione
 1. `backend/app/nlp/analizador_pipeline.py` carga especialistas desde MongoDB.
 2. Para cada candidato consulta opiniones en `opiniones` por `doctor_id`.
 3. `backend/app/nlp/preprocesador.py` limpia perfil/opiniones, detecta fraude local, calcula métricas y selecciona una muestra representativa.
-4. Si el caso no es apto o tiene sospecha de fraude local, se guarda análisis local sin llamar al LLM.
-5. Si el caso requiere IA, `backend/app/nlp/prompt_builder.py` construye el prompt con perfil, servicios, precios, consultorios, métricas y metadatos de muestreo.
-6. `backend/app/nlp/modelos/*_modelo.py` invoca al proveedor remoto y registra cada request real antes de hacer HTTP.
-7. `backend/app/nlp/repositorios/analisis_repo.py` guarda el resultado en `analisis_especialistas`.
-8. `backend/app/scraper/utils/estado_pipeline.py` persiste progreso NLP en `fixtures/pipeline_estado*.json` para reanudar.
-9. `backend/app/nlp/nlp_logger.py` escribe logs y resumen final en `backend/logs/nlp/`.
+4. Si el caso no es apto por pocas opiniones descargadas, se guarda análisis local sin llamar al LLM.
+5. Si hay sospecha de fraude local pero alcanza el mínimo de opiniones, la señal se envía al LLM como contexto de cautela, no como cierre automático.
+6. Si el caso requiere IA, `backend/app/nlp/prompt_builder.py` construye el prompt con perfil, servicios, precios, consultorios, métricas y metadatos de muestreo.
+7. `backend/app/nlp/modelos/*_modelo.py` invoca al proveedor remoto y registra cada request real antes de hacer HTTP.
+8. `backend/app/nlp/repositorios/analisis_repo.py` guarda el resultado en `analisis_especialistas`.
+9. `backend/app/scraper/utils/estado_pipeline.py` persiste progreso NLP en `fixtures/pipeline_estado*.json` para reanudar.
+10. `backend/app/nlp/nlp_logger.py` escribe logs y resumen final en `backend/logs/nlp/`.
 
 ## Comandos
 
@@ -23,11 +24,16 @@ python -m app.nlp.analizador_pipeline --prueba --limite 5
 python -m app.nlp.analizador_pipeline --especialidad Endodoncia --limite 50
 python -m app.nlp.analizador_pipeline --todos --modelo gemini --limite 1000
 python -m app.nlp.analizador_pipeline --reintentar-errores --limite 100
+python -m app.nlp.analizador_pipeline --todos --modelo deepseek --reanalizar-sospecha-fraude --min-opiniones-ia 5
 ```
 
 `--limite` ahora significa requests reales al proveedor remoto, no candidatos revisados. No se descuenta por skips, fraude local, sin opiniones suficientes, errores previos al request o análisis ya finalizados.
 
 `--forzar-reanalisis` recalcula aunque exista análisis finalizado reciente. Úsalo solo cuando cambie el prompt, el modelo o quieras regenerar resultados válidos.
+
+`--reanalizar-sospecha-fraude` permite regenerar con IA perfiles que antes quedaron cerrados localmente como `sospecha_fraude`. Mantiene como finalizados recientes los estados `completado` y `sin_opiniones`.
+
+`--min-opiniones-ia` define cuántas opiniones descargadas en Mongo se requieren para llamar al modelo. El valor por defecto es `5`.
 
 `--concurrencia` se mantiene por compatibilidad CLI, pero el pipeline NLP ejecuta el corte por requests de forma secuencial para no sobrepasar el límite con trabajos ya programados.
 
@@ -214,7 +220,7 @@ Además, `backend/app/nlp/repositorios/analisis_repo.py` considera finalizados r
 - `sospecha_fraude`
 - `sin_opiniones`
 
-No se recalculan salvo que uses `--forzar-reanalisis`.
+No se recalculan salvo que uses `--forzar-reanalisis`. Si solo quieres reabrir las sospechas locales antiguas, usa `--reanalizar-sospecha-fraude`.
 
 ## Ejemplos de salida final
 
