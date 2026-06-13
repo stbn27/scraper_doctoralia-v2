@@ -61,8 +61,8 @@ def _regex_ci(valor: str) -> dict:
     patron = ""
     for char in valor_limpio:
         if char in "aeiouáéíóúü":
-            # Reemplazar cualquier vocal por '.' para ser tolerante a acentos o caracteres corruptos
-            patron += "."
+            # Reemplazar cualquier vocal por clase de caracteres para evitar falsos positivos con consonantes
+            patron += "[aeiouáéíóúü\uFFFD]"
         elif char == " ":
             # Espacios coinciden con espacios, guiones o cualquier carácter de unión
             patron += ".*"
@@ -122,6 +122,7 @@ def _construir_filtro_especialistas(params: dict) -> dict:
         filtro["$or"] = [
             {"ciudad": _regex_ci(ciu_norm)},
             {"consultorios.direccion": _regex_ci(ciu_norm)},
+            {"scraping_meta.url_origen": _regex_ci(ciu_norm)},
         ]
 
     # --- Búsqueda textual ---

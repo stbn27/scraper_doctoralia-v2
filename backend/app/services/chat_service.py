@@ -269,7 +269,7 @@ async def interpretar_consulta_medica(
     esp = f.get("especialidad")
     ubi = f.get("ubicacion")
 
-    # Ready si tiene especialidad. La ubicación puede ser opcional o complementaria
-    resultado["ready"] = bool(esp)
+    # Ready si tiene especialidad y ubicación
+    resultado["ready"] = bool(esp and ubi)
 
     return resultado

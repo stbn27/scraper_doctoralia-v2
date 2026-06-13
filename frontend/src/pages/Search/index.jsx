@@ -201,19 +201,25 @@ export default function Search() {
 
     const handleChatDetected = useCallback(
         (detectedData) => {
-            const nextFilters = {
-                ...filters,
-                especialidad: detectedData?.especialidad ?? filters.especialidad,
-                ciudad: detectedData?.ciudad ?? filters.ciudad,
-            };
-
-            setFilters(nextFilters);
-
-            if (detectedData?.ready) {
-                doSearch(nextFilters);
-            }
+            if (!detectedData) return;
+            setFilters((prev) => {
+                const newEsp = detectedData.especialidad ?? prev.especialidad;
+                const newCiudad = detectedData.ciudad ?? prev.ciudad;
+                if (newEsp === prev.especialidad && newCiudad === prev.ciudad) {
+                    return prev;
+                }
+                const next = {
+                    ...prev,
+                    especialidad: newEsp,
+                    ciudad: newCiudad,
+                };
+                if (detectedData.ready) {
+                    setTimeout(() => doSearch(next), 0);
+                }
+                return next;
+            });
         },
-        [doSearch, filters]
+        [doSearch]
     );
 
     // El backend ya ordena, no necesitamos sort local.

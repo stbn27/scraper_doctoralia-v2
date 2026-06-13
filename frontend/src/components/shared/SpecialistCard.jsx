@@ -143,9 +143,11 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
                 {specialist.especialidad}
               </p>
             )}
-            <div className="flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              <RiMapPin2Line className="text-xs shrink-0" />
-              <span className="text-xs truncate">{specialist.ciudad}</span>
+            <div className="flex items-start gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              <RiMapPin2Line className="text-xs shrink-0 mt-0.5" />
+              <span className="text-xs line-clamp-2">
+                {specialist.ciudad || specialist.consultorio_principal?.direccion || 'Ubicación no especificada'}
+              </span>
             </div>
           </div>
 

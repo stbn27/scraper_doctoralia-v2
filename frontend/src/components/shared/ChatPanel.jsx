@@ -20,6 +20,11 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
         const [showLocationBtn, setShowLocationBtn] = useState(false);
         const messagesEndRef = useRef(null);
         const textareaRef = useRef(null);
+        const detectedDataRef = useRef(detectedData);
+
+        useEffect(() => {
+                detectedDataRef.current = detectedData;
+        }, [detectedData]);
 
         const scrollToBottom = useCallback(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,17 +65,13 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                         setShowLocationBtn(false);
                                 }
 
-                                setDetectedData((prev) => {
-                                        const next = {
-                                                ...prev,
-                                                especialidad: response?.especialidad ?? prev.especialidad,
-                                                ciudad: response?.ciudad ?? prev.ciudad,
-                                                ready: Boolean(response?.ready || prev.ready),
-                                        };
-
-                                        onDetectedChange?.(next);
-                                        return next;
-                                });
+                                const next = {
+                                        especialidad: response?.especialidad ?? detectedDataRef.current.especialidad,
+                                        ciudad: response?.ciudad ?? detectedDataRef.current.ciudad,
+                                        ready: Boolean(response?.ready || detectedDataRef.current.ready),
+                                };
+                                setDetectedData(next);
+                                onDetectedChange?.(next);
                         } catch (error) {
                                 setMessages((prev) => [
                                         ...prev,
@@ -150,9 +151,9 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                                                 icon={<RiSearchLine />}
                                                                 onClick={() => {
                                                                         const params = new URLSearchParams();
-                                                                        if (detectedData.especialidad) params.set('q', detectedData.especialidad);
+                                                                        if (detectedData.especialidad) params.set('especialidad', detectedData.especialidad);
                                                                         if (detectedData.ciudad) params.set('ciudad', detectedData.ciudad);
-                                                                        navigate(`/resultados?${params.toString()}`);
+                                                                        navigate(`/busqueda?${params.toString()}`);
                                                                 }}
                                                                 className="rounded-xl py-3 text-base"
                                                         >
