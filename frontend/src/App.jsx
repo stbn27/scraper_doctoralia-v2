@@ -12,6 +12,7 @@ const Login = lazy(() => import('@/pages/Login/index'));
 const Perfil = lazy(() => import('@/pages/Perfil/index'));
 const Favoritos = lazy(() => import('@/pages/Favoritos/index'));
 const Historial = lazy(() => import('@/pages/Historial/index'));
+const Admin = lazy(() => import('@/pages/Admin/index'));
 
 /**
  * ProtectedRoute — Redirige a /login si no hay sesión activa.
@@ -20,15 +21,20 @@ const Historial = lazy(() => import('@/pages/Historial/index'));
  */
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
-  if (loading) {
-    return <PageLoader />;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+/**
+ * AdminRoute — Solo permite acceso a usuarios con rol ADMIN.
+ * Redirige a /busqueda si el rol no es ADMIN.
+ */
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.rol !== 'ADMIN') return <Navigate to="/busqueda" replace />;
   return children;
 }
 
@@ -109,6 +115,11 @@ export default function App() {
             }
           />
           
+          {/* Panel de administración */}
+          <Route
+            path="/admin"
+            element={<AdminRoute><Admin /></AdminRoute>}
+          />
           {/* Redirección del dashboard legacy hacia el perfil */}
           <Route path="/dashboard" element={<Navigate to="/perfil" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

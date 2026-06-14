@@ -4,12 +4,13 @@ from fastapi import FastAPI
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.mongo import get_mongo_db
+from app.db.mongo import get_mongo_db, get_doctoralia_db
 from app.db.mysql import get_mysql_conn
 from app.api.especialistas import router as especialistas_router
 from app.api.usuarios import router as usuarios_router
 from app.api.catalogos import router as catalogos_router
 from app.api.chat import router as chat_router
+from app.api.admin import router as admin_router
 
 app = FastAPI(
     title="API Recomendación Médica v2",
@@ -29,6 +30,7 @@ app.include_router(especialistas_router)
 app.include_router(usuarios_router)
 app.include_router(catalogos_router)
 app.include_router(chat_router)
+app.include_router(admin_router)
 
 
 @app.get("/")
@@ -38,8 +40,8 @@ def root():
 
 @app.get("/health")
 def health():
-    """Verifica el estado de conexión a MySQL y MongoDB."""
-    resultados = {"api": "ok", "mysql": "error", "mongodb": "error"}
+    """Verifica el estado de conexión a MySQL, MongoDB legacy y BD Doctoralia."""
+    resultados = {"api": "ok", "mysql": "error", "mongodb_legacy": "error", "mongodb_doctoralia": "error"}
     try:
         conn = get_mysql_conn()
         conn.close()
@@ -49,9 +51,15 @@ def health():
     try:
         db = get_mongo_db()
         db.command("ping")
-        resultados["mongodb"] = "ok"
+        resultados["mongodb_legacy"] = "ok"
     except Exception as e:
-        resultados["mongodb"] = str(e)
+        resultados["mongodb_legacy"] = str(e)
+    try:
+        db2 = get_doctoralia_db()
+        db2.command("ping")
+        resultados["mongodb_doctoralia"] = "ok"
+    except Exception as e:
+        resultados["mongodb_doctoralia"] = str(e)
     return resultados
 
 
