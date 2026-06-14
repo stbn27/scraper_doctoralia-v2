@@ -1,15 +1,23 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
+
+# pyrefly: ignore [missing-import]
 from passlib.context import CryptContext
+
+# pyrefly: ignore [missing-import]
 from fastapi import Depends, HTTPException, status
+
+# pyrefly: ignore [missing-import]
 from fastapi.security import OAuth2PasswordBearer
 import os
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "DESARROLLANDO_Uel_s15t3m4s_de_rec0m3nd4c10n_m3d1c4")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "DESARROLLANDO_Uel_s15t3m4s_de_rec0m3nd4c10n_m3d1c4"
+)
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 

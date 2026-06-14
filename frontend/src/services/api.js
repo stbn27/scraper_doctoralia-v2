@@ -113,6 +113,17 @@ export {
   getReviewSummary
 } from './analisis.api';
 
+export {
+  buscarUbicaciones,
+  getCiudades,
+  getEstados,
+} from './ubicaciones.api';
+
+export {
+  getOpiniones,
+  calcularResumenOpiniones,
+} from './opiniones.api';
+
 /* ──────────────────────────────────────────────
    Autenticación y Perfil
    ────────────────────────────────────────────── */
@@ -234,10 +245,15 @@ export async function obtenerEspecialidades(query = '') {
 }
 
 /**
- * Obtiene lista de ciudades.
+ * Obtiene lista de ciudades usando el endpoint de ubicaciones.
+ * Soporta ciudades, alcaldías y estados.
+ *
+ * @param {string} [q=''] - Texto de búsqueda opcional
+ * @returns {Promise<Object>} Respuesta del backend con lista de ubicaciones
  */
-export async function obtenerCiudades(query = '') {
-  const data = await realizarPeticion(`/catalogos/ciudades${query ? `?q=${query}` : ''}`);
+export async function obtenerCiudades(q = '') {
+  const params = q ? `?q=${encodeURIComponent(q)}` : '';
+  const data = await realizarPeticion(`/catalogos/ubicaciones${params}`);
   return data;
 }
 

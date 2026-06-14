@@ -1,8 +1,10 @@
 """
 Servicio de búsqueda avanzada de especialistas con filtros, paginación y análisis IA.
 
-Orquesta la consulta a MongoDB aplicando todos los filtros disponibles y enriquece
-los resultados con datos de `analisis_especialistas` usando batch queries.
+Consulta la colección ``doctor_profiles`` de la BD Doctoralia (27017) y enriquece
+los resultados con datos de ``analisis_especialistas``.
+
+Los especialistas CON análisis siempre se muestran antes que los que no tienen.
 No dispara scraping. Solo consulta datos ya almacenados.
 """
 
@@ -13,8 +15,13 @@ import re
 import unicodedata
 from typing import Any, Optional
 
-from app.db.mongo import get_mongo_async_db
+from app.db.mongo import get_doctoralia_async_db
 from app.db.repositorios import analisis_repo
+
+
+# =============================================================================
+# Utilidades de normalización
+# =============================================================================
 
 
 def _normalizar(texto: str) -> str:
@@ -42,8 +49,7 @@ def _normalizar(texto: str) -> str:
 
 def _regex_ci(valor: str) -> dict:
     """
-    Construye filtro MongoDB de regex case-insensitive tolerante a acentos,
-    guiones/espacios y caracteres corruptos de codificación (como ).
+    Construye filtro MongoDB de regex case-insensitive tolerante a acentos.
 
     Parámetros
     ----------
@@ -53,59 +59,50 @@ def _regex_ci(valor: str) -> dict:
     Retorna
     -------
     dict
-        Filtro MongoDB `{$regex: ..., $options: 'i'}`.
+        Filtro MongoDB ``{$regex: ..., $options: 'i'}``.
     """
-    # Reemplazar guiones por espacios y limpiar
     valor_limpio = valor.lower().replace("-", " ").strip()
-
     patron = ""
     for char in valor_limpio:
         if char in "aeiouáéíóúü":
-            # Reemplazar cualquier vocal por clase de caracteres para evitar falsos positivos con consonantes
             patron += "[aeiouáéíóúü\uFFFD]"
         elif char == " ":
-            # Espacios coinciden con espacios, guiones o cualquier carácter de unión
             patron += ".*"
         else:
             patron += re.escape(char)
-
     return {"$regex": patron, "$options": "i"}
 
 
-# Mapa de aliases de ciudad frecuentes
-_ALIASES_CIUDAD = {
-    "cdmx": "ciudad de mexico",
-    "df": "ciudad de mexico",
-    "ciudad de mexico": "ciudad de mexico",
-    "ciudad de méxico": "ciudad de mexico",
-    "guadalajara": "guadalajara",
-    "monterrey": "monterrey",
-}
-
-# Mapa de ordenamientos a campos MongoDB
+# Mapa de ordenamientos a campos MongoDB para doctor_profiles
 _SORT_MAP = {
     "opiniones_desc": ("total_opiniones", -1),
     "opiniones_asc": ("total_opiniones", 1),
-    "rating_desc": ("rating_global", -1),
-    "rating_asc": ("rating_global", 1),
-    "nombre_asc": ("nombre", 1),
-    "nombre_desc": ("nombre", -1),
+    "nombre_asc": ("doctor.nombre", 1),
+    "nombre_desc": ("doctor.nombre", -1),
 }
 
 
-def _construir_filtro_especialistas(params: dict) -> dict:
+# =============================================================================
+# Construcción de filtros para doctor_profiles
+# =============================================================================
+
+
+def _construir_filtro_doctor_profiles(params: dict) -> dict:
     """
-    Construye el filtro MongoDB para la colección `especialistas` a partir de parámetros de búsqueda.
+    Construye el filtro MongoDB para la colección ``doctor_profiles``.
+
+    El esquema de ``doctor_profiles`` tiene campos anidados bajo ``doctor.*``:
+    - ``doctor.nombre``, ``doctor.especialidades[]``, ``doctor.direcciones[]``.
 
     Parámetros
     ----------
     params : dict
-        Diccionario con todos los parámetros de búsqueda del endpoint GET /especialistas.
+        Diccionario con parámetros de búsqueda del endpoint GET /especialistas.
 
     Retorna
     -------
     dict
-        Filtro MongoDB listo para usar en `find()` o `aggregate()`.
+        Filtro MongoDB listo para usar en ``find()`` o ``aggregate()``.
     """
     filtro: dict[str, Any] = {}
 
@@ -113,30 +110,30 @@ def _construir_filtro_especialistas(params: dict) -> dict:
     esp = params.get("especialidad") or params.get("especialidad_slug")
     if esp:
         esp_norm = _normalizar(esp)
-        filtro["especialidad"] = _regex_ci(esp_norm)
+        filtro["doctor.especialidades"] = _regex_ci(esp_norm)
 
-    # --- Ciudad ---
+    # --- Ciudad / Ubicación ---
     ciu = params.get("ciudad") or params.get("ciudad_slug")
     if ciu:
-        ciu_norm = _ALIASES_CIUDAD.get(_normalizar(ciu), _normalizar(ciu))
+        ciu_norm = _normalizar(ciu)
         filtro["$or"] = [
-            {"ciudad": _regex_ci(ciu_norm)},
-            {"consultorios.direccion": _regex_ci(ciu_norm)},
-            {"scraping_meta.url_origen": _regex_ci(ciu_norm)},
+            {"doctor.direcciones.ciudad": _regex_ci(ciu_norm)},
+            {"doctor.direcciones.calle": _regex_ci(ciu_norm)},
+            {"doctor.estado": _regex_ci(ciu_norm)},
         ]
 
-    # --- Búsqueda textual ---
+    # --- Búsqueda textual por nombre ---
     q = params.get("q")
     if q:
-        filtro["nombre"] = _regex_ci(q)
+        filtro["doctor.nombre"] = _regex_ci(q)
 
     # --- Pacientes ---
     if params.get("atiende_ninos") is True:
-        filtro["pacientes.atiende_ninos"] = True
+        filtro["doctor.pacientes_que_atiende.ninos"] = True
     if params.get("atiende_adultos") is True:
-        filtro["pacientes.atiende_adultos"] = True
+        filtro["doctor.pacientes_que_atiende.adultos"] = True
     if params.get("atiende_adolescentes") is True:
-        filtro["pacientes.atiende_adolescentes"] = True
+        filtro["doctor.pacientes_que_atiende.adolescentes"] = True
 
     # --- Opiniones ---
     if params.get("solo_con_opiniones"):
@@ -152,77 +149,65 @@ def _construir_filtro_especialistas(params: dict) -> dict:
             rango["$lte"] = max_op
         filtro["total_opiniones"] = rango
 
-    # --- Rating ---
-    rating_min = params.get("rating_min")
-    rating_max = params.get("rating_max")
-    if rating_min is not None or rating_max is not None:
-        rango_rating: dict = {}
-        if rating_min is not None:
-            rango_rating["$gte"] = rating_min
-        if rating_max is not None:
-            rango_rating["$lte"] = rating_max
-        filtro["rating_global"] = rango_rating
-
-    # --- Foto, cédula, consultorio ---
+    # --- Foto de perfil ---
     if params.get("solo_con_foto"):
-        filtro["foto_perfil_url"] = {"$nin": [None, ""]}
+        filtro["doctor.foto_perfil"] = {"$nin": [None, ""]}
+
+    # --- Cédula ---
     if params.get("solo_con_cedula"):
-        filtro["$or"] = filtro.get("$or", []) + [
-            {"cedula": {"$nin": [None, ""]}},
-            {"cedulas": {"$exists": True, "$not": {"$size": 0}}},
-        ]
+        filtro["doctor.cedulas"] = {"$exists": True, "$not": {"$size": 0}}
+
+    # --- Consultorio ---
     if params.get("solo_con_consultorio"):
-        filtro["consultorios"] = {"$exists": True, "$not": {"$size": 0}}
+        filtro["doctor.direcciones"] = {"$exists": True, "$not": {"$size": 0}}
 
     # --- Precio ---
     if params.get("solo_con_precio"):
-        filtro["servicios.precio_desde"] = {"$nin": [None]}
-    precio_min = params.get("precio_min")
-    precio_max = params.get("precio_max")
-    if precio_min is not None or precio_max is not None:
-        rango_precio: dict = {}
-        if precio_min is not None:
-            rango_precio["$gte"] = precio_min
-        if precio_max is not None:
-            rango_precio["$lte"] = precio_max
-        filtro["servicios.precio_desde"] = rango_precio
+        filtro["doctor.servicios_y_precios.precio"] = {
+            "$nin": [None, ""],
+            "$exists": True,
+        }
 
     # --- Servicio específico ---
     servicio = params.get("servicio")
     if servicio:
-        filtro["servicios.nombre"] = _regex_ci(servicio)
+        filtro["doctor.servicios_y_precios.servicio"] = _regex_ci(servicio)
 
     # --- Alcaldía / municipio ---
     alcaldia = params.get("alcaldia_o_municipio")
     if alcaldia:
-        filtro["consultorios.direccion"] = _regex_ci(alcaldia)
+        filtro["doctor.direcciones.calle"] = _regex_ci(_normalizar(alcaldia))
 
     return filtro
 
 
 def _construir_sort(orden: Optional[str]) -> list[tuple]:
     """
-    Traduce el parámetro `orden` a instrucción de sort para MongoDB.
+    Traduce el parámetro ``orden`` a instrucción de sort para MongoDB.
 
     Parámetros
     ----------
     orden : str o None
-        Nombre del criterio de orden (ej. 'puntuacion_desc').
+        Nombre del criterio de orden.
 
     Retorna
     -------
     list[tuple]
-        Lista de tuplas `(campo, dirección)` para pymongo.
+        Lista de tuplas ``(campo, dirección)`` para pymongo.
     """
     if orden in _SORT_MAP:
         campo, direccion = _SORT_MAP[orden]
         return [(campo, direccion)]
-    # Por defecto: opiniones descendente
     return [("total_opiniones", -1)]
 
 
+# =============================================================================
+# Serialización y construcción de cards
+# =============================================================================
+
+
 def _serializar_id(doc: dict) -> dict:
-    """Convierte `_id` ObjectId a string para serialización JSON."""
+    """Convierte ``_id`` ObjectId a string para serialización JSON."""
     if "_id" in doc and doc["_id"] is not None:
         doc["_id"] = str(doc["_id"])
     return doc
@@ -230,84 +215,126 @@ def _serializar_id(doc: dict) -> dict:
 
 def _extraer_analisis_resumen(analisis_doc: Optional[dict]) -> Optional[dict]:
     """
-    Extrae el resumen de análisis IA para incluir en la card de especialista.
+    Extrae resumen del análisis IA para la card de especialista.
+
+    Adapta el nuevo esquema de ``analisis_especialistas`` donde los campos
+    están en ``analisis.*`` y ``metadata_opiniones.*`` en lugar de
+    ``resultado_ia.*`` y ``metricas_locales.*``.
 
     Parámetros
     ----------
     analisis_doc : dict o None
-        Documento completo de `analisis_especialistas`.
+        Documento completo de ``analisis_especialistas``.
 
     Retorna
     -------
     dict o None
-        Resumen de análisis listo para la respuesta de card, o None.
+        Resumen del análisis listo para la respuesta de card, o None.
     """
     if not analisis_doc:
         return None
 
-    resultado_ia = analisis_doc.get("resultado_ia") or {}
-    metricas = analisis_doc.get("metricas_locales") or {}
+    analisis = analisis_doc.get("analisis") or {}
+    meta_op = analisis_doc.get("metadata_opiniones") or {}
 
     return {
-        "estado": analisis_doc.get("estado"),
+        "estado": analisis_doc.get("estatus_analisis"),
         "modelo_usado": analisis_doc.get("modelo_usado"),
-        "fecha_analisis": str(analisis_doc.get("fecha_analisis", "")),
-        "puntuacion_recomendacion": resultado_ia.get("puntuacion_recomendacion"),
-        "resumen": resultado_ia.get("resumen"),
-        "confiabilidad_opiniones": resultado_ia.get("confiabilidad_opiniones"),
-        "sospecha_fraude": metricas.get("sospecha_fraude"),
-        "razones_fraude": metricas.get("razones_fraude") or [],
+        "fecha_analisis": str(analisis_doc.get("metadata_analisis", {}).get("fecha", "")),
+        "puntuacion_recomendacion": analisis.get("puntuacion"),
+        "resumen": analisis.get("resumen"),
+        "confiabilidad_opiniones": analisis.get("confiabilidad"),
+        "sospecha_fraude": meta_op.get("sospecha_fraude"),
+        "razones_fraude": meta_op.get("razones_fraude") or [],
         "metricas_locales": {
-            "total_opiniones_bd": metricas.get("total_opiniones_bd"),
-            "porcentaje_verificadas": metricas.get("porcentaje_verificadas"),
-            "rating_promedio": metricas.get("rating_promedio"),
-            "recencia_promedio_dias": metricas.get("recencia_promedio_dias"),
+            "total_opiniones_bd": meta_op.get("opiniones_bd"),
+            "porcentaje_verificadas": meta_op.get("verificadas"),
+            "rating_promedio": meta_op.get("rating_promedio"),
+            "recencia_promedio_dias": meta_op.get("recencia_promedio_dias"),
         },
     }
 
 
-def _construir_card(especialista: dict, analisis_doc: Optional[dict]) -> dict:
+def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict]) -> dict:
     """
-    Construye la representación de card de un especialista enriquecida con análisis IA.
+    Construye la representación de card de un especialista (doctor_profiles)
+    enriquecida con análisis IA.
 
     Parámetros
     ----------
-    especialista : dict
-        Documento de la colección `especialistas`.
+    doctor_doc : dict
+        Documento de la colección ``doctor_profiles`` con ``_id`` ya serializado.
     analisis_doc : dict o None
         Documento de análisis IA correspondiente, si existe.
 
     Retorna
     -------
     dict
-        Diccionario con todos los campos de EspecialistaCardResponse.
+        Diccionario con todos los campos del card de especialista.
     """
-    consultorios = especialista.get("consultorios") or []
-    consultorio_principal = consultorios[0] if consultorios else None
+    doctor = doctor_doc.get("doctor") or {}
+    direcciones = doctor.get("direcciones") or []
 
-    servicios = especialista.get("servicios") or []
-    precios_validos = [s["precio_desde"] for s in servicios if s.get("precio_desde")]
-    precio_minimo = min(precios_validos) if precios_validos else None
+    # Filtrar direcciones con datos válidos
+    direcciones_validas = [
+        d for d in direcciones if d.get("ciudad") or d.get("calle")
+    ]
+    direccion_principal = direcciones_validas[0] if direcciones_validas else None
+
+    # Especialidad principal
+    especialidades = doctor.get("especialidades") or []
+    especialidad_principal = especialidades[0] if especialidades else None
+
+    # Ciudad principal
+    ciudad_principal = None
+    if direccion_principal:
+        ciudad_principal = direccion_principal.get("ciudad")
+    if not ciudad_principal and doctor.get("estado"):
+        estados = doctor.get("estado") or []
+        ciudad_principal = estados[0] if estados else None
+
+    # Precio mínimo desde servicios_y_precios
+    servicios = doctor.get("servicios_y_precios") or []
+    precio_minimo = None
+    for s in servicios:
+        precio_str = s.get("precio")
+        if precio_str and "Desde $" in precio_str:
+            try:
+                valor = int(precio_str.replace("Desde $", "").replace(",", "").strip())
+                if precio_minimo is None or valor < precio_minimo:
+                    precio_minimo = valor
+            except ValueError:
+                pass
 
     analisis_resumen = _extraer_analisis_resumen(analisis_doc)
 
     return {
-        "_id": str(especialista.get("_id", "")),
-        "doctoralia_id": especialista.get("doctoralia_id"),
-        "nombre": especialista.get("nombre", ""),
-        "especialidad": especialista.get("especialidad"),
-        "ciudad": especialista.get("ciudad"),
-        "rating_global": especialista.get("rating_global"),
-        "total_opiniones": especialista.get("total_opiniones"),
-        "foto_perfil_url": especialista.get("foto_perfil_url"),
-        "cedula": especialista.get("cedula"),
-        "consultorio_principal": consultorio_principal,
-        "pacientes": especialista.get("pacientes"),
+        "_id": str(doctor_doc.get("_id", "")),
+        "doctoralia_id": doctor.get("id_doctoralia"),
+        "nombre": doctor.get("nombre", ""),
+        "especialidad": especialidad_principal,
+        "especialidades": especialidades,
+        "ciudad": ciudad_principal,
+        "estado": doctor.get("estado") or [],
+        "foto_perfil_url": doctor.get("foto_perfil"),
+        "cedulas": doctor.get("cedulas") or [],
+        "cedula": (doctor.get("cedulas") or [None])[0],
+        "total_opiniones": doctor_doc.get("total_opiniones", 0),
+        "rating_global": None,  # no disponible en doctor_profiles
+        "direccion_principal": direccion_principal,
+        "consultorios": direcciones_validas,
+        "pacientes": doctor.get("pacientes_que_atiende"),
         "precio_minimo": precio_minimo,
         "servicios_destacados": servicios[:3],
+        "tipos_consulta": doctor.get("tipos_de_consulta") or [],
         "tiene_analisis": analisis_doc is not None,
         "analisis": analisis_resumen,
     }
+
+
+# =============================================================================
+# Función principal de búsqueda paginada
+# =============================================================================
 
 
 async def buscar_especialistas_paginado(
@@ -316,133 +343,125 @@ async def buscar_especialistas_paginado(
     limit: int = 12,
 ) -> dict:
     """
-    Ejecuta búsqueda avanzada de especialistas con filtros, paginación y enriquecimiento con análisis IA.
+    Ejecuta búsqueda avanzada de especialistas con filtros, paginación y análisis IA.
 
-    Esta función construye el filtro MongoDB, aplica ordenamiento, pagina los resultados
-    y enriquece cada especialista con su análisis IA usando una batch query a `analisis_especialistas`.
-
-    Para filtros que requieren datos de análisis (solo_analizados, estado_analisis,
-    confiabilidad, sospecha_fraude, puntuacion_*), se hace un pre-filtro en `analisis_especialistas`
-    para obtener los IDs válidos y luego filtrar `especialistas` por esos IDs.
+    Consulta ``doctor_profiles`` en la BD Doctoralia. Los especialistas con análisis
+    siempre aparecen antes que los sin análisis (ordenamiento por prioridad).
+    Para filtros basados en análisis (confiabilidad, puntuacion, etc.) hace un
+    pre-filtro en ``analisis_especialistas``.
 
     Parámetros
     ----------
     params : dict
-        Parámetros de búsqueda extraídos del request (especialidad, ciudad, orden, etc.).
+        Parámetros de búsqueda del endpoint GET /especialistas.
     page : int
-        Página actual (1-indexed). Por defecto 1.
+        Página actual (1-indexed).
     limit : int
-        Documentos por página. Por defecto 12, máximo 50.
+        Documentos por página.
 
     Retorna
     -------
     dict
-        Respuesta completa con total, paginación y lista de especialistas con análisis.
+        ``{total, page, limit, pages, has_next, has_prev, filters_applied, results}``
     """
-    db = get_mongo_async_db()
-    col_esp = db["especialistas"]
+    db = get_doctoralia_async_db()
+    col_doc = db["doctor_profiles"]
     col_ana = db["analisis_especialistas"]
 
-    # Filtros que requieren join con analisis
+    orden = params.get("orden", "opiniones_desc")
     solo_analizados = params.get("solo_analizados", False)
     estado_analisis = params.get("estado_analisis")
     confiabilidad = params.get("confiabilidad")
     sospecha_fraude_param = params.get("sospecha_fraude")
     puntuacion_min = params.get("puntuacion_min")
     puntuacion_max = params.get("puntuacion_max")
-    orden = params.get("orden", "opiniones_desc")
 
-    # Si hay filtros de análisis, pre-filtrar IDs de analisis_especialistas
+    # Pre-filtro por analisis si es necesario
     ids_con_analisis: Optional[set[int]] = None
-    if any(
-        [
-            solo_analizados,
-            estado_analisis,
-            confiabilidad,
-            sospecha_fraude_param is not None,
-            puntuacion_min,
-            puntuacion_max,
-        ]
-    ):
+    if any([
+        solo_analizados,
+        estado_analisis,
+        confiabilidad,
+        sospecha_fraude_param is not None,
+        puntuacion_min,
+        puntuacion_max,
+    ]):
         filtro_ana: dict[str, Any] = {}
         if estado_analisis:
-            filtro_ana["estado"] = estado_analisis
+            filtro_ana["estatus_analisis"] = estado_analisis
         if confiabilidad:
-            filtro_ana["resultado_ia.confiabilidad_opiniones"] = confiabilidad
+            filtro_ana["analisis.confiabilidad"] = confiabilidad
         if sospecha_fraude_param is not None:
-            filtro_ana["metricas_locales.sospecha_fraude"] = sospecha_fraude_param
+            filtro_ana["metadata_opiniones.sospecha_fraude"] = sospecha_fraude_param
         if puntuacion_min is not None:
-            filtro_ana.setdefault("resultado_ia.puntuacion_recomendacion", {})[
-                "$gte"
-            ] = puntuacion_min
+            filtro_ana.setdefault("analisis.puntuacion", {})["$gte"] = puntuacion_min
         if puntuacion_max is not None:
-            filtro_ana.setdefault("resultado_ia.puntuacion_recomendacion", {})[
-                "$lte"
-            ] = puntuacion_max
+            filtro_ana.setdefault("analisis.puntuacion", {})["$lte"] = puntuacion_max
 
-        cursor_ana = col_ana.find(filtro_ana, {"doctoralia_id": 1, "doctor_id": 1})
         ids_con_analisis = set()
-        async for doc in cursor_ana:
-            did = doc.get("doctoralia_id") or doc.get("doctor_id")
+        async for doc in col_ana.find(filtro_ana, {"id_doctoralia": 1}):
+            did = doc.get("id_doctoralia")
             if did:
                 ids_con_analisis.add(did)
 
-    # Construir filtro principal de especialistas
-    filtro = _construir_filtro_especialistas(params)
-
-    # Aplicar IDs de análisis como filtro si es necesario
+    # Construir filtro principal
+    filtro = _construir_filtro_doctor_profiles(params)
     if ids_con_analisis is not None:
-        filtro["doctoralia_id"] = {"$in": list(ids_con_analisis)}
+        filtro["doctor.id_doctoralia"] = {"$in": list(ids_con_analisis)}
 
-    # Determinar sort
-    sort_por_puntuacion = orden in ("puntuacion_desc", "puntuacion_asc")
-    sort_por_recencia = orden == "recencia_analisis_desc"
-
-    if sort_por_puntuacion or sort_por_recencia:
-        sort_instruccion = [("total_opiniones", -1)]
-    else:
-        sort_instruccion = _construir_sort(orden)
+    # Ordenamiento en MongoDB
+    sort_instruccion = _construir_sort(orden)
 
     # Contar total
-    total = await col_esp.count_documents(filtro)
-
-    # Si no hay resultados
+    total = await col_doc.count_documents(filtro)
     if total == 0:
         return _respuesta_vacia(params, page, limit)
 
     skip = (page - 1) * limit
-    cursor = col_esp.find(filtro).sort(sort_instruccion).skip(skip).limit(limit)
-    docs = [doc async for doc in cursor]
+    docs = [doc async for doc in col_doc.find(filtro).sort(sort_instruccion).skip(skip).limit(limit)]
 
-    # Obtener análisis en batch
-    doctoralia_ids = [d.get("doctoralia_id") for d in docs if d.get("doctoralia_id")]
-    mapa_analisis = await analisis_repo.obtener_por_doctoralia_ids(doctoralia_ids)
+    # Obtener IDs de doctoralia para batch de análisis
+    doctoralia_ids = [
+        (d.get("doctor") or {}).get("id_doctoralia")
+        for d in docs
+        if (d.get("doctor") or {}).get("id_doctoralia")
+    ]
+    mapa_analisis = await _obtener_analisis_batch(col_ana, doctoralia_ids)
 
     # Construir cards
     results = []
     for doc in docs:
-        did = doc.get("doctoralia_id")
+        did = (doc.get("doctor") or {}).get("id_doctoralia")
         analisis_doc = mapa_analisis.get(did) if did else None
-        card = _construir_card(_serializar_id(doc), analisis_doc)
+        card = _construir_card(_serializar_id(dict(doc)), analisis_doc)
         results.append(card)
 
-    # Ordenar por puntuación en memoria si es necesario
+    # Reordenar: analizados primero, luego por puntuacion/orden en memoria
+    sort_por_puntuacion = orden in ("puntuacion_desc", "puntuacion_asc")
+    sort_por_recencia = orden == "recencia_analisis_desc"
+
     if sort_por_puntuacion:
         rev = orden == "puntuacion_desc"
         results.sort(
-            key=lambda c: (c.get("analisis", {}) or {}).get("puntuacion_recomendacion")
-            or -1,
-            reverse=rev,
+            key=lambda c: (
+                0 if c.get("tiene_analisis") else 1,
+                -((c.get("analisis") or {}).get("puntuacion_recomendacion") or 0) if rev
+                else ((c.get("analisis") or {}).get("puntuacion_recomendacion") or 0),
+            )
         )
     elif sort_por_recencia:
         results.sort(
-            key=lambda c: ((c.get("analisis", {}) or {}).get("fecha_analisis") or ""),
+            key=lambda c: (
+                0 if c.get("tiene_analisis") else 1,
+                (c.get("analisis") or {}).get("fecha_analisis") or "",
+            ),
             reverse=True,
         )
+    else:
+        # Para otros ordenes, siempre poner analizados primero
+        results.sort(key=lambda c: 0 if c.get("tiene_analisis") else 1)
 
     pages = math.ceil(total / limit) if limit else 1
-
-    # Filtros aplicados para respuesta
     filters_applied = {
         k: v for k, v in params.items() if v is not None and v is not False and v != ""
     }
@@ -457,6 +476,32 @@ async def buscar_especialistas_paginado(
         "filters_applied": filters_applied,
         "results": results,
     }
+
+
+async def _obtener_analisis_batch(col_ana, doctoralia_ids: list) -> dict:
+    """
+    Obtiene un mapa de análisis IA indexado por id_doctoralia en batch.
+
+    Parámetros
+    ----------
+    col_ana : AsyncIOMotorCollection
+        Colección ``analisis_especialistas``.
+    doctoralia_ids : list[int]
+        Lista de IDs de doctoralia a consultar.
+
+    Retorna
+    -------
+    dict
+        ``{id_doctoralia: documento_analisis}``.
+    """
+    if not doctoralia_ids:
+        return {}
+    mapa: dict = {}
+    async for doc in col_ana.find({"id_doctoralia": {"$in": doctoralia_ids}}):
+        did = doc.get("id_doctoralia")
+        if did:
+            mapa[did] = doc
+    return mapa
 
 
 def _respuesta_vacia(params: dict, page: int, limit: int) -> dict:

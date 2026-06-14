@@ -24,10 +24,13 @@ import json
 from datetime import datetime
 from typing import Optional
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db.mongo import get_mongo_async_db
 from app.db.mysql import get_mysql_conn
+from app.db.repositorios import analisis_repo
+
 from app.models.schemas import (
     DireccionCreate,
     DireccionUpdate,
@@ -54,7 +57,11 @@ router = APIRouter(tags=["Auth y Usuarios"])
 @router.post("/auth/register", status_code=201)
 def register(data: UsuarioCreate):
     """
-    Registra un nuevo usuario en MySQL.
+    Registra un nuevo usuario en MySQL con rol USER por defecto.
+
+    Al crear el usuario se asigna automáticamente ``rol_id = 1`` (USER).
+    Si la tabla ``roles`` aún no existe, el campo se omite para mantener
+    compatibilidad con la BD sin la tabla de roles.
 
     Parámetros
     ----------
@@ -64,7 +71,7 @@ def register(data: UsuarioCreate):
     Retorna
     -------
     dict
-        Datos básicos del usuario creado: id, email, created_at.
+        Datos básicos del usuario creado: id, email, rol, created_at.
 
     Excepciones
     -----------
@@ -80,21 +87,32 @@ def register(data: UsuarioCreate):
         raise HTTPException(status_code=409, detail="El email ya está registrado")
 
     hashed = hash_password(data.password)
-    cursor.execute(
-        "INSERT INTO usuarios (email, password_hash) VALUES (%s, %s)",
-        (data.email, hashed),
-    )
+    # Intentar insertar con rol_id (requiere tabla roles preexistente)
+    try:
+        cursor.execute(
+            "INSERT INTO usuarios (email, password_hash, rol_id) VALUES (%s, %s, %s)",
+            (data.email, hashed, 1),
+        )
+    except Exception:
+        # Fallback: insertar sin rol_id si la columna no existe aún
+        cursor.execute(
+            "INSERT INTO usuarios (email, password_hash) VALUES (%s, %s)",
+            (data.email, hashed),
+        )
     conn.commit()
     nuevo_id = cursor.lastrowid
     cursor.close()
     conn.close()
-    return {"id": nuevo_id, "email": data.email, "created_at": datetime.utcnow()}
+    return {"id": nuevo_id, "email": data.email, "rol": "USER", "created_at": datetime.utcnow()}
 
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(data: UsuarioLogin):
     """
-    Autentica al usuario y retorna un token JWT.
+    Autentica al usuario y retorna un token JWT con el rol incluido.
+
+    El payload del JWT contiene ``sub`` (id) y ``rol`` (nombre del rol del usuario).
+    Si la tabla ``roles`` no existe, el rol se omite del token.
 
     Parámetros
     ----------
@@ -113,15 +131,30 @@ def login(data: UsuarioLogin):
     """
     conn = get_mysql_conn()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM usuarios WHERE email = %s", (data.email,))
-    user = cursor.fetchone()
+    # Intentar JOIN con roles para obtener el nombre del rol
+    try:
+        cursor.execute(
+            """
+            SELECT u.*, r.nombre AS rol_nombre
+            FROM usuarios u
+            LEFT JOIN roles r ON u.rol_id = r.id
+            WHERE u.email = %s
+            """,
+            (data.email,),
+        )
+        user = cursor.fetchone()
+    except Exception:
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (data.email,))
+        user = cursor.fetchone()
+
     cursor.close()
     conn.close()
 
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    token = create_access_token({"sub": str(user["id"])})
+    rol = user.get("rol_nombre") or "USER"
+    token = create_access_token({"sub": str(user["id"]), "rol": rol})
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -133,9 +166,10 @@ def login(data: UsuarioLogin):
 @router.get("/usuarios/me")
 def get_me(current_user: dict = Depends(get_current_user)):
     """
-    Retorna el perfil completo del usuario autenticado.
+    Retorna el perfil completo del usuario autenticado incluyendo su rol.
 
-    Incluye datos personales, dirección principal y preferencias.
+    Realiza JOIN con la tabla ``roles`` para incluir el nombre del rol.
+    Si la tabla de roles no existe, devuelve rol ``USER`` por defecto.
 
     Parámetros
     ----------
@@ -145,7 +179,7 @@ def get_me(current_user: dict = Depends(get_current_user)):
     Retorna
     -------
     dict
-        Perfil completo con dirección principal y preferencias.
+        Perfil completo con dirección principal, preferencias y rol.
 
     Excepciones
     -----------
@@ -155,18 +189,35 @@ def get_me(current_user: dict = Depends(get_current_user)):
     conn = get_mysql_conn()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute(
-        """
-        SELECT id, email, nombre, apellido, telefono, avatar_url, created_at
-        FROM usuarios WHERE id = %s
-        """,
-        (current_user["id"],),
-    )
+    try:
+        cursor.execute(
+            """
+            SELECT u.id, u.email, u.nombre, u.apellido, u.telefono, u.avatar_url,
+                   u.created_at, r.nombre AS rol
+            FROM usuarios u
+            LEFT JOIN roles r ON u.rol_id = r.id
+            WHERE u.id = %s
+            """,
+            (current_user["id"],),
+        )
+    except Exception:
+        cursor.execute(
+            """
+            SELECT id, email, nombre, apellido, telefono, avatar_url, created_at
+            FROM usuarios WHERE id = %s
+            """,
+            (current_user["id"],),
+        )
+
     user = cursor.fetchone()
     if not user:
         cursor.close()
         conn.close()
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # Asegurar que el campo rol siempre esté presente
+    if "rol" not in user or user["rol"] is None:
+        user["rol"] = current_user.get("rol") or "USER"
 
     # Dirección principal
     cursor.execute(
@@ -566,6 +617,7 @@ async def listar_favoritos(current_user: dict = Depends(get_current_user)):
         return {"total": 0, "favoritos": []}
 
     # Batch fetch de especialistas desde MongoDB
+    # pyrefly: ignore [missing-import]
     from bson import ObjectId
 
     db = get_mongo_async_db()

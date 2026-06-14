@@ -7,6 +7,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# pyrefly: ignore [missing-import]
 from bs4 import BeautifulSoup
 
 from app.db.repositorios import catalogos_repo, especialistas_repo

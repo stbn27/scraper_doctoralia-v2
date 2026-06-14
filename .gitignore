@@ -24,6 +24,7 @@ docs/sugerencias/**
 docs/otros/**
 docs/general/**
 docs/db/**
+docs/docker/**
 
 # Arquivos de configuración
 .env

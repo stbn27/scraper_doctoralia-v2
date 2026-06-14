@@ -1,12 +1,15 @@
 """
-Router de especialistas v2.
+Router de especialistas v2 — BD Doctoralia.
 
-Mantiene compatibilidad con endpoints existentes y agrega:
-- GET /especialistas          → Búsqueda avanzada con filtros y paginación
-- GET /especialistas/{id}     → Detalle con análisis IA completo
-- GET /especialistas/doctoralia/{id} → Por doctoralia_id
-- GET /especialistas/{id}/opiniones  → Opiniones paginadas y filtrables
-- (Conservados) /buscar, /catalogo/*, DELETE
+Consulta las colecciones ``doctor_profiles`` y ``analisis_especialistas`` de la BD Doctoralia (27017).
+
+Endpoints
+---------
+- GET  /especialistas/              → Búsqueda avanzada con filtros y paginación
+- GET  /especialistas/doctoralia/{id} → Detalle por ID de Doctoralia
+- GET  /especialistas/{id}          → Detalle por _id de MongoDB
+- GET  /especialistas/{id}/opiniones → Opiniones paginadas
+- DELETE /especialistas/{id}        → Eliminar (legacy)
 """
 
 from __future__ import annotations
@@ -14,27 +17,26 @@ from __future__ import annotations
 import math
 from typing import Any, Optional
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException, Query
 
-from app.db.mongo import get_mongo_async_db
-from app.db.repositorios import analisis_repo, especialistas_repo
-from app.models.especialista import EspecialistaResponse
-from app.models.opinion import OpinionesResponse
-from app.models.schemas import EspecialistaDetailResponse, OpinionesPaginadasResponse
-from app.services.busqueda_service import buscar_especialistas_paginado
-from app.services.especialistas_service import (
-    actualizar_catalogo_desde_web,
-    buscar_o_scrapear_especialistas,
-    cargar_catalogo_desde_fixture,
+from app.db.mongo import get_doctoralia_async_db
+from app.db.repositorios import analisis_repo
+from app.services.busqueda_service import (
+    buscar_especialistas_paginado,
+    _construir_card,
+    _serializar_id,
+    _extraer_analisis_resumen,
 )
-from app.services.opiniones_service import obtener_o_scrapear_opiniones
+
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/especialistas", tags=["Especialistas"])
 
 
 class CatalogoCargaRequest(BaseModel):
-    """Payload para cargar el catálogo desde fixtures."""
+    """Payload para cargar catálogo (legacy)."""
 
     especialidad: str
     ciudad: str
@@ -42,17 +44,17 @@ class CatalogoCargaRequest(BaseModel):
 
 def _serializar_doc(doc: dict) -> dict:
     """
-    Convierte el campo `_id` de un documento MongoDB a string.
+    Convierte el campo ``_id`` de un documento MongoDB a string.
 
     Parámetros
     ----------
     doc : dict
-        Documento MongoDB con posible campo `_id` de tipo ObjectId.
+        Documento MongoDB con posible campo ``_id`` de tipo ObjectId.
 
     Retorna
     -------
     dict
-        Documento con `_id` convertido a string.
+        Documento con ``_id`` convertido a string.
     """
     if "_id" in doc and doc["_id"] is not None:
         doc["_id"] = str(doc["_id"])
@@ -63,53 +65,62 @@ def _extraer_analisis_detalle(analisis_doc: Optional[dict]) -> dict:
     """
     Extrae el análisis IA completo para la vista de detalle del especialista.
 
+    Usa el nuevo esquema de ``analisis_especialistas`` donde:
+    - El puntaje está en ``analisis.puntuacion``.
+    - Los puntos fuertes/débiles en ``analisis.puntos_fuertes`` y ``analisis.puntos_debiles``.
+    - Las métricas en ``metadata_opiniones.*``.
+
     Parámetros
     ----------
     analisis_doc : dict o None
-        Documento completo de `analisis_especialistas`.
+        Documento completo de ``analisis_especialistas``.
 
     Retorna
     -------
     dict
         Análisis completo incluyendo puntos fuertes, débiles y justificación.
+        Si no hay análisis, retorna ``{"tiene_analisis": False, "mensaje": ...}``.
     """
     if not analisis_doc:
-        return {"tiene_analisis": False}
+        return {
+            "tiene_analisis": False,
+            "mensaje": "Este especialista aún no ha sido analizado por la IA.",
+        }
 
-    resultado_ia = analisis_doc.get("resultado_ia") or {}
-    metricas = analisis_doc.get("metricas_locales") or {}
+    analisis = analisis_doc.get("analisis") or {}
+    meta_op = analisis_doc.get("metadata_opiniones") or {}
+    meta_ana = analisis_doc.get("metadata_analisis") or {}
 
     return {
         "tiene_analisis": True,
-        "estado": analisis_doc.get("estado"),
+        "estado": analisis_doc.get("estatus_analisis"),
         "modelo_usado": analisis_doc.get("modelo_usado"),
         "version_prompt": analisis_doc.get("version_prompt"),
-        "fecha_analisis": str(analisis_doc.get("fecha_analisis", "")),
-        "puntuacion_recomendacion": resultado_ia.get("puntuacion_recomendacion"),
-        "resumen": resultado_ia.get("resumen"),
-        "puntos_fuertes": resultado_ia.get("puntos_fuertes") or [],
-        "puntos_debiles": resultado_ia.get("puntos_debiles") or [],
-        "confiabilidad_opiniones": resultado_ia.get("confiabilidad_opiniones"),
-        "justificacion_puntuacion": resultado_ia.get("justificacion_puntuacion"),
-        "metricas_locales": {
-            "total_opiniones_bd": metricas.get("total_opiniones_bd"),
-            "opiniones_enviadas_al_modelo": metricas.get(
-                "opiniones_enviadas_al_modelo"
-            ),
-            "porcentaje_verificadas": metricas.get("porcentaje_verificadas"),
-            "recencia_promedio_dias": metricas.get("recencia_promedio_dias"),
-            "longitud_promedio_palabras": metricas.get("longitud_promedio_palabras"),
-            "porcentaje_texto_corto": metricas.get("porcentaje_texto_corto"),
-            "porcentaje_ultimos_6_meses": metricas.get("porcentaje_ultimos_6_meses"),
-            "rating_promedio": metricas.get("rating_promedio"),
-            "sospecha_fraude": metricas.get("sospecha_fraude"),
-            "razones_fraude": metricas.get("razones_fraude") or [],
+        "fecha_analisis": str(meta_ana.get("fecha", "")),
+        "puntuacion_recomendacion": analisis.get("puntuacion"),
+        "resumen": analisis.get("resumen"),
+        "puntos_fuertes": analisis.get("puntos_fuertes") or [],
+        "puntos_debiles": analisis.get("puntos_debiles") or [],
+        "confiabilidad": analisis.get("confiabilidad"),
+        "justificacion": analisis.get("justificacion"),
+        "alertas_preprocesamiento": analisis_doc.get("alertas_preprocesamiento"),
+        "metricas_opiniones": {
+            "total_opiniones_bd": meta_op.get("opiniones_bd"),
+            "opiniones_analizadas": meta_ana.get("opiniones_enviadas"),
+            "porcentaje_verificadas": meta_op.get("verificadas"),
+            "recencia_promedio_dias": meta_op.get("recencia_promedio_dias"),
+            "longitud_promedio_palabras": meta_op.get("longitud_promedio_palabras"),
+            "porcentaje_texto_corto": meta_op.get("porcentaje_texto_corto"),
+            "porcentaje_ultimos_6_meses": meta_op.get("porcentaje_ultimos_6_meses"),
+            "rating_promedio": meta_op.get("rating_promedio"),
+            "sospecha_fraude": meta_op.get("sospecha_fraude"),
+            "razones_fraude": meta_op.get("razones_fraude") or [],
         },
     }
 
 
 # =============================================================================
-# ENDPOINT PRINCIPAL — GET /especialistas (búsqueda avanzada con filtros)
+# ENDPOINT PRINCIPAL — GET /especialistas (búsqueda avanzada)
 # =============================================================================
 
 
@@ -153,26 +164,21 @@ async def buscar_especialistas_v2(
     """
     Búsqueda avanzada de especialistas con filtros múltiples y paginación.
 
-    No dispara scraping. Consulta exclusivamente datos almacenados en MongoDB.
-    Enriquece cada resultado con datos de análisis IA de `analisis_especialistas`.
+    Consulta ``doctor_profiles`` en la BD Doctoralia. Los especialistas con análisis
+    IA siempre aparecen primero en los resultados, independientemente del orden elegido.
 
     Parámetros
     ----------
     especialidad : str, opcional
-        Nombre o slug de especialidad para filtrar.
+        Nombre o slug de especialidad.
     ciudad : str, opcional
-        Nombre o slug de ciudad para filtrar.
+        Ciudad, alcaldía o estado para filtrar.
     q : str, opcional
         Búsqueda textual por nombre del especialista.
-    page : int
-        Página actual. Por defecto 1.
-    limit : int
-        Resultados por página. Por defecto 12, máximo 50.
-    orden : str
-        Criterio de ordenamiento. Por defecto 'opiniones_desc'.
     solo_analizados : bool
         Si True, devuelve solo especialistas con análisis IA.
-    ... (ver query params completos en la documentación)
+    orden : str
+        Criterio de ordenamiento. Por defecto 'opiniones_desc'.
 
     Retorna
     -------
@@ -208,12 +214,11 @@ async def buscar_especialistas_v2(
         "alcaldia_o_municipio": alcaldia_o_municipio,
         "codigo_postal": codigo_postal,
     }
-
     return await buscar_especialistas_paginado(params=params, page=page, limit=limit)
 
 
 # =============================================================================
-# DETALLE DE ESPECIALISTA — GET /especialistas/{id}
+# DETALLE POR DOCTORALIA ID
 # =============================================================================
 
 
@@ -221,6 +226,8 @@ async def buscar_especialistas_v2(
 async def obtener_especialista_por_doctoralia_id(doctoralia_id: int):
     """
     Obtiene el detalle completo de un especialista por su ID de Doctoralia.
+
+    Busca en ``doctor_profiles`` y enriquece con análisis de ``analisis_especialistas``.
 
     Parámetros
     ----------
@@ -230,14 +237,17 @@ async def obtener_especialista_por_doctoralia_id(doctoralia_id: int):
     Retorna
     -------
     dict
-        Detalle completo del especialista con análisis IA.
+        Detalle completo del especialista con análisis IA (o mensaje si no tiene).
 
     Excepciones
     -----------
     HTTPException 404
         Si no se encuentra el especialista.
     """
-    doc = await especialistas_repo.buscar_por_doctoralia_id(doctoralia_id)
+    db = get_doctoralia_async_db()
+    col = db["doctor_profiles"]
+
+    doc = await col.find_one({"doctor.id_doctoralia": doctoralia_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
 
@@ -247,38 +257,44 @@ async def obtener_especialista_por_doctoralia_id(doctoralia_id: int):
     return doc
 
 
+# =============================================================================
+# OPINIONES PAGINADAS
+# =============================================================================
+
+
 @router.get("/{especialista_id}/opiniones", response_model=dict)
 async def obtener_opiniones_paginadas(
     especialista_id: str,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    orden: str = Query(
-        "reciente", description="reciente|antigua|rating_desc|rating_asc"
-    ),
+    orden: str = Query("reciente", description="reciente|antigua|rating_desc|rating_asc"),
     rating_min: Optional[float] = Query(None),
     rating_max: Optional[float] = Query(None),
     solo_verificadas: Optional[bool] = Query(None),
     servicio: Optional[str] = Query(None),
 ):
     """
-    Obtiene las opiniones paginadas y filtrables de un especialista.
+    Obtiene las opiniones paginadas de un especialista.
+
+    Primero resuelve el ``doctoralia_id`` desde ``doctor_profiles`` usando el ``_id`` de Mongo,
+    luego consulta ``doctor_opinions`` filtrando por ``doctor_id`` (entero).
 
     Parámetros
     ----------
     especialista_id : str
-        ObjectId de MongoDB del especialista.
+        ``_id`` de MongoDB del documento en ``doctor_profiles``.
     page : int
         Página actual. Por defecto 1.
     limit : int
         Opiniones por página. Por defecto 20, máximo 100.
     orden : str
-        Criterio de orden: 'reciente', 'antigua', 'rating_desc', 'rating_asc'.
+        Criterio: 'reciente', 'antigua', 'rating_desc', 'rating_asc'.
     rating_min : float, opcional
-        Rating mínimo para filtrar opiniones.
+        Rating mínimo.
     rating_max : float, opcional
-        Rating máximo para filtrar opiniones.
+        Rating máximo.
     solo_verificadas : bool, opcional
-        Si True, devuelve solo opiniones con verificación.
+        Si True, solo opiniones con cita verificada.
     servicio : str, opcional
         Filtrar por servicio consultado (búsqueda parcial).
 
@@ -292,18 +308,28 @@ async def obtener_opiniones_paginadas(
     HTTPException 404
         Si no se encuentra el especialista.
     """
-    especialista = await especialistas_repo.buscar_por_id(especialista_id)
-    if not especialista:
+    # pyrefly: ignore [missing-import]
+    from bson import ObjectId
+
+    db = get_doctoralia_async_db()
+    col_profiles = db["doctor_profiles"]
+    col_opiniones = db["doctor_opinions"]
+
+    # Resolver el documento del especialista
+    try:
+        oid = ObjectId(especialista_id)
+        doc_esp = await col_profiles.find_one({"_id": oid})
+    except Exception:
+        doc_esp = None
+
+    if not doc_esp:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
 
-    doctor_id = especialista.get("doctoralia_id")
+    doctor_id = (doc_esp.get("doctor") or {}).get("id_doctoralia")
     if not doctor_id:
         raise HTTPException(
-            status_code=422, detail="El especialista no tiene doctoralia_id asociado"
+            status_code=422, detail="El especialista no tiene id_doctoralia asociado"
         )
-
-    db = get_mongo_async_db()
-    col = db["opiniones"]
 
     # Filtro de opiniones
     filtro: dict[str, Any] = {"doctor_id": doctor_id}
@@ -325,27 +351,35 @@ async def obtener_opiniones_paginadas(
     }
     sort = _sort_opiniones.get(orden, [("fecha_publicacion", -1)])
 
-    total = await col.count_documents(filtro)
+    total = await col_opiniones.count_documents(filtro)
     pages = math.ceil(total / limit) if limit and total else 0
     skip = (page - 1) * limit
 
-    cursor = col.find(filtro).sort(sort).skip(skip).limit(limit)
+    cursor = col_opiniones.find(filtro).sort(sort).skip(skip).limit(limit)
 
     opiniones = []
     async for op in cursor:
         op["_id"] = str(op["_id"])
         tipo_ver = op.get("tipo_verificacion") or ""
         op["es_verificada"] = "verific" in tipo_ver.lower()
+        # Limpiar campos internos de scraping si no se necesitan
+        op.pop("scraping_meta", None)
         opiniones.append(op)
 
+    doctor = doc_esp.get("doctor") or {}
+    especialidades = doctor.get("especialidades") or []
+    direcciones = doctor.get("direcciones") or []
+    ciudad = (direcciones[0].get("ciudad") if direcciones else None) or (
+        (doctor.get("estado") or [None])[0]
+    )
+
     esp_info = {
-        "_id": str(especialista.get("_id", "")),
+        "_id": str(doc_esp.get("_id", "")),
         "doctoralia_id": doctor_id,
-        "nombre": especialista.get("nombre", ""),
-        "especialidad": especialista.get("especialidad"),
-        "ciudad": especialista.get("ciudad"),
-        "rating_global": especialista.get("rating_global"),
-        "total_opiniones": especialista.get("total_opiniones"),
+        "nombre": doctor.get("nombre", ""),
+        "especialidad": especialidades[0] if especialidades else None,
+        "ciudad": ciudad,
+        "total_opiniones": doc_esp.get("total_opiniones"),
     }
 
     return {
@@ -360,79 +394,49 @@ async def obtener_opiniones_paginadas(
 
 
 # =============================================================================
-# ENDPOINTS LEGACY / BÚSQUEDA SCRAPING — Conservados para compatibilidad
+# DETALLE POR _id DE MONGODB
 # =============================================================================
-
-
-@router.get("/buscar", response_model=dict)
-async def buscar_especialistas_legacy(
-    especialidad: str = Query(...),
-    ciudad: str = Query(...),
-    limite: int = Query(20, ge=1, le=500),
-    forzar_scraping: bool = Query(False),
-):
-    """
-    [LEGACY] Busca especialistas con posibilidad de scraping.
-
-    Conservado para compatibilidad. Para búsqueda sin scraping usar GET /especialistas.
-
-    Parámetros
-    ----------
-    especialidad : str
-        Especialidad a buscar (obligatorio).
-    ciudad : str
-        Ciudad a buscar (obligatorio).
-    limite : int
-        Límite de resultados. Por defecto 20.
-    forzar_scraping : bool
-        Si True, fuerza re-scraping aunque haya datos en Mongo.
-
-    Retorna
-    -------
-    dict
-        Lista de especialistas con metadatos de la búsqueda.
-    """
-    try:
-        resultado = await buscar_o_scrapear_especialistas(
-            especialidad=especialidad,
-            ciudad=ciudad,
-            limite=limite,
-            forzar_scraping=forzar_scraping,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    especialistas = [_serializar_doc(doc) for doc in resultado.get("especialistas", [])]
-    resultado["especialistas"] = especialistas
-    return resultado
 
 
 @router.get("/{especialista_id}", response_model=dict)
 async def obtener_especialista_detalle(especialista_id: str):
     """
-    Obtiene el detalle completo de un especialista por ObjectId de MongoDB.
+    Obtiene el detalle completo de un especialista por su ``_id`` de MongoDB.
+
+    Busca en ``doctor_profiles`` y enriquece con análisis IA.
 
     Parámetros
     ----------
     especialista_id : str
-        ObjectId de MongoDB del especialista.
+        ``_id`` de MongoDB del documento en ``doctor_profiles``.
 
     Retorna
     -------
     dict
-        Detalle completo con todos los campos y análisis IA completo.
+        Detalle completo con análisis IA (o mensaje si no tiene análisis).
 
     Excepciones
     -----------
     HTTPException 404
         Si no se encuentra el especialista.
     """
-    doc = await especialistas_repo.buscar_por_id(especialista_id)
+    # pyrefly: ignore [missing-import]
+    from bson import ObjectId
+
+    db = get_doctoralia_async_db()
+    col = db["doctor_profiles"]
+
+    try:
+        oid = ObjectId(especialista_id)
+        doc = await col.find_one({"_id": oid})
+    except Exception:
+        doc = None
+
     if not doc:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
 
     doc = _serializar_doc(doc)
-    doctoralia_id = doc.get("doctoralia_id")
+    doctoralia_id = (doc.get("doctor") or {}).get("id_doctoralia")
     analisis_doc = None
     if doctoralia_id:
         analisis_doc = await analisis_repo.obtener_por_doctoralia_id(doctoralia_id)
@@ -441,25 +445,58 @@ async def obtener_especialista_detalle(especialista_id: str):
     return doc
 
 
+# =============================================================================
+# DELETE (legacy)
+# =============================================================================
+
+
 @router.delete("/{especialista_id}")
 async def eliminar_especialista(especialista_id: str):
-    """Elimina un especialista por ObjectId."""
-    eliminado = await especialistas_repo.eliminar_especialista(especialista_id)
-    if not eliminado:
+    """
+    Elimina un especialista de ``doctor_profiles`` por su ``_id``.
+
+    Parámetros
+    ----------
+    especialista_id : str
+        ``_id`` de MongoDB del documento a eliminar.
+    """
+    # pyrefly: ignore [missing-import]
+    from bson import ObjectId
+
+    db = get_doctoralia_async_db()
+    col = db["doctor_profiles"]
+
+    try:
+        oid = ObjectId(especialista_id)
+        resultado = await col.delete_one({"_id": oid})
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID inválido")
+
+    if resultado.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
     return {"eliminado": True}
 
 
+# =============================================================================
+# ENDPOINTS LEGACY (catálogo) — conservados por compatibilidad
+# =============================================================================
+
+
 @router.post("/catalogo/cargar")
 async def cargar_catalogo(payload: CatalogoCargaRequest):
-    """Carga el catálogo de especialidad y ciudad desde fixtures."""
-    try:
-        return await cargar_catalogo_desde_fixture(payload.especialidad, payload.ciudad)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+    """[Legacy] Carga el catálogo desde fixtures. Redirige al nuevo sistema."""
+    return {
+        "mensaje": "El catálogo ahora se sirve directamente desde la BD Doctoralia. "
+        "Usa GET /catalogos/especialidades y GET /catalogos/ciudades.",
+        "especialidad": payload.especialidad,
+        "ciudad": payload.ciudad,
+    }
 
 
 @router.post("/catalogo/actualizar")
 async def actualizar_catalogo():
-    """Scrapea el catálogo completo y lo persiste en Mongo."""
-    return await actualizar_catalogo_desde_web()
+    """[Legacy] Actualizaba el catálogo vía scraping. Ya no es necesario."""
+    return {
+        "mensaje": "El catálogo se actualiza automáticamente con el pipeline de scraping de Doctoralia. "
+        "No se requiere acción manual.",
+    }

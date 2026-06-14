@@ -1,4 +1,7 @@
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.mongo import get_mongo_db
@@ -52,8 +55,13 @@ def health():
     return resultados
 
 
+# pyrefly: ignore [missing-import]
 from fastapi.exceptions import RequestValidationError
+
+# pyrefly: ignore [missing-import]
 from fastapi.responses import JSONResponse
+
+# pyrefly: ignore [missing-import]
 from fastapi import Request
 
 

@@ -1,8 +1,19 @@
 """
-Router de catálogos para autocompletado de especialidades, ciudades y pares.
+Router de catálogos para autocompletado de especialidades, ciudades, estados y pares.
 
 Todos los endpoints son públicos (sin autenticación).
-Los datos provienen de la colección `catalogos` en MongoDB.
+Los datos provienen de la BD Doctoralia (27017):
+- ``specializations``              → especialidades
+- ``cities``                       → ciudades
+- ``provinces``                    → estados/provincias
+- ``specialization_city_links``    → pares especialidad-ciudad
+
+Endpoints
+---------
+- GET /catalogos/especialidades     → lista de especialidades
+- GET /catalogos/ciudades           → lista de ciudades
+- GET /catalogos/ubicaciones        → ciudades + estados para autocompletado mixto
+- GET /catalogos/pares              → pares especialidad-ciudad con URL de búsqueda
 """
 
 from __future__ import annotations
@@ -11,9 +22,10 @@ import math
 import re
 from typing import Optional
 
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Query
 
-from app.db.mongo import get_mongo_async_db
+from app.db.mongo import get_doctoralia_async_db
 from app.models.schemas import (
     CiudadesListResponse,
     EspecialidadesListResponse,
@@ -22,231 +34,249 @@ from app.models.schemas import (
 
 router = APIRouter(prefix="/catalogos", tags=["Catálogos"])
 
-# Mapa de slugs a nombres legibles con acentos correctos
-_SLUG_A_NOMBRE: dict[str, str] = {
-    "cirujano-general": "Cirujano General",
-    "dermatologo": "Dermatólogo",
-    "endodoncia": "Endodoncia",
-    "ginecologo": "Ginecólogo",
-    "implantologo": "Implantólogo",
-    "internista": "Internista",
-    "nutriologo": "Nutriólogo",
-    "oftalmologo": "Oftalmólogo",
-    "ortodoncista": "Ortodoncista",
-    "ortopedista": "Ortopedista",
-    "otorrinolaringologo": "Otorrinolaringólogo",
-    "pediatra": "Pediatra",
-    "periodoncia": "Periodoncia",
-    "psicologo": "Psicólogo",
-    "psiquiatra": "Psiquiatra",
-    "traumatologo": "Traumatólogo",
-    "urologo": "Urólogo",
-    "dentista": "Dentista",
-    "cardiologo": "Cardiólogo",
-    "endocrinologo": "Endocrinólogo",
-    "gastroenterologo": "Gastroenterólogo",
-    "neurologo": "Neurólogo",
-    "oncologo": "Oncólogo",
-    "reumatologo": "Reumatólogo",
-    "psicoterapeuta": "Psicoterapeuta",
-    "ciudad-de-mexico": "Ciudad de México",
-    "guadalajara": "Guadalajara",
-    "monterrey": "Monterrey",
-    "oaxaca-de-juarez": "Oaxaca de Juárez",
-    "puebla": "Puebla",
-    "tijuana": "Tijuana",
-    "merida": "Mérida",
-    "leon": "León",
-    "queretaro": "Querétaro",
-}
+
+# =============================================================================
+# Helpers
+# =============================================================================
 
 
-def _slug_a_nombre(slug: str) -> str:
+def _filtro_busqueda_texto(campo: str, q: Optional[str]) -> dict:
     """
-    Convierte un slug a nombre legible con capitalización y acentos correctos.
-
-    Parámetros
-    ----------
-    slug : str
-        Slug en formato 'endodoncia' o 'ciudad-de-mexico'.
-
-    Retorna
-    -------
-    str
-        Nombre legible desde el mapa, o título capitalizado si no está en el mapa.
-
-    Ejemplo
-    -------
-    >>> _slug_a_nombre("ginecologo")
-    'Ginecólogo'
-    >>> _slug_a_nombre("ciudad-de-mexico")
-    'Ciudad de México'
-    """
-    return _SLUG_A_NOMBRE.get(slug, slug.replace("-", " ").title())
-
-
-async def _obtener_coleccion():
-    """Retorna la colección `catalogos` de MongoDB."""
-    db = get_mongo_async_db()
-    return db["catalogos"]
-
-
-def _filtro_con_busqueda(campo: str, q: Optional[str]) -> dict:
-    """
-    Construye el filtro MongoDB para un campo con búsqueda parcial opcional.
+    Construye filtro MongoDB de búsqueda parcial case-insensitive sobre un campo.
 
     Parámetros
     ----------
     campo : str
-        Nombre del campo en MongoDB.
+        Nombre del campo en la colección.
     q : str o None
-        Texto de búsqueda parcial case-insensitive. Si es None, no aplica regex.
+        Texto de búsqueda. Si es None o vacío, retorna filtro vacío.
 
     Retorna
     -------
     dict
-        Filtro MongoDB listo para usar en `find()` o `aggregate()`.
+        Filtro MongoDB ``{campo: {$regex: ..., $options: 'i'}}``.
+
+    Ejemplo
+    -------
+    >>> _filtro_busqueda_texto("displayName", "azca")
+    {'displayName': {'$regex': 'azca', '$options': 'i'}}
     """
-    if q:
-        return {campo: {"$regex": re.escape(q.lower()), "$options": "i"}}
+    if q and q.strip():
+        return {campo: {"$regex": re.escape(q.strip()), "$options": "i"}}
     return {}
+
+
+async def _obtener_db():
+    """Retorna la base de datos Doctoralia asíncrona."""
+    return get_doctoralia_async_db()
+
+
+# =============================================================================
+# GET /catalogos/especialidades
+# =============================================================================
 
 
 @router.get("/especialidades", response_model=EspecialidadesListResponse)
 async def listar_especialidades(
     q: Optional[str] = Query(None, description="Búsqueda parcial por nombre o slug"),
-    limit: int = Query(200, ge=1, le=500),
+    limit: int = Query(300, ge=1, le=500),
 ):
     """
     Lista especialidades médicas disponibles para autocompletado.
 
-    Agrupa los documentos del catálogo por `especialidad_slug` y devuelve
-    el nombre legible de cada especialidad con el total de ciudades disponibles.
+    Lee de la colección ``specializations`` de la BD Doctoralia.
+    Cada documento tiene: id, name, urlname, seoUrl, searchUrlTemplate.
 
     Parámetros
     ----------
     q : str, opcional
-        Filtro de búsqueda parcial sobre el slug (case-insensitive).
+        Filtro de búsqueda parcial sobre el nombre (case-insensitive).
     limit : int
-        Máximo de especialidades únicas a devolver. Por defecto 200.
+        Máximo de especialidades a devolver. Por defecto 300.
 
     Retorna
     -------
     EspecialidadesListResponse
-        Total real y lista de especialidades con nombre, slug y total de pares.
+        Total y lista de especialidades con ``nombre``, ``slug`` y ``total_pares``.
+
+    Ejemplo
+    -------
+    GET /catalogos/especialidades?q=cardio
+    → [{"nombre": "Cardiólogo", "slug": "cardiologo", "total_pares": 0}]
     """
-    col = await _obtener_coleccion()
-    filtro = _filtro_con_busqueda("especialidad_slug", q)
+    db = await _obtener_db()
+    col = db["specializations"]
 
-    pipeline_conteo = [
-        {"$match": filtro},
-        {"$group": {"_id": "$especialidad_slug"}},
-        {"$count": "total"},
-    ]
-    pipeline_datos = [
-        {"$match": filtro},
-        {
-            "$group": {
-                "_id": "$especialidad_slug",
-                "total_pares": {"$sum": 1},
-                "especialidad_nombre": {"$first": "$especialidad_nombre"},
-            }
-        },
-        {"$sort": {"_id": 1}},
-        {"$limit": limit},
-    ]
+    filtro = _filtro_busqueda_texto("name", q)
 
-    total_real = 0
-    async for doc in col.aggregate(pipeline_conteo):
-        total_real = doc.get("total", 0)
+    total = await col.count_documents(filtro)
 
     especialidades = []
-    async for doc in col.aggregate(pipeline_datos):
-        slug = doc["_id"] or ""
-        if not slug:
-            continue
-        nombre = doc.get("especialidad_nombre") or _slug_a_nombre(slug)
+    async for doc in col.find(filtro).sort("name", 1).limit(limit):
         especialidades.append(
             {
-                "nombre": nombre,
-                "slug": slug,
-                "total_pares": doc.get("total_pares", 0),
+                "nombre": doc.get("name", ""),
+                "slug": doc.get("urlname", ""),
+                "total_pares": 0,
             }
         )
 
-    return {"total": total_real, "especialidades": especialidades}
+    return {"total": total, "especialidades": especialidades}
+
+
+# =============================================================================
+# GET /catalogos/ciudades
+# =============================================================================
 
 
 @router.get("/ciudades", response_model=CiudadesListResponse)
 async def listar_ciudades(
-    q: Optional[str] = Query(None, description="Búsqueda parcial por slug de ciudad"),
+    q: Optional[str] = Query(None, description="Búsqueda parcial por nombre de ciudad"),
     especialidad: Optional[str] = Query(
-        None, description="Filtrar por especialidad disponible"
+        None, description="Filtrar ciudades que tienen esa especialidad disponible"
     ),
     limit: int = Query(100, ge=1, le=500),
 ):
     """
-    Lista ciudades disponibles para autocompletado, opcionalmente filtradas por especialidad.
+    Lista ciudades disponibles para autocompletado.
+
+    Lee de la colección ``cities`` de la BD Doctoralia.
+    Si se proporciona ``especialidad``, filtra usando ``specialization_city_links``.
 
     Parámetros
     ----------
     q : str, opcional
-        Búsqueda parcial sobre el slug de ciudad (case-insensitive).
+        Búsqueda parcial sobre ``displayName`` (case-insensitive).
     especialidad : str, opcional
-        Slug de especialidad para filtrar solo ciudades con esa especialidad disponible.
+        Slug de especialidad para filtrar solo ciudades donde hay esa especialidad.
     limit : int
-        Máximo de ciudades únicas a devolver. Por defecto 100.
+        Máximo de ciudades. Por defecto 100.
 
     Retorna
     -------
     CiudadesListResponse
-        Total real de ciudades únicas y lista con nombre, slug y total de pares.
+        Total y lista con ``nombre``, ``slug``, ``estado``, ``total_pares``.
     """
-    col = await _obtener_coleccion()
+    db = await _obtener_db()
+    col_cities = db["cities"]
 
-    filtro = _filtro_con_busqueda("ciudad_slug", q)
+    # Si se filtra por especialidad, obtener slugs de ciudades válidas primero
+    slugs_validos: Optional[set] = None
     if especialidad:
-        filtro["especialidad_slug"] = {
-            "$regex": re.escape(especialidad.lower()),
-            "$options": "i",
-        }
-
-    pipeline_conteo = [
-        {"$match": filtro},
-        {"$group": {"_id": "$ciudad_slug"}},
-        {"$count": "total"},
-    ]
-    pipeline_datos = [
-        {"$match": filtro},
-        {
-            "$group": {
-                "_id": "$ciudad_slug",
-                "total_pares": {"$sum": 1},
+        col_links = db["specialization_city_links"]
+        filtro_esp = {
+            "specialtySlug": {
+                "$regex": re.escape(especialidad.strip()),
+                "$options": "i",
             }
-        },
-        {"$sort": {"total_pares": -1, "_id": 1}},
-        {"$limit": limit},
-    ]
+        }
+        cursor_links = col_links.find(filtro_esp, {"citySlug": 1})
+        slugs_validos = set()
+        async for lnk in cursor_links:
+            if lnk.get("citySlug"):
+                slugs_validos.add(lnk["citySlug"])
 
-    total_real = 0
-    async for doc in col.aggregate(pipeline_conteo):
-        total_real = doc.get("total", 0)
+    # Construir filtro principal
+    filtro: dict = _filtro_busqueda_texto("displayName", q)
+    if slugs_validos is not None:
+        filtro["slug"] = {"$in": list(slugs_validos)}
+
+    total = await col_cities.count_documents(filtro)
 
     ciudades = []
-    async for doc in col.aggregate(pipeline_datos):
-        slug = doc["_id"] or ""
-        if not slug:
-            continue
+    async for doc in col_cities.find(filtro).sort("displayName", 1).limit(limit):
         ciudades.append(
             {
-                "nombre": _slug_a_nombre(slug),
-                "slug": slug,
+                "nombre": doc.get("displayName", ""),
+                "slug": doc.get("slug", ""),
                 "estado": None,
-                "total_pares": doc.get("total_pares", 0),
+                "total_pares": 0,
             }
         )
 
-    return {"total": total_real, "ciudades": ciudades}
+    return {"total": total, "ciudades": ciudades}
+
+
+# =============================================================================
+# GET /catalogos/ubicaciones  (NUEVO — para autocompletado mixto)
+# =============================================================================
+
+
+@router.get("/ubicaciones")
+async def buscar_ubicaciones(
+    q: Optional[str] = Query(None, description="Texto libre: ciudad, alcaldía, estado"),
+    limit: int = Query(15, ge=1, le=50),
+):
+    """
+    Busca ubicaciones para autocompletado mixto: ciudades y estados.
+
+    Prioriza resultados de la colección ``cities``. Si hay menos de ``limit`` resultados,
+    complementa con ``provinces`` para cubrir búsquedas por estado.
+
+    Parámetros
+    ----------
+    q : str, opcional
+        Texto libre de búsqueda (ciudad, alcaldía, estado). Mínimo 2 caracteres.
+    limit : int
+        Máximo de sugerencias totales. Por defecto 15.
+
+    Retorna
+    -------
+    dict
+        ``{"total": int, "ubicaciones": [{nombre, slug, tipo, searchLoc}]}``.
+        ``tipo`` puede ser ``'ciudad'`` o ``'estado'``.
+
+    Ejemplo
+    -------
+    GET /catalogos/ubicaciones?q=azca
+    → {"ubicaciones": [{"nombre": "Azcapotzalco", "slug": "azcapotzalco", "tipo": "ciudad"}]}
+    """
+    if not q or len(q.strip()) < 2:
+        return {"total": 0, "ubicaciones": []}
+
+    db = await _obtener_db()
+    filtro = _filtro_busqueda_texto("displayName", q)
+
+    ubicaciones: list[dict] = []
+
+    # 1. Buscar en cities primero
+    col_cities = db["cities"]
+    async for doc in col_cities.find(filtro).sort("displayName", 1).limit(limit):
+        ubicaciones.append(
+            {
+                "nombre": doc.get("displayName", ""),
+                "slug": doc.get("slug", ""),
+                "tipo": "ciudad",
+                "searchLoc": doc.get("searchLoc", doc.get("displayName", "")),
+            }
+        )
+
+    # 2. Complementar con provinces si hay espacio
+    restante = limit - len(ubicaciones)
+    if restante > 0:
+        col_prov = db["provinces"]
+        slugs_ya = {u["slug"] for u in ubicaciones}
+        async for doc in col_prov.find(filtro).sort("displayName", 1).limit(restante * 2):
+            slug = doc.get("slug", "")
+            if slug not in slugs_ya:
+                ubicaciones.append(
+                    {
+                        "nombre": doc.get("displayName", ""),
+                        "slug": slug,
+                        "tipo": "estado",
+                        "searchLoc": doc.get("searchLoc", doc.get("displayName", "")),
+                    }
+                )
+                slugs_ya.add(slug)
+            if len(ubicaciones) >= limit:
+                break
+
+    return {"total": len(ubicaciones), "ubicaciones": ubicaciones}
+
+
+# =============================================================================
+# GET /catalogos/pares
+# =============================================================================
 
 
 @router.get("/pares", response_model=ParesListResponse)
@@ -260,6 +290,8 @@ async def listar_pares(
     """
     Lista pares especialidad-ciudad disponibles con paginación.
 
+    Lee de la colección ``specialization_city_links`` de la BD Doctoralia.
+
     Parámetros
     ----------
     especialidad : str, opcional
@@ -267,7 +299,7 @@ async def listar_pares(
     ciudad : str, opcional
         Slug de ciudad para filtrar.
     modalidad : str, opcional
-        'presencial' o 'online'.
+        No aplicable en la nueva BD (se ignora, mantenido por compatibilidad).
     page : int
         Página actual. Por defecto 1.
     limit : int
@@ -276,20 +308,22 @@ async def listar_pares(
     Retorna
     -------
     ParesListResponse
-        Paginación completa y lista de pares especialidad-ciudad.
+        Paginación completa y lista de pares con URL canónica de búsqueda.
     """
-    col = await _obtener_coleccion()
+    db = await _obtener_db()
+    col = db["specialization_city_links"]
 
     filtro: dict = {}
     if especialidad:
-        filtro["especialidad_slug"] = {
-            "$regex": re.escape(especialidad.lower()),
+        filtro["specialtySlug"] = {
+            "$regex": re.escape(especialidad.strip()),
             "$options": "i",
         }
     if ciudad:
-        filtro["ciudad_slug"] = {"$regex": re.escape(ciudad.lower()), "$options": "i"}
-    if modalidad:
-        filtro["modalidad"] = modalidad
+        filtro["citySlug"] = {
+            "$regex": re.escape(ciudad.strip()),
+            "$options": "i",
+        }
 
     total = await col.count_documents(filtro)
     pages = math.ceil(total / limit) if limit and total else 0
@@ -297,17 +331,14 @@ async def listar_pares(
 
     pares = []
     async for doc in col.find(filtro).skip(skip).limit(limit):
-        esp_slug = doc.get("especialidad_slug", "")
-        ciu_slug = doc.get("ciudad_slug", "")
         pares.append(
             {
-                "especialidad_nombre": doc.get("especialidad_nombre")
-                or _slug_a_nombre(esp_slug),
-                "especialidad_slug": esp_slug,
-                "ciudad_nombre": _slug_a_nombre(ciu_slug),
-                "ciudad_slug": ciu_slug,
-                "modalidad": doc.get("modalidad"),
-                "url": doc.get("url"),
+                "especialidad_nombre": doc.get("specialtyName", ""),
+                "especialidad_slug": doc.get("specialtySlug", ""),
+                "ciudad_nombre": doc.get("citySlug", "").replace("-", " ").title(),
+                "ciudad_slug": doc.get("citySlug", ""),
+                "modalidad": None,
+                "url": doc.get("canonicalUrl") or doc.get("searchUrl"),
             }
         )
 

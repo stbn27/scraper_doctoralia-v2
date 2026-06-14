@@ -5,33 +5,19 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: medicos_db
       MYSQL_ROOT_HOST: '%'
-    ports: ["3310:3306"]
-    volumes: [mysql_data:/var/lib/mysql]
+    ports:
+      - "3310:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
 
   mongodb:
     image: mongo:6
-    ports: ["27018:27017"]
+    ports:
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
-    command: --wiredTigerCacheSizeGB 0.5 # limita cache a 512MB
-
-  ollama:
-    profiles: ["ai"]
-    image: ollama/ollama
-    ports: ["11434:11434"]
-    volumes: [ollama_models:/root/.ollama]
-
-  backend:
-    build: ./backend
-    ports: ["8000:8000"]
-    depends_on: [mongodb] # Agregar ollama, mysql como dependencia cuando se necesito modelos de IA local
-    env_file: .env
-    volumes:
-      - ./backend:/app # Montar el código fuente para desarrollo
-    environment:
-      - WATCHFILES_FORCE_POLLING=true # Para Linux para el --reload
+    command: --wiredTigerCacheSizeGB 0.5
 
 volumes:
   mysql_data:
   mongo_data:
-  ollama_models:
