@@ -41,7 +41,12 @@ def root():
 @app.get("/health")
 def health():
     """Verifica el estado de conexión a MySQL, MongoDB legacy y BD Doctoralia."""
-    resultados = {"api": "ok", "mysql": "error", "mongodb_legacy": "error", "mongodb_doctoralia": "error"}
+    resultados = {
+        "api": "ok",
+        "mysql": "error",
+        "mongodb_legacy": "error",
+        "mongodb_doctoralia": "error",
+    }
     try:
         conn = get_mysql_conn()
         conn.close()

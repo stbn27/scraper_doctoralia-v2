@@ -140,16 +140,33 @@ export default function Detail() {
     );
   }
 
-  const consultorio = specialist.consultorios?.[0];
-  const visibleServices = showAllServices
-    ? specialist.servicios || []
-    : (specialist.servicios || []).slice(0, 6);
-
+  const doctor = specialist.doctor || specialist;
   const ia = specialist.analisis || {};
-  const localMetrics = ia.metricas_locales || {};
+  const localMetrics = ia.metricas_opiniones || ia.metricas_locales || {};
   const hasIa = ia.tiene_analisis;
 
-  const profileUrl = specialist.scraping_meta?.url_origen || specialist.url_origen || specialist.url || (specialist.doctoralia_id ? `https://www.doctoralia.com.mx/doctor/id/${specialist.doctoralia_id}` : null);
+  const data = {
+    _id: specialist._id,
+    nombre: doctor.nombre,
+    foto_perfil_url: doctor.foto_perfil || specialist.foto_perfil_url,
+    especialidad: (doctor.especialidades || [])[0] || specialist.especialidad,
+    rating_global: localMetrics.rating_promedio || specialist.rating_global,
+    total_opiniones: specialist.total_opiniones,
+    ciudad: (doctor.direcciones?.[0]?.ciudad) || (doctor.estado?.[0]) || specialist.ciudad,
+    pacientes: doctor.pacientes_que_atiende || specialist.pacientes || {},
+    cedulas: doctor.cedulas || specialist.cedulas || [],
+    experiencia: typeof doctor.experiencia === 'string' ? doctor.experiencia.split('\n').filter(Boolean) : (specialist.experiencia || []),
+    consultorio: (doctor.direcciones || specialist.consultorios || [])[0],
+    servicios: (doctor.servicios_y_precios || specialist.servicios || []).map(serv => ({
+      nombre: serv.servicio || serv.nombre,
+      precio_texto: serv.precio || serv.precio_texto
+    })),
+    url_perfil: doctor.url_perfil || specialist.scraping_meta?.url_origen || specialist.url_origen
+  };
+
+  const consultorio = data.consultorio;
+  const visibleServices = showAllServices ? data.servicios : data.servicios.slice(0, 6);
+  const profileUrl = data.url_perfil;
 
   const handleBack = () => {
     if (window.history.state && window.history.state.idx > 0) {
@@ -186,9 +203,9 @@ export default function Detail() {
               {/* Foto */}
               <div className="shrink-0">
                 <Avatar
-                  name={specialist.nombre}
-                  id={specialist._id}
-                  src={specialist.foto_perfil_url}
+                  name={data.nombre}
+                  id={data._id}
+                  src={data.foto_perfil_url}
                   size={88}
                   className="text-2xl ring-2 ring-royalBlue-500/20"
                 />
@@ -199,22 +216,22 @@ export default function Detail() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold leading-snug tracking-tight">
-                      {specialist.nombre}
+                      {data.nombre}
                     </h1>
-                    {specialist.especialidad && (
+                    {data.especialidad && (
                       <p className="text-sm mt-0.5 font-medium text-royalBlue-400 flex items-center gap-1.5">
                         <RiStethoscopeLine className="text-base" />
-                        {specialist.especialidad}
+                        {data.especialidad}
                       </p>
                     )}
                   </div>
 
                   {/* Score compacto en línea */}
-                  {hasIa && specialist.analisis?.puntuacion_recomendacion != null && (
+                  {hasIa && ia.puntuacion_recomendacion != null && (
                     <div className="flex flex-col items-center gap-0.5 shrink-0">
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl font-extrabold text-royalBlue-400 leading-none">
-                          {Math.round(specialist.analisis.puntuacion_recomendacion)}
+                          {Math.round(ia.puntuacion_recomendacion)}
                         </span>
                         <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>/10</span>
                       </div>
@@ -228,14 +245,14 @@ export default function Detail() {
                 {/* Rating + ubicación */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <StarRating rating={specialist.rating_global} />
+                    <StarRating rating={data.rating_global} />
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {specialist.total_opiniones} opiniones
+                      {data.total_opiniones} opiniones
                     </span>
                   </div>
                   <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <RiMapPin2Line className="shrink-0" />
-                    {specialist.ciudad}
+                    {data.ciudad}
                   </span>
                   {consultorio?.precio_minimo && (
                     <span className="text-xs text-royalBlue-400 font-medium">
@@ -246,24 +263,24 @@ export default function Detail() {
 
                 {/* Metadatos en fila */}
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {specialist.pacientes?.atiende_ninos && (
+                  {data.pacientes?.atiende_ninos && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                       <RiUserLine className="text-xs" /> Niños
                     </span>
                   )}
-                  {specialist.pacientes?.atiende_adultos && (
+                  {data.pacientes?.atiende_adultos && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                       <RiUserLine className="text-xs" /> Adultos
                     </span>
                   )}
-                  {specialist.pacientes?.atiende_adolescentes && (
+                  {data.pacientes?.atiende_adolescentes && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                       <RiUserLine className="text-xs" /> Adolescentes
                     </span>
                   )}
-                  {specialist.cedula && (
+                  {data.cedulas?.length > 0 && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-royalBlue-500/10 text-royalBlue-500 dark:text-royalBlue-300 border border-royalBlue-500/20">
-                      <RiShieldCheckLine className="text-xs" /> Cédula {specialist.cedula}
+                      <RiShieldCheckLine className="text-xs" /> Cédula {data.cedulas[0]}
                     </span>
                   )}
                 </div>
@@ -416,19 +433,19 @@ export default function Detail() {
         </section>
 
         {/* Experiencia — con "Leer más" */}
-        {specialist.experiencia?.length > 0 && (
+        {data.experiencia?.length > 0 && (
           <section className="scroll-reveal px-1">
             <h2 className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
               Trayectoria profesional
             </h2>
             <div className="space-y-2">
-              {(showAllExp ? specialist.experiencia : specialist.experiencia.slice(0, 2)).map((text, i) => (
+              {(showAllExp ? data.experiencia : data.experiencia.slice(0, 2)).map((text, i) => (
                 <p key={i} className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                   {text}
                 </p>
               ))}
             </div>
-            {specialist.experiencia.length > 2 && (
+            {data.experiencia.length > 2 && (
               <button
                 onClick={() => setShowAllExp(v => !v)}
                 className="mt-3 text-xs flex items-center gap-1 hover:text-royalBlue-400 transition-colors"
@@ -441,7 +458,7 @@ export default function Detail() {
         )}
 
         {/* Servicios — lista limpia */}
-        {specialist.servicios?.length > 0 && (
+        {data.servicios?.length > 0 && (
           <section className="glass-card p-6 scroll-reveal">
             <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>
               Servicios y precios
@@ -456,7 +473,7 @@ export default function Detail() {
                 </div>
               ))}
             </div>
-            {specialist.servicios.length > 6 && (
+            {data.servicios.length > 6 && (
               <button
                 onClick={() => setShowAllServices(v => !v)}
                 className="mt-3 text-xs flex items-center gap-1 hover:text-royalBlue-400 transition-colors"
@@ -464,7 +481,7 @@ export default function Detail() {
               >
                 {showAllServices
                   ? <><RiArrowUpSLine /> Ver menos</>
-                  : <><RiArrowDownSLine /> Ver todos ({specialist.servicios.length})</>
+                  : <><RiArrowDownSLine /> Ver todos ({data.servicios.length})</>
                 }
               </button>
             )}
@@ -482,12 +499,12 @@ export default function Detail() {
                 <RiHospitalLine className="text-royalBlue-700 dark:text-royalBlue-400 text-base" />
               </div>
               <div>
-                {consultorio.clinica && (
-                  <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>{consultorio.clinica}</p>
+                {consultorio.nombre && (
+                  <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>{consultorio.nombre}</p>
                 )}
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{consultorio.direccion}</p>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{consultorio.texto}</p>
                 <button
-                  onClick={() => openMap(consultorio.direccion)}
+                  onClick={() => openMap(consultorio.texto)}
                   className="mt-2 text-xs flex items-center gap-1.5 text-royal-800 dark:text-royalBlue-500 hover:text-royalBlue-900 dark:hover:text-royalBlue-400 transition-colors"
                 >
                   <RiExternalLinkLine /> Ver en Google Maps

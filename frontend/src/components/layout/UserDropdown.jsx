@@ -6,6 +6,7 @@ import {
   RiHistoryLine,
   RiLogoutBoxRLine,
   RiUserLine,
+  RiDashboardLine,
 } from 'react-icons/ri';
 
 import { AccessibilityDropdown } from '@/components/layout/AccessibilityDropdown.jsx';
@@ -99,6 +100,17 @@ export function UserDropdown({ user, onLogout }) {
             <RiUserLine />
             Mi perfil
           </Link>
+
+          {user?.rol === 'ADMIN' && (
+            <Link
+              to="/admin"
+              onClick={closeMenu}
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors text-royalBlue-600 dark:text-royalBlue-400 hover:bg-royalBlue-50 dark:hover:bg-royalBlue-900/20"
+            >
+              <RiDashboardLine />
+              Administrador
+            </Link>
+          )}
 
           <Link
             to="/favoritos"

@@ -156,8 +156,8 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
             onClick={handleFavorite}
             disabled={favLoading}
             className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${fav
-                ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
-                : 'hover:bg-black/5 dark:hover:bg-white/10'
+              ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
+              : 'hover:bg-black/5 dark:hover:bg-white/10'
               }`}
             style={!fav ? { color: 'var(--text-muted)' } : {}}
             aria-label={fav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
@@ -168,12 +168,23 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
 
         {/* ── Fila 2: Rating + opiniones ── */}
         <div className="flex items-center gap-1.5">
-          <StarRating rating={specialist.rating_global} />
+
+          {/* Solo mostrar este componente si tiene raiting en el response */}
+          {specialist.rating_global != null && (
+            <StarRating rating={specialist.rating_global} showNumber={false} />
+          )}
+          {!specialist.rating_global && (
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              --
+            </span>
+          )}
+
           <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
             {specialist.total_opiniones
               ? `${specialist.total_opiniones} ${specialist.total_opiniones === 1 ? 'reseña' : 'reseñas'}`
               : 'Sin reseñas'}
           </span>
+
         </div>
 
         {/* ── Fila 3: Badges IA + pacientes ── */}
@@ -229,13 +240,15 @@ export function SpecialistCard({ specialist, showDelete = false, onDelete = null
             </div>
           ) : (
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              Precio no publicado
             </span>
           )}
 
           <button
             onClick={() => navigate(`/especialistas/${specialist._id}`)}
-            className="text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-royalBlue-600 hover:bg-royalBlue-500 active:bg-royalBlue-700 text-white transition-colors shadow-sm"
+            className="text-xs font-semibold text-white
+              px-3.5 py-1.5 rounded-lg 
+              bg-royalBlue-600 hover:bg-royalBlue-500 active:bg-royalBlue-700 
+              transition-colors shadow-sm"
           >
             Ver perfil
           </button>

@@ -168,9 +168,15 @@ async def listar_especialistas_admin(
     q: Optional[str] = Query(None, description="Búsqueda por nombre del doctor"),
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
     ciudad: Optional[str] = Query(None, description="Filtrar por ciudad"),
-    con_analisis: Optional[bool] = Query(None, description="Filtrar por presencia de análisis"),
-    modelo_usado: Optional[str] = Query(None, description="Filtrar por modelo de IA usado"),
-    estatus_analisis: Optional[str] = Query(None, description="Filtrar por estatus de análisis"),
+    con_analisis: Optional[bool] = Query(
+        None, description="Filtrar por presencia de análisis"
+    ),
+    modelo_usado: Optional[str] = Query(
+        None, description="Filtrar por modelo de IA usado"
+    ),
+    estatus_analisis: Optional[str] = Query(
+        None, description="Filtrar por estatus de análisis"
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     _admin: dict = Depends(_requerir_admin),
@@ -253,7 +259,12 @@ async def listar_especialistas_admin(
         }
     if ciudad:
         filtro_doc["$or"] = [
-            {"doctor.direcciones.ciudad": {"$regex": re.escape(ciudad.strip()), "$options": "i"}},
+            {
+                "doctor.direcciones.ciudad": {
+                    "$regex": re.escape(ciudad.strip()),
+                    "$options": "i",
+                }
+            },
             {"doctor.estado": {"$regex": re.escape(ciudad.strip()), "$options": "i"}},
         ]
     if ids_validos is not None:
@@ -272,7 +283,8 @@ async def listar_especialistas_admin(
     skip = (page - 1) * limit
 
     docs = [
-        doc async for doc in col_doc.find(filtro_doc)
+        doc
+        async for doc in col_doc.find(filtro_doc)
         .sort("queue_meta.persistedAt", -1)
         .skip(skip)
         .limit(limit)
@@ -338,28 +350,30 @@ async def listar_especialistas_admin(
         dir_validas = [d for d in direcciones if d.get("ciudad")]
         dir_principal = dir_validas[0] if dir_validas else None
 
-        especialistas.append({
-            "_id": str(doc.get("_id", "")),
-            "doctoralia_id": did,
-            "nombre": doctor.get("nombre", ""),
-            "especialidades": doctor.get("especialidades") or [],
-            "ciudad": dir_principal.get("ciudad") if dir_principal else None,
-            "estado": (doctor.get("estado") or [None])[0],
-            "foto_perfil": doctor.get("foto_perfil"),
-            "cedulas": doctor.get("cedulas") or [],
-            "total_opiniones_perfil": doc.get("total_opiniones", 0),
-            "total_opiniones_bd": mapa_opiniones.get(did, 0),
-            "tiene_analisis": ana is not None,
-            "analisis": analisis_info,
-            "scraping": {
-                "ultimo_scraping": ultimo_scraping_str,
-                "fecha_consulta": fecha_consulta,
-                "fuente": meta.get("fuente"),
-                "fuente_busqueda": meta.get("fuente_busqueda"),
-                "priority_score": queue.get("priority_score"),
-                "discovery_sources": queue.get("discovery_sources") or [],
-            },
-        })
+        especialistas.append(
+            {
+                "_id": str(doc.get("_id", "")),
+                "doctoralia_id": did,
+                "nombre": doctor.get("nombre", ""),
+                "especialidades": doctor.get("especialidades") or [],
+                "ciudad": dir_principal.get("ciudad") if dir_principal else None,
+                "estado": (doctor.get("estado") or [None])[0],
+                "foto_perfil": doctor.get("foto_perfil"),
+                "cedulas": doctor.get("cedulas") or [],
+                "total_opiniones_perfil": doc.get("total_opiniones", 0),
+                "total_opiniones_bd": mapa_opiniones.get(did, 0),
+                "tiene_analisis": ana is not None,
+                "analisis": analisis_info,
+                "scraping": {
+                    "ultimo_scraping": ultimo_scraping_str,
+                    "fecha_consulta": fecha_consulta,
+                    "fuente": meta.get("fuente"),
+                    "fuente_busqueda": meta.get("fuente_busqueda"),
+                    "priority_score": queue.get("priority_score"),
+                    "discovery_sources": queue.get("discovery_sources") or [],
+                },
+            }
+        )
 
     return {
         "total": total,
@@ -424,7 +438,12 @@ async def detalle_especialista_admin(
                 "verificadas": {
                     "$sum": {
                         "$cond": [
-                            {"$regexMatch": {"input": {"$ifNull": ["$tipo_verificacion", ""]}, "regex": "verific"}},
+                            {
+                                "$regexMatch": {
+                                    "input": {"$ifNull": ["$tipo_verificacion", ""]},
+                                    "regex": "verific",
+                                }
+                            },
                             1,
                             0,
                         ]
@@ -524,16 +543,22 @@ async def resumen_scraping(
         doctor = doc.get("doctor") or {}
         queue = doc.get("queue_meta") or {}
         persisted = queue.get("persistedAt")
-        ultimos.append({
-            "doctoralia_id": doctor.get("id_doctoralia"),
-            "nombre": doctor.get("nombre", ""),
-            "especialidades": (doctor.get("especialidades") or [])[:2],
-            "ultimo_scraping": persisted.isoformat() if persisted else None,
-            "priority_score": queue.get("priority_score"),
-        })
+        ultimos.append(
+            {
+                "doctoralia_id": doctor.get("id_doctoralia"),
+                "nombre": doctor.get("nombre", ""),
+                "especialidades": (doctor.get("especialidades") or [])[:2],
+                "ultimo_scraping": persisted.isoformat() if persisted else None,
+                "priority_score": queue.get("priority_score"),
+            }
+        )
 
     # Total en cola de scraping
-    total_en_cola = await db["doctor_queue"].count_documents({}) if "doctor_queue" in await db.list_collection_names() else 0
+    total_en_cola = (
+        await db["doctor_queue"].count_documents({})
+        if "doctor_queue" in await db.list_collection_names()
+        else 0
+    )
 
     # Distribución por fuente de descubrimiento
     pipeline_fuentes = [

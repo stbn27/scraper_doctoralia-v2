@@ -6,6 +6,9 @@ import {
   RiUserLine, RiTimeLine, RiFilterLine,
 } from 'react-icons/ri';
 import { useAuth } from '@/hooks/useAuth';
+import { PageWrapper } from '@/components/layout/PageWrapper';
+import { BubbleBackground } from '@/components/layout/BubbleBackground';
+import { Navbar } from '@/components/layout/Navbar';
 import {
   getEstadisticasGlobales,
   getEspecialistasAdmin,
@@ -259,7 +262,7 @@ export default function AdminPage() {
   useEffect(() => {
     getEstadisticasGlobales()
       .then(setStats)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setCargando(false));
   }, []);
 
@@ -284,7 +287,11 @@ export default function AdminPage() {
   const totalPages = data?.pages || 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d0f', color: '#e2e8f0', padding: '24px' }}>
+    <PageWrapper name="admin">
+      <BubbleBackground />
+      <Navbar />
+
+      <div className="relative z-10 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto" style={{ color: '#e2e8f0' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
@@ -407,7 +414,8 @@ export default function AdminPage() {
       </div>
 
       <style>{`@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
-    </div>
+      </div>
+    </PageWrapper>
   );
 }
 

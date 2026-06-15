@@ -65,7 +65,7 @@ def _regex_ci(valor: str) -> dict:
     patron = ""
     for char in valor_limpio:
         if char in "aeiouáéíóúü":
-            patron += "[aeiouáéíóúü\uFFFD]"
+            patron += "[aeiouáéíóúü\ufffd]"
         elif char == " ":
             patron += ".*"
         else:
@@ -240,7 +240,9 @@ def _extraer_analisis_resumen(analisis_doc: Optional[dict]) -> Optional[dict]:
     return {
         "estado": analisis_doc.get("estatus_analisis"),
         "modelo_usado": analisis_doc.get("modelo_usado"),
-        "fecha_analisis": str(analisis_doc.get("metadata_analisis", {}).get("fecha", "")),
+        "fecha_analisis": str(
+            analisis_doc.get("metadata_analisis", {}).get("fecha", "")
+        ),
         "puntuacion_recomendacion": analisis.get("puntuacion"),
         "resumen": analisis.get("resumen"),
         "confiabilidad_opiniones": analisis.get("confiabilidad"),
@@ -276,9 +278,7 @@ def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict]) -> dict:
     direcciones = doctor.get("direcciones") or []
 
     # Filtrar direcciones con datos válidos
-    direcciones_validas = [
-        d for d in direcciones if d.get("ciudad") or d.get("calle")
-    ]
+    direcciones_validas = [d for d in direcciones if d.get("ciudad") or d.get("calle")]
     direccion_principal = direcciones_validas[0] if direcciones_validas else None
 
     # Especialidad principal
@@ -378,14 +378,16 @@ async def buscar_especialistas_paginado(
 
     # Pre-filtro por analisis si es necesario
     ids_con_analisis: Optional[set[int]] = None
-    if any([
-        solo_analizados,
-        estado_analisis,
-        confiabilidad,
-        sospecha_fraude_param is not None,
-        puntuacion_min,
-        puntuacion_max,
-    ]):
+    if any(
+        [
+            solo_analizados,
+            estado_analisis,
+            confiabilidad,
+            sospecha_fraude_param is not None,
+            puntuacion_min,
+            puntuacion_max,
+        ]
+    ):
         filtro_ana: dict[str, Any] = {}
         if estado_analisis:
             filtro_ana["estatus_analisis"] = estado_analisis
@@ -418,7 +420,13 @@ async def buscar_especialistas_paginado(
         return _respuesta_vacia(params, page, limit)
 
     skip = (page - 1) * limit
-    docs = [doc async for doc in col_doc.find(filtro).sort(sort_instruccion).skip(skip).limit(limit)]
+    docs = [
+        doc
+        async for doc in col_doc.find(filtro)
+        .sort(sort_instruccion)
+        .skip(skip)
+        .limit(limit)
+    ]
 
     # Obtener IDs de doctoralia para batch de análisis
     doctoralia_ids = [
@@ -445,8 +453,13 @@ async def buscar_especialistas_paginado(
         results.sort(
             key=lambda c: (
                 0 if c.get("tiene_analisis") else 1,
-                -((c.get("analisis") or {}).get("puntuacion_recomendacion") or 0) if rev
-                else ((c.get("analisis") or {}).get("puntuacion_recomendacion") or 0),
+                (
+                    -((c.get("analisis") or {}).get("puntuacion_recomendacion") or 0)
+                    if rev
+                    else (
+                        (c.get("analisis") or {}).get("puntuacion_recomendacion") or 0
+                    )
+                ),
             )
         )
     elif sort_por_recencia:

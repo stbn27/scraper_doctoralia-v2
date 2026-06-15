@@ -27,7 +27,7 @@ from typing import Optional
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.db.mongo import get_mongo_async_db
+from app.db.mongo import get_doctoralia_async_db, get_mongo_async_db
 from app.db.mysql import get_mysql_conn
 from app.db.repositorios import analisis_repo
 
@@ -529,9 +529,9 @@ async def agregar_favorito(
 
     # Resolver medico_id desde MongoDB si solo viene doctoralia_id
     if not medico_id and doctoralia_id:
-        db = get_mongo_async_db()
-        col = db["especialistas"]
-        esp = await col.find_one({"doctoralia_id": doctoralia_id}, {"_id": 1})
+        db = get_doctoralia_async_db()
+        col = db["doctor_profiles"]
+        esp = await col.find_one({"doctor.id_doctoralia": doctoralia_id}, {"_id": 1})
         if not esp:
             raise HTTPException(
                 status_code=404, detail="Especialista no encontrado en MongoDB"
@@ -620,15 +620,17 @@ async def listar_favoritos(current_user: dict = Depends(get_current_user)):
     # pyrefly: ignore [missing-import]
     from bson import ObjectId
 
-    db = get_mongo_async_db()
-    col_esp = db["especialistas"]
+    db = get_doctoralia_async_db()
+    col_esp = db["doctor_profiles"]
 
     ids_mongo = []
     for fav in favoritos_mysql:
+        mid = fav["medico_id"]
         try:
-            ids_mongo.append(ObjectId(fav["medico_id"]))
+            ids_mongo.append(ObjectId(mid))
         except Exception:
             pass
+        ids_mongo.append(mid)
 
     mapa_especialistas: dict = {}
     if ids_mongo:
@@ -661,7 +663,8 @@ async def listar_favoritos(current_user: dict = Depends(get_current_user)):
             continue
 
         esp_id = str(esp_doc["_id"])
-        did = esp_doc.get("doctoralia_id")
+        doctor_info = esp_doc.get("doctor") or {}
+        did = doctor_info.get("id_doctoralia") or esp_doc.get("doctoralia_id")
         analisis_doc = mapa_analisis.get(did) if did else None
 
         # Importar aquí para evitar circular

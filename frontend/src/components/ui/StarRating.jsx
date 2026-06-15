@@ -7,12 +7,13 @@ import { RiStarFill, RiStarLine } from 'react-icons/ri';
  * @example
  * <StarRating rating={4.5} showNumber />
  */
-export function StarRating({ rating, maxStars = 5, showNumber = true, className = '' }) {
+export function StarRating({ rating = 0, maxStars = 5, showNumber = true, className = '' }) {
+  const safeRating = Number(rating) || 0;
   const stars = [];
 
   for (let i = 1; i <= maxStars; i++) {
     stars.push(
-      i <= Math.round(rating) ? (
+      i <= Math.round(safeRating) ? (
         <RiStarFill key={i} className="text-amber-400" />
       ) : (
         <RiStarLine key={i} className="text-amber-400/30" />
@@ -25,7 +26,7 @@ export function StarRating({ rating, maxStars = 5, showNumber = true, className 
       {stars}
       {showNumber && (
         <span className="ml-1.5 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-          ({rating.toFixed(1)})
+          ({safeRating.toFixed(1)})
         </span>
       )}
     </div>

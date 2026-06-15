@@ -7,6 +7,7 @@ Lee de la BD Doctoralia (27017) donde el pipeline escribe los resultados.
 
 from typing import Optional
 
+# pyrefly: ignore [missing-import]
 from pymongo import ASCENDING, DESCENDING
 
 from app.db.mongo import get_doctoralia_async_db
@@ -37,6 +38,7 @@ async def _asegurar_indices():
     if _indices_creados:
         return
 
+    # pyrefly: ignore [missing-import]
     from pymongo.errors import OperationFailure
 
     col = await _obtener_coleccion()

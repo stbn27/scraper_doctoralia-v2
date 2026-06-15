@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RiCloseLine, RiMapPinLine, RiSearchLine } from 'react-icons/ri';
+import { RiCloseLine, RiMapPinLine, RiSearchLine, RiMenuSearchLine } from 'react-icons/ri';
 import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
 
@@ -41,9 +41,9 @@ const PATIENT_TYPE_OPTIONS = [
 /** Retorna el ícono/badge del tipo de ubicación */
 function TipoBadge({ tipo }) {
     const estilos = {
-        ciudad:    { bg: 'rgba(79,125,255,0.15)', color: '#4f7dff', texto: 'Ciudad' },
-        estado:    { bg: 'rgba(100,200,100,0.15)', color: '#4caf50', texto: 'Estado' },
-        alcaldia:  { bg: 'rgba(255,165,0,0.15)', color: '#ff9800', texto: 'Alcaldía' },
+        ciudad: { bg: 'rgba(79,125,255,0.15)', color: '#4f7dff', texto: 'Ciudad' },
+        estado: { bg: 'rgba(100,200,100,0.15)', color: '#4caf50', texto: 'Estado' },
+        alcaldia: { bg: 'rgba(255,165,0,0.15)', color: '#ff9800', texto: 'Alcaldía' },
         municipio: { bg: 'rgba(255,165,0,0.15)', color: '#ff9800', texto: 'Municipio' },
     };
     const est = estilos[tipo] || estilos.ciudad;
@@ -472,6 +472,14 @@ export function TraditionalSearchForm({
                     Buscar
                 </Button>
             </div>
+
+            <div className="pt-2 border-t border-royalBlue-900"></div>
+
+            {/* Boton de búsqueda avanzada */}
+            <Button variant="outline" className="mt-1 text-royalBlue-200/40" fullWidth>
+                <RiMenuSearchLine />
+                Búsqueda avanzada
+            </Button>
         </div>
     );
 }

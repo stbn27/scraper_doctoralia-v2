@@ -315,12 +315,16 @@ async def obtener_opiniones_paginadas(
     col_profiles = db["doctor_profiles"]
     col_opiniones = db["doctor_opinions"]
 
-    # Resolver el documento del especialista
+    # pyrefly: ignore [missing-import]
+    from bson.errors import InvalidId
+    
     try:
         oid = ObjectId(especialista_id)
-        doc_esp = await col_profiles.find_one({"_id": oid})
-    except Exception:
-        doc_esp = None
+        query = {"_id": {"$in": [oid, especialista_id]}}
+    except InvalidId:
+        query = {"_id": especialista_id}
+
+    doc_esp = await col_profiles.find_one(query)
 
     if not doc_esp:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
@@ -426,11 +430,16 @@ async def obtener_especialista_detalle(especialista_id: str):
     db = get_doctoralia_async_db()
     col = db["doctor_profiles"]
 
+    # pyrefly: ignore [missing-import]
+    from bson.errors import InvalidId
+
     try:
         oid = ObjectId(especialista_id)
-        doc = await col.find_one({"_id": oid})
-    except Exception:
-        doc = None
+        query = {"_id": {"$in": [oid, especialista_id]}}
+    except InvalidId:
+        query = {"_id": especialista_id}
+
+    doc = await col.find_one(query)
 
     if not doc:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
@@ -466,11 +475,16 @@ async def eliminar_especialista(especialista_id: str):
     db = get_doctoralia_async_db()
     col = db["doctor_profiles"]
 
+    # pyrefly: ignore [missing-import]
+    from bson.errors import InvalidId
+
     try:
         oid = ObjectId(especialista_id)
-        resultado = await col.delete_one({"_id": oid})
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID inválido")
+        query = {"_id": {"$in": [oid, especialista_id]}}
+    except InvalidId:
+        query = {"_id": especialista_id}
+
+    resultado = await col.delete_one(query)
 
     if resultado.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
