@@ -20,6 +20,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { ModelosIA } from './ModelosIA';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -59,6 +60,7 @@ export default function Perfil() {
   const [codigoPostal, setCodigoPostal] = useState('');
   const [esPrincipal, setEsPrincipal] = useState(false);
   const [dirSaving, setDirSaving] = useState(false);
+  const [dirToDelete, setDirToDelete] = useState(null);
 
   // Cargar perfil
   useEffect(() => {
@@ -192,16 +194,21 @@ export default function Perfil() {
     }
   };
 
-  // Eliminar dirección
-  const handleDeleteDir = async (dirId) => {
-    if (window.confirm('¿Estás seguro de eliminar esta dirección?')) {
-      try {
-        await eliminarDireccion(dirId);
-        addToast({ type: 'success', message: 'Dirección eliminada.' });
-        loadDirecciones();
-      } catch {
-        addToast({ type: 'error', message: 'Error al eliminar dirección.' });
-      }
+  // Abrir modal confirmación eliminación de dirección
+  const handleDeleteClick = (dirId) => {
+    setDirToDelete(dirId);
+  };
+
+  const handleConfirmDeleteDir = async () => {
+    if (!dirToDelete) return;
+    try {
+      await eliminarDireccion(dirToDelete);
+      addToast({ type: 'success', message: 'Dirección eliminada.' });
+      loadDirecciones();
+    } catch {
+      addToast({ type: 'error', message: 'Error al eliminar dirección.' });
+    } finally {
+      setDirToDelete(null);
     }
   };
 
@@ -573,7 +580,7 @@ export default function Perfil() {
                           <RiEditLine />
                         </button>
                         <button
-                          onClick={() => handleDeleteDir(dir.id || dir._id)}
+                          onClick={() => handleDeleteClick(dir.id || dir._id)}
                           className="p-2 rounded-lg hover:bg-red-500/10 text-red-500 transition-colors"
                           title="Eliminar"
                         >
@@ -595,6 +602,13 @@ export default function Perfil() {
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={!!dirToDelete}
+        onClose={() => setDirToDelete(null)}
+        onConfirm={handleConfirmDeleteDir}
+        title="Eliminar Dirección"
+        message="¿Estás seguro de que deseas eliminar esta dirección de tu perfil? Esta acción no se puede deshacer."
+      />
     </PageWrapper>
   );
 }
