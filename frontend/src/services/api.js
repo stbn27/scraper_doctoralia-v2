@@ -124,6 +124,13 @@ export {
   calcularResumenOpiniones,
 } from './opiniones.api';
 
+export {
+  listarTokensLLM,
+  guardarTokenLLM,
+  eliminarTokenLLM,
+  scrapeAnalyze,
+} from './llm.api';
+
 /* ──────────────────────────────────────────────
    Autenticación y Perfil
    ────────────────────────────────────────────── */

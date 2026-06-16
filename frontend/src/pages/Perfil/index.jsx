@@ -16,6 +16,7 @@ import {
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
+import { ModelosIA } from './ModelosIA';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -561,6 +562,9 @@ export default function Perfil() {
                 </div>
               )}
             </div>
+
+            {/* Gestión de Tokens LLM */}
+            <ModelosIA />
           </div>
         </div>
       </div>

@@ -278,6 +278,7 @@ export function TraditionalSearchForm({
     onClear,
     specialties = [],
     catalogsLoading = false,
+    onAdvancedSearchClick,
 }) {
     const [inputEspecialidad, setInputEspecialidad] = useState('');
     // Texto legible de la ubicación seleccionada (puede ser diferente al slug)
@@ -476,7 +477,12 @@ export function TraditionalSearchForm({
             <div className="pt-2 border-t border-royalBlue-900"></div>
 
             {/* Boton de búsqueda avanzada */}
-            <Button variant="outline" className="mt-1 text-royalBlue-200/40" fullWidth>
+            <Button 
+                variant="outline" 
+                className="mt-1 text-royalBlue-200/40" 
+                fullWidth
+                onClick={onAdvancedSearchClick}
+            >
                 <RiMenuSearchLine />
                 Búsqueda avanzada
             </Button>

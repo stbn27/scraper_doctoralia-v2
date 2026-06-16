@@ -11,6 +11,8 @@ from app.api.usuarios import router as usuarios_router
 from app.api.catalogos import router as catalogos_router
 from app.api.chat import router as chat_router
 from app.api.admin import router as admin_router
+from app.api.llm_tokens import router as llm_tokens_router
+from app.api.avanzada import router as avanzada_router
 
 app = FastAPI(
     title="API Recomendación Médica v2",
@@ -31,6 +33,8 @@ app.include_router(usuarios_router)
 app.include_router(catalogos_router)
 app.include_router(chat_router)
 app.include_router(admin_router)
+app.include_router(llm_tokens_router)
+app.include_router(avanzada_router)
 
 
 @app.get("/")

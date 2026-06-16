@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { searchSpecialists, guardarBusquedaHistorial } from '@/services/api';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import img1 from '@/assets/doctors/doctor1.svg';
+import { AdvancedSearchForm } from '@/components/search/AdvancedSearchForm';
 
 const DEFAULT_FILTERS = {
     especialidad: '',
@@ -77,6 +78,7 @@ export default function Search() {
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 12, pages: 0 });
+    const [showAdvancedForm, setShowAdvancedForm] = useState(false);
 
     const updateUrlParams = useCallback(
         (nextFilters) => {
@@ -127,6 +129,7 @@ export default function Search() {
 
             setLoading(true);
             setHasSearched(true);
+            setShowAdvancedForm(false);
 
             try {
                 const response = await searchSpecialists(nextFilters);
@@ -196,6 +199,7 @@ export default function Search() {
         setPagination({ total: 0, page: 1, limit: 12, pages: 0 });
         setLoading(false);
         setHasSearched(false);
+        setShowAdvancedForm(false);
         setSearchParams({});
     }, [setSearchParams]);
 
@@ -226,6 +230,14 @@ export default function Search() {
     // Pero mantenemos la referencia para que el resto del código funcione.
     const sortedSpecialists = specialists;
 
+    const handleAdvancedSearchClick = useCallback(() => {
+        if (!user) {
+            addToast({ type: 'warning', message: 'Inicia sesión para usar la búsqueda avanzada.' });
+            return;
+        }
+        setShowAdvancedForm(true);
+    }, [user, addToast]);
+
     useEffect(() => {
         const initialFilters = createInitialFilters(searchParams);
 
@@ -236,9 +248,9 @@ export default function Search() {
         }
     }, []);
 
-    const showInitialState = !loading && !hasSearched;
-    const showEmptyState = !loading && hasSearched && sortedSpecialists.length === 0;
-    const showResults = !loading && sortedSpecialists.length > 0;
+    const showInitialState = !loading && !hasSearched && !showAdvancedForm;
+    const showEmptyState = !loading && hasSearched && sortedSpecialists.length === 0 && !showAdvancedForm;
+    const showResults = !loading && sortedSpecialists.length > 0 && !showAdvancedForm;
 
     const renderPagination = () => {
         const { page, pages } = pagination;
@@ -339,6 +351,7 @@ export default function Search() {
                         specialties={specialties}
                         cities={cities}
                         catalogsLoading={catalogsLoading}
+                        onAdvancedSearchClick={handleAdvancedSearchClick}
                     />
 
                     <main className="min-w-0 flex-1">
@@ -372,6 +385,10 @@ export default function Search() {
 
                         {showInitialState && (
                             <InitialSearchState />
+                        )}
+
+                        {showAdvancedForm && (
+                            <AdvancedSearchForm onClose={() => setShowAdvancedForm(false)} />
                         )}
 
                         {loading && (
@@ -428,7 +445,8 @@ function InitialSearchState() {
                 <img
                     src={img1}
                     alt="Ilustración de búsqueda de especialistas"
-                    className="mx-auto mt-6 max-h-64 object-contain"
+                    className="mx-auto mt-6 max-h-64 object-contain cursor-default"
+                    style={{ userDrag: 'none', WebkitUserDrag: 'none', userSelect: 'none' }}
                 />
 
                 {/* Recomendaciones básicas, podría usarce en base al historial */}

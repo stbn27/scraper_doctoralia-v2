@@ -13,6 +13,7 @@ export function SearchSidebar({
     specialties,
     cities,
     catalogsLoading,
+    onAdvancedSearchClick,
 }) {
     const [mode, setMode] = useState('traditional');
 
@@ -74,6 +75,7 @@ export function SearchSidebar({
                             specialties={specialties}
                             cities={cities}
                             catalogsLoading={catalogsLoading}
+                            onAdvancedSearchClick={onAdvancedSearchClick}
                         />
                     </div>
                 )}
