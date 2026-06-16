@@ -11,7 +11,8 @@ import {
   RiDeleteBinLine,
   RiEditLine,
   RiCheckboxCircleLine,
-  RiArrowRightSLine
+  RiArrowRightSLine,
+  RiArrowLeftLine
 } from 'react-icons/ri';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
@@ -68,7 +69,7 @@ export default function Perfil() {
   }, [user]);
 
   // Resetear error de imagen cuando cambia la URL del avatar
-  useEffect(() => {
+  useEffect(() => { 
     setImgError(false);
   }, [avatarUrl]);
 
@@ -220,6 +221,15 @@ export default function Perfil() {
     ? new Date(user.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'Reciente';
 
+  // Volver a la búsqueda
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/busqueda');
+    }
+  };
+
   return (
     <PageWrapper name="perfil">
       <BubbleBackground />
@@ -228,8 +238,17 @@ export default function Perfil() {
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
+
           {/* Columna Izquierda: Información de Usuario */}
-          <div className="lg:col-span-4 space-y-6">
+          <div className="lg:col-span-4 lg:sticky lg:top-24 h-fit space-y-6">
+          {/* Botón volver */}
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <RiArrowLeftLine /> Volver a la búsqueda
+          </button>
             <div className="glass-card p-6 flex flex-col items-center text-center">
               {/* Avatar */}
               <div className="relative mb-4">
@@ -498,8 +517,8 @@ export default function Perfil() {
                     <div
                       key={dir.id || dir._id}
                       className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${dir.es_principal
-                          ? 'bg-royalBlue-950/20 border-royalBlue-500/30'
-                          : 'bg-white/5 border-white/5 hover:border-white/10'
+                        ? 'bg-royalBlue-950/20 border-royalBlue-500/30'
+                        : 'bg-white/5 border-white/5 hover:border-white/10'
                         }`}
                     >
                       <div className="space-y-1">
