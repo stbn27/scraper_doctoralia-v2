@@ -29,10 +29,16 @@ function getUserInitials(user) {
 
 export function UserDropdown({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const menuRef = useRef(null);
 
   const firstName = getUserFirstName(user);
   const initials = getUserInitials(user);
+  const avatarUrl = user?.avatar_url || user?.avatar;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -61,8 +67,17 @@ export function UserDropdown({ user, onLogout }) {
         aria-label="Abrir menú de usuario"
         aria-expanded={menuOpen}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-royalBlue-600 text-sm font-semibold text-white">
-          {initials}
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-royalBlue-600 text-sm font-semibold text-white overflow-hidden">
+          {avatarUrl && avatarUrl.startsWith('http') && !imgError ? (
+            <img
+              src={avatarUrl}
+              alt={firstName}
+              className="h-full w-full object-cover"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            initials
+          )}
         </div>
 
         <span className="hidden text-sm font-medium sm:block">

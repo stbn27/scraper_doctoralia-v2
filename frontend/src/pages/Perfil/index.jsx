@@ -154,7 +154,7 @@ export default function Perfil() {
 
     setDirSaving(true);
     const slug = ciudad.toLowerCase().replace(/\s+/g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    
+
     const payload = {
       alias,
       calle,
@@ -227,7 +227,7 @@ export default function Perfil() {
 
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
+
           {/* Columna Izquierda: Información de Usuario */}
           <div className="lg:col-span-4 space-y-6">
             <div className="glass-card p-6 flex flex-col items-center text-center">
@@ -298,13 +298,13 @@ export default function Perfil() {
 
           {/* Columna Derecha: Editar Datos y Direcciones */}
           <div className="lg:col-span-8 space-y-6">
-            
+
             {/* Editor Datos Personales */}
             <div className="glass-card p-6 space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <RiUserLine className="text-royalBlue-400" /> Información personal
               </h3>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   id="profile-nombre"
@@ -497,11 +497,10 @@ export default function Perfil() {
                   {direcciones.map((dir) => (
                     <div
                       key={dir.id || dir._id}
-                      className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                        dir.es_principal
+                      className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${dir.es_principal
                           ? 'bg-royalBlue-950/20 border-royalBlue-500/30'
                           : 'bg-white/5 border-white/5 hover:border-white/10'
-                      }`}
+                        }`}
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
