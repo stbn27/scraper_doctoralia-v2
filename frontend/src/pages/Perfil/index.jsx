@@ -28,8 +28,6 @@ import {
   eliminarDireccion
 } from '@/services/api';
 
-const AVATAR_EMOJIS = ['👤', '👩‍⚕️', '👨‍⚕️', '🧑‍💻', '🦊', '🐱', '🌟', '🎯', '💎', '🔥'];
-
 export default function Perfil() {
   const { user, updateProfile, cerrarSesion } = useAuth();
   const navigate = useNavigate();
@@ -39,8 +37,8 @@ export default function Perfil() {
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('👤');
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [imgError, setImgError] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Estados de direcciones
@@ -65,9 +63,14 @@ export default function Perfil() {
       setNombre(user.nombre || user.name || '');
       setApellido(user.apellido || user.lastName || '');
       setTelefono(user.telefono || '');
-      setAvatarUrl(user.avatar_url || user.avatar || '👤');
+      setAvatarUrl(user.avatar_url || user.avatar || '');
     }
   }, [user]);
+
+  // Resetear error de imagen cuando cambia la URL del avatar
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
 
   // Cargar direcciones
   const loadDirecciones = useCallback(async () => {
@@ -228,33 +231,22 @@ export default function Perfil() {
           {/* Columna Izquierda: Información de Usuario */}
           <div className="lg:col-span-4 space-y-6">
             <div className="glass-card p-6 flex flex-col items-center text-center">
-              {/* Avatar Selector */}
+              {/* Avatar */}
               <div className="relative mb-4">
-                <button
-                  onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                  className="w-24 h-24 rounded-3xl bg-royalBlue-800/40 border border-white/10 flex items-center justify-center text-5xl hover:border-royalBlue-400/50 transition-all duration-300 shadow-xl"
-                  title="Cambiar avatar"
+                <div
+                  className="w-24 h-24 rounded-3xl bg-royalBlue-800/40 border border-white/10 flex items-center justify-center overflow-hidden hover:border-royalBlue-400/50 transition-all duration-300 shadow-xl"
                 >
-                  {avatarUrl}
-                </button>
-                {showAvatarPicker && (
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 glass-card p-3 flex flex-wrap gap-2 w-60 z-20">
-                    {AVATAR_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => {
-                          setAvatarUrl(emoji);
-                          setShowAvatarPicker(false);
-                        }}
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg hover:bg-white/15 transition-colors ${
-                          avatarUrl === emoji ? 'bg-royalBlue-600/40 ring-2 ring-royalBlue-400' : ''
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {avatarUrl && avatarUrl.startsWith('http') && !imgError ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar de usuario"
+                      className="w-full h-full object-cover"
+                      onError={() => setImgError(true)}
+                    />
+                  ) : (
+                    <RiUserLine className="text-5xl text-slate-300" />
+                  )}
+                </div>
               </div>
 
               <h2 className="text-xl font-bold text-slate-100">{nombre} {apellido}</h2>
@@ -357,11 +349,11 @@ export default function Perfil() {
                   id="profile-avatar-url"
                   label="URL de foto de perfil (opcional)"
                   type="url"
-                  value={avatarUrl.startsWith('http') ? avatarUrl : ''}
-                  onChange={(e) => setAvatarUrl(e.target.value || '👤')}
+                  value={avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : ''}
+                  onChange={(e) => setAvatarUrl(e.target.value || '')}
                   placeholder="https://ejemplo.com/mi-foto.jpg"
                 />
-                {avatarUrl.startsWith('http') && (
+                {avatarUrl && avatarUrl.startsWith('http') && (
                   <div className="flex items-center gap-2 pt-0.5">
                     <img
                       src={avatarUrl}
