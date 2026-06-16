@@ -42,6 +42,8 @@ export default function Perfil() {
   const [imgError, setImgError] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
 
+  const isAvatarInvalid = avatarUrl.trim() !== '' && (!avatarUrl.startsWith('http') || imgError);
+
   // Estados de direcciones
   const [direcciones, setDirecciones] = useState([]);
   const [dirsLoading, setDirsLoading] = useState(true);
@@ -69,7 +71,7 @@ export default function Perfil() {
   }, [user]);
 
   // Resetear error de imagen cuando cambia la URL del avatar
-  useEffect(() => { 
+  useEffect(() => {
     setImgError(false);
   }, [avatarUrl]);
 
@@ -98,6 +100,10 @@ export default function Perfil() {
   const handleSaveProfile = async () => {
     if (!nombre.trim()) {
       addToast({ type: 'error', message: 'El nombre es obligatorio.' });
+      return;
+    }
+    if (isAvatarInvalid) {
+      addToast({ type: 'error', message: 'Por favor introduce una URL de foto de perfil válida.' });
       return;
     }
     setProfileSaving(true);
@@ -241,14 +247,14 @@ export default function Perfil() {
 
           {/* Columna Izquierda: Información de Usuario */}
           <div className="lg:col-span-4 lg:sticky lg:top-24 h-fit space-y-6">
-          {/* Botón volver */}
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <RiArrowLeftLine /> Volver a la búsqueda
-          </button>
+            {/* Botón volver */}
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <RiArrowLeftLine /> Volver a la búsqueda
+            </button>
             <div className="glass-card p-6 flex flex-col items-center text-center">
               {/* Avatar */}
               <div className="relative mb-4">
@@ -364,23 +370,34 @@ export default function Perfil() {
 
               {/* Avatar URL */}
               <div className="space-y-1.5">
-                <Input
-                  id="profile-avatar-url"
-                  label="URL de foto de perfil (opcional)"
-                  type="url"
-                  value={avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : ''}
-                  onChange={(e) => setAvatarUrl(e.target.value || '')}
-                  placeholder="https://ejemplo.com/mi-foto.jpg"
-                />
-                {avatarUrl && avatarUrl.startsWith('http') && (
-                  <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Input
+                      id="profile-avatar-url"
+                      label="URL de foto de perfil (opcional)"
+                      type="url"
+                      value={avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : ''}
+                      onChange={(e) => setAvatarUrl(e.target.value || '')}
+                      placeholder="https://ejemplo.com/mi-foto.jpg"
+                    />
+                  </div>
+                  {avatarUrl && avatarUrl.startsWith('http') && !imgError && (
                     <img
                       src={avatarUrl}
                       alt="Vista previa"
-                      className="w-8 h-8 rounded-full object-cover border border-white/15"
-                      onError={(e) => { e.target.style.display = 'none'; }}
+                      className="w-10 h-10 mb-0.5 rounded-full object-cover border border-white/15 shrink-0"
+                      onError={() => setImgError(true)}
                     />
-                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Vista previa del avatar</span>
+                  )}
+                </div>
+                {avatarUrl && avatarUrl.startsWith('http') && !imgError && (
+                  <div className="flex justify-end pt-0.5">
+                    <span className="text-[11px] text-right" style={{ color: 'var(--text-muted)' }}>Vista previa del avatar</span>
+                  </div>
+                )}
+                {isAvatarInvalid && (
+                  <div className="text-red-500 text-xs mt-1">
+                    La URL no es válida o no corresponde a una imagen.
                   </div>
                 )}
               </div>

@@ -305,8 +305,8 @@ export default function Detail() {
               <button
                 onClick={handleFavorite}
                 className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${fav
-                    ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
-                    : 'hover:bg-white/5'
+                  ? 'text-red-500 bg-red-500/10 hover:bg-red-500/15'
+                  : 'hover:bg-white/5'
                   }`}
                 style={!fav ? { color: 'var(--text-muted)' } : {}}
               >
@@ -327,10 +327,10 @@ export default function Detail() {
             </div>
             {hasIa ? (
               <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${ia.confiabilidad_opiniones === 'alta'
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                  : ia.confiabilidad_opiniones === 'baja' || ia.confiabilidad_opiniones === 'sospechosa'
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                    : 'bg-royalBlue-500/10 text-royalBlue-600 dark:text-royalBlue-300 border-royalBlue-500/20'
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                : ia.confiabilidad_opiniones === 'baja' || ia.confiabilidad_opiniones === 'sospechosa'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                  : 'bg-royalBlue-500/10 text-royalBlue-600 dark:text-royalBlue-300 border-royalBlue-500/20'
                 }`}>
                 Confiabilidad {ia.confiabilidad_opiniones || 'media'}
               </span>
