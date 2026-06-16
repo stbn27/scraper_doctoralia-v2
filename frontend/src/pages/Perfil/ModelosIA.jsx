@@ -62,15 +62,22 @@ export function ModelosIA() {
     }
   };
 
-  const handleDeleteToken = async (modelo) => {
-    if (window.confirm(`¿Estás seguro de eliminar el token para ${modelo}?`)) {
-      try {
-        await eliminarTokenLLM(modelo);
-        addToast({ type: 'success', message: 'Token eliminado' });
-        cargarTokens();
-      } catch (error) {
-        addToast({ type: 'error', message: 'Error al eliminar el token' });
-      }
+  const [modelToDelete, setModelToDelete] = useState(null);
+
+  const handleDeleteClick = (modelo) => {
+    setModelToDelete(modelo);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!modelToDelete) return;
+    try {
+      await eliminarTokenLLM(modelToDelete);
+      addToast({ type: 'success', message: 'Token eliminado' });
+      cargarTokens();
+    } catch (error) {
+      addToast({ type: 'error', message: 'Error al eliminar el token' });
+    } finally {
+      setModelToDelete(null);
     }
   };
 
@@ -176,7 +183,7 @@ export function ModelosIA() {
 
               <div className="flex items-center gap-2 self-end sm:self-auto">
                 <button
-                  onClick={() => handleDeleteToken(tok.modelo)}
+                  onClick={() => handleDeleteClick(tok.modelo)}
                   className="p-2 rounded-lg hover:bg-red-500/10 text-red-500 transition-colors"
                   title="Eliminar"
                 >
@@ -191,6 +198,66 @@ export function ModelosIA() {
           No tienes tokens de IA configurados.
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!modelToDelete}
+        onClose={() => setModelToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Token"
+        message={`¿Estás seguro de que deseas eliminar el token de IA para ${getNombreModelo(modelToDelete)}? Esta acción no se puede deshacer.`}
+      />
+    </div>
+  );
+}
+
+function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = 'Eliminar', cancelText = 'Cancelar' }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Background overlay */}
+      <div 
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity duration-300"
+        onClick={onClose}
+      />
+      
+      {/* Modal content */}
+      <div className="relative w-full max-w-sm transform overflow-hidden rounded-3xl border border-white/10 bg-[#0d0d0f]/90 p-6 shadow-2xl backdrop-blur-xl transition-all duration-300 animate-in fade-in zoom-in-95">
+        <div className="flex flex-col items-center text-center space-y-4">
+          {/* Icon */}
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500">
+            <RiDeleteBinLine className="text-xl" />
+          </div>
+          
+          {/* Title & Description */}
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-100">
+              {title}
+            </h3>
+            <p className="text-xs text-slate-400">
+              {message}
+            </p>
+          </div>
+          
+          {/* Actions */}
+          <div className="flex w-full items-center justify-center gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              className="flex-1 text-xs py-2"
+            >
+              {cancelText}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={onConfirm}
+              className="flex-grow flex-1 text-xs py-2"
+            >
+              {confirmText}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
