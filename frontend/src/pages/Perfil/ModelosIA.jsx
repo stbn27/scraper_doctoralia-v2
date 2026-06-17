@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RiRobot2Line, RiAddLine, RiDeleteBinLine, RiSave3Line } from 'react-icons/ri';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,11 +19,21 @@ export function ModelosIA() {
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  
+
   // Formulario
   const [modeloSeleccionado, setModeloSeleccionado] = useState('');
   const [tokenValor, setTokenValor] = useState('');
   const [saving, setSaving] = useState(false);
+  const formRef = useRef(null);
+
+  useEffect(() => {
+    if (showForm && formRef.current) {
+      const timer = setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showForm]);
 
   useEffect(() => {
     cargarTokens();
@@ -106,9 +116,12 @@ export function ModelosIA() {
       </div>
 
       {showForm && (
-        <div className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4 transition-all">
+        <div 
+          ref={formRef}
+          className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4 transition-all"
+        >
           <h4 className="text-sm font-semibold text-royalBlue-300">Nuevo Token</h4>
-          
+
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold opacity-80" style={{ color: 'var(--text-muted)' }}>
@@ -127,7 +140,7 @@ export function ModelosIA() {
                 ))}
               </select>
             </div>
-            
+
             <Input
               id="token-valor"
               label="API Key *"
