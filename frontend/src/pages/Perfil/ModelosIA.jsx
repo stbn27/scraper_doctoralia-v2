@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RiRobot2Line, RiAddLine, RiDeleteBinLine, RiSave3Line } from 'react-icons/ri';
+import Select from 'react-select';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { selectStyles } from '@/components/ui/selectStyles';
 import { useToast } from '@/hooks/useToast';
 import { listarTokensLLM, guardarTokenLLM, eliminarTokenLLM } from '@/services/api';
 
@@ -13,6 +15,8 @@ const MODELOS_DISPONIBLES = [
   { id: 'minimax', nombre: 'MiniMax' },
   { id: 'xiaomi', nombre: 'Xiaomi' }
 ];
+
+const OPTIONS_MODELOS = MODELOS_DISPONIBLES.map(mod => ({ value: mod.id, label: mod.nombre }));
 
 export function ModelosIA() {
   const { addToast } = useToast();
@@ -116,7 +120,7 @@ export function ModelosIA() {
       </div>
 
       {showForm && (
-        <div 
+        <div
           ref={formRef}
           className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4 transition-all"
         >
@@ -124,21 +128,19 @@ export function ModelosIA() {
 
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold opacity-80" style={{ color: 'var(--text-muted)' }}>
+              <label className="block text-xs font-semibold opacity-80 mb-1" style={{ color: 'var(--text-muted)' }}>
                 Modelo *
               </label>
-              <select
-                value={modeloSeleccionado}
-                onChange={(e) => setModeloSeleccionado(e.target.value)}
-                className="glass-input w-full px-4 py-2.5 text-sm"
-              >
-                <option value="" className="bg-slate-900">Seleccionar modelo...</option>
-                {MODELOS_DISPONIBLES.map(mod => (
-                  <option key={mod.id} value={mod.id} className="bg-slate-900">
-                    {mod.nombre}
-                  </option>
-                ))}
-              </select>
+              <Select
+                id="select-modelo"
+                options={OPTIONS_MODELOS}
+                value={OPTIONS_MODELOS.find(opt => opt.value === modeloSeleccionado) || null}
+                onChange={(val) => setModeloSeleccionado(val ? val.value : '')}
+                styles={selectStyles}
+                placeholder="Seleccionar modelo..."
+                isClearable
+                noOptionsMessage={() => "No hay modelos disponibles"}
+              />
             </div>
 
             <Input
