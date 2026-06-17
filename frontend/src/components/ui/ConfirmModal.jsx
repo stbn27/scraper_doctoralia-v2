@@ -14,6 +14,7 @@ import { Button } from './Button';
  *   confirmText?: string;
  *   cancelText?: string;
  *   variant?: 'danger' | 'primary';
+ *   position?: 'center' | 'bottom-right';
  *   icon?: React.ReactNode;
  * }} props
  */
@@ -26,6 +27,7 @@ export function ConfirmModal({
   confirmText = 'Eliminar',
   cancelText = 'Cancelar',
   variant = 'danger',
+  position = 'center',
   icon = null
 }) {
   if (!isOpen) return null;
@@ -39,8 +41,16 @@ export function ConfirmModal({
     ? 'bg-red-500/10 border-red-500/20 text-red-500'
     : 'bg-royalBlue-500/10 border-royalBlue-500/20 text-royalBlue-400';
 
+  const positionClasses = position === 'bottom-right'
+    ? 'items-end justify-end p-6 md:p-8'
+    : 'items-center justify-center p-4';
+
+  const animationClasses = position === 'bottom-right'
+    ? 'animate-in fade-in slide-in-from-bottom-10 slide-in-from-right-5 duration-300'
+    : 'animate-in fade-in zoom-in-95 duration-200';
+
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={`fixed inset-0 z-50 flex ${positionClasses}`}>
       {/* Background overlay */}
       <div 
         className="absolute inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity duration-300"
@@ -48,7 +58,7 @@ export function ConfirmModal({
       />
       
       {/* Modal content */}
-      <div className="relative w-full max-w-sm transform overflow-hidden rounded-3xl border border-white/10 bg-[#0d0d0f]/90 p-6 shadow-2xl backdrop-blur-xl transition-all duration-300 animate-in fade-in zoom-in-95">
+      <div className={`relative w-full max-w-sm transform overflow-hidden rounded-3xl border border-white/10 bg-[#0d0d0f]/90 p-6 shadow-2xl backdrop-blur-xl transition-all ${animationClasses}`}>
         <div className="flex flex-col items-center text-center space-y-4">
           {/* Icon */}
           <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${iconColorClass}`}>

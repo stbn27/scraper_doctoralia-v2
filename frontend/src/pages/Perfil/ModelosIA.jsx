@@ -206,6 +206,7 @@ export function ModelosIA() {
         onConfirm={handleConfirmDelete}
         title="Eliminar Token"
         message={`¿Estás seguro de que deseas eliminar el token de IA para ${getNombreModelo(modelToDelete)}? Esta acción no se puede deshacer.`}
+        position="bottom-right"
       />
     </div>
   );
