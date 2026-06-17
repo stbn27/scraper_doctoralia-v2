@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { RiDeleteBinLine } from 'react-icons/ri';
 import { Button } from './Button';
 
@@ -28,6 +29,7 @@ export function ConfirmModal({
   icon = null
 }) {
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const defaultIcon = variant === 'danger' 
     ? <RiDeleteBinLine className="text-xl" />
@@ -37,7 +39,7 @@ export function ConfirmModal({
     ? 'bg-red-500/10 border-red-500/20 text-red-500'
     : 'bg-royalBlue-500/10 border-royalBlue-500/20 text-royalBlue-400';
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Background overlay */}
       <div 
@@ -84,4 +86,6 @@ export function ConfirmModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
