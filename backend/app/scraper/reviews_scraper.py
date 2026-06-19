@@ -8,7 +8,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# pyrefly: ignore [missing-import]
 import httpx
+
+# pyrefly: ignore [missing-import]
 from bs4 import BeautifulSoup
 
 from app.scraper.utils.base import get_user_agent
@@ -275,7 +278,9 @@ def construir_resultado_opiniones(
     if limit_por_pagina <= 0:
         limit_por_pagina = 10
 
-    total_paginas = math.ceil(total_opiniones / limit_por_pagina) if total_opiniones else 0
+    total_paginas = (
+        math.ceil(total_opiniones / limit_por_pagina) if total_opiniones else 0
+    )
 
     # Si hay limite, calcular cuantas paginas necesitamos realmente
     if max_opiniones is not None:

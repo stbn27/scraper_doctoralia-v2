@@ -1,7 +1,11 @@
 import json
 import re
+
+# pyrefly: ignore [missing-import]
 import httpx
 from pathlib import Path
+
+# pyrefly: ignore [missing-import]
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from app.scraper.utils.base import get_user_agent
@@ -851,6 +855,7 @@ def _format_mexico_timestamp() -> str:
     """
     from datetime import timezone as _tz
     import zoneinfo
+
     try:
         tz = zoneinfo.ZoneInfo("America/Mexico_City")
     except Exception:
@@ -1002,8 +1007,7 @@ def parse_doctoralia_html(
     # Servicios en formato {servicio, precio}
     servicios_raw = extract_services(soup)
     servicios_y_precios = [
-        {"servicio": s["nombre"], "precio": s["precio_texto"]}
-        for s in servicios_raw
+        {"servicio": s["nombre"], "precio": s["precio_texto"]} for s in servicios_raw
     ]
 
     # Direcciones en formato completo
@@ -1242,7 +1246,7 @@ async def fetch_and_parse_profile_async(
         except httpx.HTTPStatusError as exc:
             ultimo_error = exc
             if exc.response.status_code in (429, 503):
-                espera = (2 ** intento) * _random.uniform(5, 10)
+                espera = (2**intento) * _random.uniform(5, 10)
                 await asyncio.sleep(espera)
             elif intento < MAX_REINTENTOS - 1:
                 await asyncio.sleep(_random.uniform(3, 7))
@@ -1259,7 +1263,9 @@ async def fetch_and_parse_profile_async(
     # Si llegamos aqui sin retornar, relanzamos el ultimo error
     if ultimo_error:
         raise ultimo_error
-    raise RuntimeError(f"No se pudo obtener el perfil tras {MAX_REINTENTOS} intentos: {url}")
+    raise RuntimeError(
+        f"No se pudo obtener el perfil tras {MAX_REINTENTOS} intentos: {url}"
+    )
 
 
 if __name__ == "__main__":

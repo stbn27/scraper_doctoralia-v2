@@ -122,6 +122,7 @@ def _extract_locs_from_sitemap(xml: str) -> list[str]:
         Lista de URLs en las etiquetas ``<loc>``.
     """
     import re
+
     return re.findall(r"<loc>([^<]+)</loc>", xml)
 
 
@@ -160,11 +161,13 @@ async def build_pares_desde_sitemaps() -> list[dict]:
         if clave in seen:
             continue
         seen.add(clave)
-        pares.append({
-            "especialidad_slug": especialidad_slug,
-            "ciudad_slug": ciudad_slug,
-            "url": url,
-        })
+        pares.append(
+            {
+                "especialidad_slug": especialidad_slug,
+                "ciudad_slug": ciudad_slug,
+                "url": url,
+            }
+        )
 
     return pares
 
@@ -216,7 +219,6 @@ async def fase_catalogo(estado: dict, log) -> dict:
         log.error(f"FASE 1 — Error al cargar catalogo: {exc}")
 
     return estado
-
 
 
 # ===========================================================================
@@ -758,10 +760,14 @@ async def ejecutar_pipeline(args) -> None:
     log.info("Descargando lista de pares desde sitemaps de Doctoralia...")
     try:
         todos_los_pares = await build_pares_desde_sitemaps()
-        log.info(f"{len(todos_los_pares)} pares especialidad+ciudad obtenidos del sitemap.")
+        log.info(
+            f"{len(todos_los_pares)} pares especialidad+ciudad obtenidos del sitemap."
+        )
     except Exception as exc:
         log.error(f"No se pudo obtener el catalogo desde el sitemap: {exc}")
-        log.warning("Continuando sin catalogo: solo modo --especialidad/--ciudad funcionara.")
+        log.warning(
+            "Continuando sin catalogo: solo modo --especialidad/--ciudad funcionara."
+        )
         todos_los_pares = []
 
     if args.prueba or (args.especialidad and args.ciudad):

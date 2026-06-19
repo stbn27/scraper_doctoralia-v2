@@ -14,6 +14,7 @@ y tienen la estructura anidada equivalente a la del ``index.ts``.
 
 from datetime import datetime, timezone
 
+# pyrefly: ignore [missing-import]
 from pymongo import ASCENDING, ReplaceOne
 
 from app.db.mongo import get_doctoralia_async_db
@@ -125,11 +126,15 @@ async def upsert_perfil(doc: dict) -> str:
         # $setOnInsert no aplica en update posterior; usamos $set para inicializar.
         await coleccion.update_one(
             {"_id": doc_id, "queue_meta": {"$exists": False}},
-            {"$set": {"queue_meta": {
-                "discovery_sources": discovery_sources,
-                "priority_score": priority_score,
-                "persistedAt": datetime.now(timezone.utc),
-            }}},
+            {
+                "$set": {
+                    "queue_meta": {
+                        "discovery_sources": discovery_sources,
+                        "priority_score": priority_score,
+                        "persistedAt": datetime.now(timezone.utc),
+                    }
+                }
+            },
         )
         # Actualizar en caso de que ya exista
         await coleccion.update_one(
@@ -175,9 +180,7 @@ async def upsert_perfiles_masivo(docs: list[dict]) -> dict:
                 continue
             doc_id = _get_doc_id(id_doctoralia)
         doc_copy = {**doc, "_id": doc_id}
-        operaciones.append(
-            ReplaceOne({"_id": doc_id}, doc_copy, upsert=True)
-        )
+        operaciones.append(ReplaceOne({"_id": doc_id}, doc_copy, upsert=True))
 
     if not operaciones:
         return {"insertados": 0, "actualizados": 0}

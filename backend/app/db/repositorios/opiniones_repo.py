@@ -16,6 +16,7 @@ Campos principales: ``opinion_id``, ``autor``, ``doctor_id``,
 import hashlib
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 from pymongo import ASCENDING, DESCENDING, ReplaceOne
 
 from app.db.mongo import get_doctoralia_async_db
@@ -42,13 +43,15 @@ def _get_opinion_id(opinion: dict) -> str:
         return f"opinion:{opinion_id}"
 
     digest = hashlib.sha1(
-        "|".join([
-            str(opinion.get("doctor_id", "")),
-            opinion.get("autor") or "",
-            opinion.get("fecha_publicacion") or "",
-            opinion.get("texto") or "",
-            opinion.get("consultorio") or "",
-        ]).encode()
+        "|".join(
+            [
+                str(opinion.get("doctor_id", "")),
+                opinion.get("autor") or "",
+                opinion.get("fecha_publicacion") or "",
+                opinion.get("texto") or "",
+                opinion.get("consultorio") or "",
+            ]
+        ).encode()
     ).hexdigest()
     return f"opinion-hash:{opinion.get('doctor_id', '')}:{digest}"
 
@@ -76,7 +79,9 @@ async def _asegurar_indices() -> None:
         return
 
     coleccion = await _obtener_coleccion()
-    await coleccion.create_index([("doctor_id", ASCENDING), ("fecha_publicacion", DESCENDING)])
+    await coleccion.create_index(
+        [("doctor_id", ASCENDING), ("fecha_publicacion", DESCENDING)]
+    )
     await coleccion.create_index([("opinion_id", ASCENDING)])
     _indices_creados = True
 
@@ -146,9 +151,7 @@ async def insertar_opiniones_masivo(opiniones: list[dict]) -> int:
         # Normalizar nombre del campo de fecha si viene como "fecha"
         if "fecha" in doc and "fecha_publicacion" not in doc:
             doc["fecha_publicacion"] = doc.pop("fecha")
-        operaciones.append(
-            ReplaceOne({"_id": doc_id}, doc, upsert=True)
-        )
+        operaciones.append(ReplaceOne({"_id": doc_id}, doc, upsert=True))
 
     if not operaciones:
         return 0
