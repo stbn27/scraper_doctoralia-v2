@@ -67,11 +67,12 @@ def convertir_decimal(value: str | int | float | None) -> float | None:
         return None
 
 
-def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
+def fetch_pagina_opiniones(doctor_id: int, page: int) -> tuple[str, int, int]:
     """Descarga una pagina de opiniones desde el endpoint AJAX.
 
     Doctoralia devuelve una respuesta JSON que contiene HTML en la clave
-    ``html``. Esta funcion obtiene esa respuesta, extrae el HTML y decodifica
+    ``html``, el total de opiniones en ``numRows`` y el limite por pagina en
+    ``limit``. Esta funcion obtiene esa respuesta, extrae el HTML y decodifica
     entidades como ``&amp;`` o ``&quot;``.
 
     Args:
@@ -79,7 +80,9 @@ def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
         page: Numero de pagina de opiniones que se quiere descargar.
 
     Returns:
-        HTML de las opiniones como texto.
+        Tupla ``(html_text, num_rows, limit)`` donde ``html_text`` es el HTML
+        de las opiniones, ``num_rows`` es el total de opiniones reportado por
+        el servidor y ``limit`` es el tamano de pagina.
 
     Raises:
         httpx.HTTPStatusError: Si el servidor responde con error HTTP.
@@ -95,7 +98,9 @@ def fetch_pagina_opiniones(doctor_id: int, page: int) -> str:
     response.raise_for_status()
     payload = response.json()
     raw_html = payload.get("html") if isinstance(payload, dict) else None
-    return html.unescape(raw_html or "")
+    num_rows = int(payload.get("numRows", 0)) if isinstance(payload, dict) else 0
+    limit = int(payload.get("limit", 10)) if isinstance(payload, dict) else 10
+    return html.unescape(raw_html or ""), num_rows, limit
 
 
 def extract_opinion_id(node) -> int | None:
@@ -213,7 +218,7 @@ def extract_review_fields(node) -> dict:
         "autor": autor,
         "rating": rating,
         "texto": texto,
-        "fecha": fecha,
+        "fecha_publicacion": fecha,
         "servicio_consultado": servicio_consultado,
         "consultorio": consultorio,
         "tipo_verificacion": tipo_verificacion,
@@ -242,44 +247,75 @@ def construir_resultado_opiniones(
     doctor_id: int,
     total_opiniones: int,
     max_opiniones: int | None = None,
+    url_perfil: str | None = None,
 ) -> dict:
     """Descarga varias paginas de opiniones y arma el resultado final.
 
-    Cada pagina del endpoint suele traer hasta 10 opiniones. La funcion calcula
-    cuantas paginas debe pedir a partir del total informado y del limite
-    opcional. Entre paginas espera un tiempo aleatorio corto para no hacer todas
-    las peticiones seguidas.
+    Cada opinion incluye un campo ``scraping_meta`` con la URL de origen, el
+    numero de pagina, el total de paginas y la fecha de extraccion, siguiendo
+    el esquema del ``index.ts``.
 
     Args:
         doctor_id: Identificador interno del doctor en Doctoralia.
         total_opiniones: Total de opiniones conocido para ese doctor.
         max_opiniones: Limite opcional de opiniones a extraer. Si es ``None``,
             intenta extraer todas las disponibles segun ``total_opiniones``.
+        url_perfil: URL del perfil del doctor para incluir en ``scraping_meta``.
 
     Returns:
         Diccionario con ``meta`` y ``opiniones``. ``meta`` incluye totales,
-        limite aplicado y fecha de extraccion.
+        limite aplicado y fecha de extraccion. Cada opinion en ``opiniones``
+        tiene ``scraping_meta`` con ``url``, ``page``, ``total_pages`` y
+        ``fecha_extraccion``.
     """
+    # Primera pagina para determinar total real de paginas
+    first_html, num_rows_real, limit_por_pagina = fetch_pagina_opiniones(doctor_id, 1)
+    if num_rows_real > 0:
+        total_opiniones = num_rows_real
+    if limit_por_pagina <= 0:
+        limit_por_pagina = 10
 
-    total_paginas = math.ceil(total_opiniones / 10) if total_opiniones else 0
+    total_paginas = math.ceil(total_opiniones / limit_por_pagina) if total_opiniones else 0
 
-    # Si hay límite, calcular cuántas páginas necesitamos realmente
+    # Si hay limite, calcular cuantas paginas necesitamos realmente
     if max_opiniones is not None:
-        paginas_necesarias = math.ceil(max_opiniones / 10)
+        paginas_necesarias = math.ceil(max_opiniones / limit_por_pagina)
         total_paginas = min(total_paginas, paginas_necesarias)
 
+    fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    base_url_opinion = f"{BASE_URL}/{doctor_id}"
     all_opinions: list[dict] = []
 
-    for page in range(1, total_paginas + 1):
-        html_text = fetch_pagina_opiniones(doctor_id, page)
-        all_opinions.extend(parse_opinions(html_text))
+    def _enriquecer(opinion: dict, page: int, t_pages: int) -> dict:
+        """Agrega ``doctor_id`` y ``scraping_meta`` a una opinion."""
+        url_pagina = f"{base_url_opinion}/{page}"
+        return {
+            **opinion,
+            "doctor_id": doctor_id,
+            "scraping_meta": {
+                "url": url_pagina,
+                "page": page,
+                "total_pages": t_pages,
+                "fecha_extraccion": fecha_extraccion,
+            },
+        }
 
-        # Cortar si ya alcanzamos el límite (la última página puede traer de más)
-        if max_opiniones is not None and len(all_opinions) >= max_opiniones:
-            all_opinions = all_opinions[:max_opiniones]
-            break
+    # Procesar primera pagina ya descargada
+    for op in parse_opinions(first_html):
+        all_opinions.append(_enriquecer(op, 1, total_paginas))
 
-        time.sleep(random.uniform(1, 2))
+    if max_opiniones is not None and len(all_opinions) >= max_opiniones:
+        all_opinions = all_opinions[:max_opiniones]
+    else:
+        for page in range(2, total_paginas + 1):
+            time.sleep(random.uniform(1, 2))
+            html_text, _, _ = fetch_pagina_opiniones(doctor_id, page)
+            for op in parse_opinions(html_text):
+                all_opinions.append(_enriquecer(op, page, total_paginas))
+
+            if max_opiniones is not None and len(all_opinions) >= max_opiniones:
+                all_opinions = all_opinions[:max_opiniones]
+                break
 
     meta = {
         "doctor_id": doctor_id,
@@ -287,7 +323,7 @@ def construir_resultado_opiniones(
         "total_paginas": total_paginas,
         "opiniones_extraidas": len(all_opinions),
         "limite_aplicado": max_opiniones is not None,
-        "fecha_extraccion": datetime.now().isoformat(timespec="seconds"),
+        "fecha_extraccion": fecha_extraccion,
     }
 
     return {

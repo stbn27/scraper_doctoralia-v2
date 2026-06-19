@@ -843,43 +843,247 @@ def get_latest_review_date(reviews: list[dict]) -> str | None:
     return max(dates) if dates else None
 
 
-def parse_doctoralia_html(html: str, url: str | None = None) -> dict:
+def _format_mexico_timestamp() -> str:
+    """Devuelve la fecha y hora actuales en zona America/Mexico_City.
+
+    Returns:
+        Texto con formato ``YYYY-MM-DD HH:MM:SS`` en hora de Ciudad de México.
+    """
+    from datetime import timezone as _tz
+    import zoneinfo
+    try:
+        tz = zoneinfo.ZoneInfo("America/Mexico_City")
+    except Exception:
+        tz = _tz.utc
+    now = datetime.now(tz)
+    return now.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _extract_enfermedades(soup: BeautifulSoup) -> list[str]:
+    """Extrae las principales enfermedades tratadas del perfil.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de enfermedades. Devuelve lista vacia si no hay datos.
+    """
+    enfermedades: list[str] = []
+    lista = soup.select("#disease li, [id='disease'] li")
+    for li in lista:
+        text = clean_text(li.get_text(" ", strip=True))
+        if text and text not in enfermedades:
+            enfermedades.append(text)
+    if enfermedades:
+        return enfermedades
+
+    text = soup.get_text("\n", strip=True)
+    m = re.search(
+        r"Principales enfermedades tratadas\s+(.*?)\s+(?:Pacientes que atiendo|Tipos de consulta|Servicios y precios|Consultorios|Experiencia|$)",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m:
+        block = m.group(1)
+        for line in block.split("\n"):
+            t = clean_text(line)
+            if t and len(t) > 3 and t not in enfermedades:
+                enfermedades.append(t)
+    return enfermedades
+
+
+def _extract_tipos_consulta(soup: BeautifulSoup) -> list[str]:
+    """Extrae los tipos de consulta disponibles del perfil.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de tipos de consulta. Devuelve lista vacia si no hay datos.
+    """
+    tipos: list[str] = []
+    text = soup.get_text("\n", strip=True)
+    m = re.search(
+        r"Tipos de consulta\s+(.*?)\s+(?:Servicios y precios|Consultorios|Aseguradoras|Opiniones|Experiencia|$)",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m:
+        block = m.group(1)
+        for line in block.split("\n"):
+            t = clean_text(line)
+            if t and len(t) > 2 and t not in tipos:
+                tipos.append(t)
+    return tipos
+
+
+def _extract_formas_pago(soup: BeautifulSoup) -> list[str]:
+    """Extrae las formas de pago aceptadas en el consultorio.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de formas de pago. Devuelve lista vacia si no hay datos.
+    """
+    formas: list[str] = []
+    pagos_nodes = soup.select("[data-test-id='address-payment-method']")
+    for node in pagos_nodes:
+        text = clean_text(node.get_text(" ", strip=True))
+        if text and text not in formas:
+            formas.append(text)
+    return formas
+
+
+def _extract_idiomas(soup: BeautifulSoup) -> list[str]:
+    """Extrae los idiomas que habla el doctor.
+
+    Args:
+        soup: HTML del perfil parseado con BeautifulSoup.
+
+    Returns:
+        Lista de idiomas. Devuelve lista vacia si no hay datos.
+    """
+    idiomas: list[str] = []
+    lista = soup.select("#language li")
+    for li in lista:
+        text = clean_text(li.get_text(" ", strip=True))
+        if text and text not in idiomas:
+            idiomas.append(text)
+    return idiomas
+
+
+def parse_doctoralia_html(
+    html: str,
+    url: str | None = None,
+    fuente_busqueda: str | None = None,
+    id_doctoralia: int | None = None,
+    discovery_sources: list[str] | None = None,
+    priority_score: int | None = None,
+) -> dict:
     """Parsea el HTML completo de un perfil de Doctoralia.
 
-    Coordina todos los extractores del archivo para devolver un unico
-    diccionario con datos generales, experiencia, servicios, consultorios,
-    pacientes y metadatos de scraping.
+    Genera la estructura anidada compatible con la coleccion ``doctor_profiles``
+    de MongoDB, equivalente al esquema definido en ``fixtures/index.ts``.
 
     Args:
         html: Contenido HTML completo del perfil.
-        url: URL de origen opcional. Se guarda en los metadatos.
+        url: URL del perfil. Se guarda en ``doctor.url_perfil`` y ``metadata.fuente``.
+        fuente_busqueda: URL de busqueda que origino el descubrimiento del doctor.
+        id_doctoralia: ID numerico del doctor en Doctoralia. Si se proporciona se
+            pone en ``doctor.id_doctoralia``.
+        discovery_sources: Lista de fuentes de descubrimiento para ``queue_meta``.
+        priority_score: Puntaje de prioridad (total de opiniones) para ``queue_meta``.
 
     Returns:
-        Diccionario con la informacion estructurada del perfil.
+        Diccionario con estructura::
+
+            {
+                "_id": "doctor:{id}",   # solo si id_doctoralia no es None
+                "doctor": {id_doctoralia, nombre, url_perfil, especialidades,
+                            foto_perfil, estado, direcciones, cedulas,
+                            experiencia, principales_enfermedades_tratadas,
+                            pacientes_que_atiende, tipos_de_consulta,
+                            servicios_y_precios, formas_de_pago, idiomas},
+                "total_opiniones": int,
+                "rating_global": float | None,
+                "metadata": {fuente, fuente_busqueda, moneda_por_defecto,
+                              idioma, fecha_consulta},
+            }
     """
     soup = BeautifulSoup(html, "lxml")
 
-    data = extract_profile_header(soup)
-    data["experiencia"] = extract_experiencia(soup)
-    data["servicios"] = extract_services(soup)
-    data["consultorios"] = extract_addresses(soup)
-    # data["opiniones"] = []
-    # data["opiniones"] = extract_reviews(soup, limit=limit_reviews)
-    data["pacientes"] = extract_pacientes(soup)
+    header = extract_profile_header(soup)
 
-    data["info_meta"] = {
-        "total_servicios": len(data["servicios"]),
-        "total_consultorios": len(data["consultorios"]),
-        # "opiniones_extraidas": len(data["opiniones"]),
-        # "ultima_opinion_fecha": get_latest_review_date(data["opiniones"]),
+    # Experiencia: string unico unido por saltos de linea
+    experiencia_lineas = extract_experiencia(soup)
+    experiencia_str = "\n".join(experiencia_lineas) if experiencia_lineas else None
+
+    # Servicios en formato {servicio, precio}
+    servicios_raw = extract_services(soup)
+    servicios_y_precios = [
+        {"servicio": s["nombre"], "precio": s["precio_texto"]}
+        for s in servicios_raw
+    ]
+
+    # Direcciones en formato completo
+    direcciones_raw = extract_addresses(soup)
+    direcciones = [
+        {
+            "address_id": None,
+            "nombre": addr.get("clinica"),
+            "texto": addr.get("direccion"),
+            "calle": addr.get("direccion"),
+            "ciudad": None,
+            "estado": None,
+            "codigo_postal": None,
+            "maps": None,
+            "lat": None,
+            "lng": None,
+            "source": "profile",
+        }
+        for addr in direcciones_raw
+    ]
+
+    # Pacientes
+    pacientes_raw = extract_pacientes(soup)
+    pacientes_que_atiende = {
+        "ninos": pacientes_raw.get("atiende_ninos", False),
+        "adolescentes": pacientes_raw.get("atiende_adolescentes", False),
+        "adultos": pacientes_raw.get("atiende_adultos", False),
     }
 
-    data["scraping_meta"] = {
-        "url_origen": url,
-        "fecha_consulta": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    # Estados derivados de direcciones o ciudad del header
+    estados: list[str] = []
+    for addr in direcciones:
+        if addr.get("estado") and addr["estado"] not in estados:
+            estados.append(addr["estado"])
+    if not estados and header.get("ciudad"):
+        estados = [header["ciudad"]]
+
+    especialidades = [header["especialidad"]] if header.get("especialidad") else []
+    fecha_consulta = _format_mexico_timestamp()
+
+    doc: dict = {
+        "doctor": {
+            "id_doctoralia": id_doctoralia,
+            "nombre": header.get("nombre"),
+            "url_perfil": url,
+            "especialidades": especialidades,
+            "foto_perfil": header.get("foto_perfil_url"),
+            "estado": estados,
+            "direcciones": direcciones,
+            "cedulas": header.get("cedulas", []),
+            "experiencia": experiencia_str,
+            "principales_enfermedades_tratadas": _extract_enfermedades(soup),
+            "pacientes_que_atiende": pacientes_que_atiende,
+            "tipos_de_consulta": _extract_tipos_consulta(soup),
+            "servicios_y_precios": servicios_y_precios,
+            "formas_de_pago": _extract_formas_pago(soup),
+            "idiomas": _extract_idiomas(soup),
+        },
+        "total_opiniones": header.get("total_opiniones") or 0,
+        "rating_global": header.get("rating_global"),
+        "metadata": {
+            "fuente": url,
+            "fuente_busqueda": fuente_busqueda,
+            "moneda_por_defecto": "MXN",
+            "idioma": "es_MX",
+            "fecha_consulta": fecha_consulta,
+        },
     }
 
-    return data
+    if id_doctoralia is not None:
+        doc["_id"] = f"doctor:{id_doctoralia}"
+
+    if discovery_sources is not None or priority_score is not None:
+        doc["queue_meta"] = {
+            "discovery_sources": discovery_sources or [],
+            "priority_score": priority_score or 0,
+            "persistedAt": datetime.now(timezone.utc),
+        }
+
+    return doc
 
 
 def parse_doctoralia_file(file_path: str | Path, url: str | None = None) -> dict:
@@ -899,11 +1103,18 @@ def parse_doctoralia_file(file_path: str | Path, url: str | None = None) -> dict
     return result
 
 
-def fetch_and_parse_profile(url: str) -> dict:
+def fetch_and_parse_profile(
+    url: str,
+    id_doctoralia: int | None = None,
+    fuente_busqueda: str | None = None,
+) -> dict:
     """Descarga un perfil real de Doctoralia y lo parsea.
 
     Args:
         url: URL completa del perfil en Doctoralia.
+        id_doctoralia: ID numerico del doctor para poblar ``_id`` y
+            ``doctor.id_doctoralia`` en el documento resultante.
+        fuente_busqueda: URL de busqueda que origino el descubrimiento.
 
     Returns:
         Diccionario estructurado del perfil, igual al que produce
@@ -921,24 +1132,41 @@ def fetch_and_parse_profile(url: str) -> dict:
     }
     response = httpx.get(url, headers=headers, timeout=30, follow_redirects=True)
     response.raise_for_status()
-    result = parse_doctoralia_html(response.text, url=url)
+    result = parse_doctoralia_html(
+        response.text,
+        url=url,
+        id_doctoralia=id_doctoralia,
+        fuente_busqueda=fuente_busqueda,
+    )
     result.pop("archivo_fuente", None)  # no aplica en scraping real
     return result
 
 
-async def fetch_and_parse_profile_async(url: str) -> dict:
-    """Descarga un perfil de Doctoralia de forma asíncrona y lo parsea.
+async def fetch_and_parse_profile_async(
+    url: str,
+    id_doctoralia: int | None = None,
+    fuente_busqueda: str | None = None,
+    discovery_sources: list[str] | None = None,
+    priority_score: int | None = None,
+) -> dict:
+    """Descarga un perfil de Doctoralia de forma asincrona y lo parsea.
 
-    Versión async de ``fetch_and_parse_profile`` diseñada para el pipeline
-    masivo. Usa ``httpx.AsyncClient`` con rotación de User-Agent en cada
+    Version async de ``fetch_and_parse_profile`` disenada para el pipeline
+    masivo. Usa ``httpx.AsyncClient`` con rotacion de User-Agent en cada
     solicitud. Aplica backoff exponencial ante respuestas 429 o 503 y detecta
-    páginas de captcha.
+    paginas de captcha.
 
     Args:
         url: URL completa del perfil en Doctoralia.
+        id_doctoralia: ID numerico del doctor para poblar ``_id`` y
+            ``doctor.id_doctoralia`` en el documento resultante.
+        fuente_busqueda: URL de busqueda que origino el descubrimiento.
+        discovery_sources: Lista de fuentes de descubrimiento para
+            ``queue_meta.discovery_sources``.
+        priority_score: Puntaje de prioridad para ``queue_meta.priority_score``.
 
     Returns:
-        Diccionario estructurado del perfil, idéntico al producido por
+        Diccionario estructurado del perfil, identico al producido por
         ``parse_doctoralia_html``.
 
     Raises:
@@ -949,9 +1177,10 @@ async def fetch_and_parse_profile_async(url: str) -> dict:
     Ejemplo::
 
         datos = await fetch_and_parse_profile_async(
-            "https://www.doctoralia.com.mx/alejandro-perez/endodoncista"
+            "https://www.doctoralia.com.mx/alejandro-perez/endodoncista",
+            id_doctoralia=12345,
         )
-        print(datos["nombre"])
+        print(datos["doctor"]["nombre"])
     """
     import asyncio
     import random as _random
@@ -975,7 +1204,6 @@ async def fetch_and_parse_profile_async(url: str) -> dict:
 
                 # Detectar bloqueo temporal — backoff exponencial
                 if respuesta.status_code in (429, 503):
-                    espera = (2 ** intento) * _random.uniform(5, 10)
                     raise httpx.HTTPStatusError(
                         f"HTTP {respuesta.status_code}",
                         request=respuesta.request,
@@ -984,12 +1212,12 @@ async def fetch_and_parse_profile_async(url: str) -> dict:
 
                 respuesta.raise_for_status()
 
-                # Detectar página de captcha real (NO falsos positivos).
-                # Las páginas normales de Doctoralia (~500KB) incluyen
-                # referencias al SDK de reCAPTCHA en el HTML, así que buscar
+                # Detectar pagina de captcha real (NO falsos positivos).
+                # Las paginas normales de Doctoralia (~500KB) incluyen
+                # referencias al SDK de reCAPTCHA en el HTML, asi que buscar
                 # "captcha" en el contenido siempre da positivo. Solo es un
-                # captcha real cuando la respuesta es muy corta (página de
-                # bloqueo sin contenido médico).
+                # captcha real cuando la respuesta es muy corta (pagina de
+                # bloqueo sin contenido medico).
                 if len(respuesta.text) < 5000:
                     contenido_lower = respuesta.text.lower()
                     es_captcha = (
@@ -1000,7 +1228,14 @@ async def fetch_and_parse_profile_async(url: str) -> dict:
                         await asyncio.sleep(30)
                         continue
 
-                resultado = parse_doctoralia_html(respuesta.text, url=url)
+                resultado = parse_doctoralia_html(
+                    respuesta.text,
+                    url=url,
+                    id_doctoralia=id_doctoralia,
+                    fuente_busqueda=fuente_busqueda,
+                    discovery_sources=discovery_sources,
+                    priority_score=priority_score,
+                )
                 resultado.pop("archivo_fuente", None)
                 return resultado
 
@@ -1021,7 +1256,7 @@ async def fetch_and_parse_profile_async(url: str) -> dict:
             else:
                 raise
 
-    # Si llegamos aquí sin retornar, relanzamos el último error
+    # Si llegamos aqui sin retornar, relanzamos el ultimo error
     if ultimo_error:
         raise ultimo_error
     raise RuntimeError(f"No se pudo obtener el perfil tras {MAX_REINTENTOS} intentos: {url}")

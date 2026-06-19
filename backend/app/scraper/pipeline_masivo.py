@@ -71,9 +71,9 @@ from app.scraper.listing_scraper import scrape_listing_async
 from app.scraper.doctoralia import fetch_and_parse_profile_async
 from app.scraper.reviews_scraper import construir_resultado_opiniones
 from app.db.repositorios.catalogos_repo import upsert_catalogos
-from app.db.repositorios.especialistas_repo import (
-    insertar_especialista,
-    buscar_por_doctoralia_id,
+from app.db.repositorios.doctor_profiles_repo import (
+    upsert_perfil,
+    buscar_por_id_doctoralia,
 )
 from app.db.repositorios.opiniones_repo import (
     insertar_opiniones_masivo,
@@ -297,36 +297,44 @@ async def _scrapear_perfil(
     log,
     semaforo: asyncio.Semaphore,
 ) -> tuple[dict, bool]:
-    """Descarga y persiste el perfil de un médico.
+    """Descarga y persiste el perfil de un medico en ``doctor_profiles``.
+
+    Construye el documento con la nueva estructura anidada (doctor, metadata,
+    queue_meta) y lo guarda en la coleccion ``doctor_profiles`` de la BD
+    Doctoralia (27017).
 
     Args:
-        item: Diccionario ``{doctoralia_id, url_perfil, nombre}``.
+        item: Diccionario con ``doctoralia_id``, ``url_perfil``, ``nombre`` y
+            opcionalmente ``fuente_busqueda`` y ``discovery_sources``.
         estado: Estado actual del pipeline.
         log: Logger configurado.
-        semaforo: Semáforo asyncio.
+        semaforo: Semaforo asyncio.
 
     Returns:
         Tupla ``(estado_actualizado, guardado)`` donde ``guardado`` es ``True``
-        si el perfil se procesó (nuevo o actualizado), ``False`` si se omitió.
+        si el perfil se proceso (nuevo o actualizado), ``False`` si se omitio.
     """
     doctoralia_id = item["doctoralia_id"]
     url_perfil = item["url_perfil"]
     nombre = item.get("nombre", "Desconocido")
+    fuente_busqueda = item.get("fuente_busqueda")
+    discovery_sources = item.get("discovery_sources") or []
 
     if perfil_ya_completado(estado, doctoralia_id):
         log.info(f"Perfil omitido (estado): {nombre} | id={doctoralia_id}")
         return estado, False
 
-    # Verificar antigüedad en Mongo
+    # Verificar antigüedad en Mongo (coleccion doctor_profiles)
     try:
-        existente = await buscar_por_doctoralia_id(doctoralia_id)
+        existente = await buscar_por_id_doctoralia(doctoralia_id)
         if existente:
-            fecha_raw = existente.get("scraping_meta", {}).get("fecha_consulta")
+            fecha_raw = (existente.get("metadata") or {}).get("fecha_consulta")
             if fecha_raw:
                 try:
-                    fecha_consulta = datetime.fromisoformat(fecha_raw)
-                    if fecha_consulta.tzinfo is None:
-                        fecha_consulta = fecha_consulta.replace(tzinfo=timezone.utc)
+                    # fecha_consulta es string YYYY-MM-DD HH:MM:SS
+                    from datetime import timedelta
+                    fecha_consulta = datetime.strptime(fecha_raw, "%Y-%m-%d %H:%M:%S")
+                    fecha_consulta = fecha_consulta.replace(tzinfo=timezone.utc)
                     if datetime.now(timezone.utc) - fecha_consulta < timedelta(days=7):
                         log.warning(  # type: ignore[attr-defined]
                             f"Perfil omitido (reciente): {nombre} | id={doctoralia_id}"
@@ -338,15 +346,27 @@ async def _scrapear_perfil(
     except Exception:
         pass
 
+    # Derivar priority_score del item (total_opiniones del listado)
+    priority_score = item.get("total_opiniones") or item.get("num_opiniones") or 0
+    # Fuente de busqueda como discovery source
+    source_key = item.get("source_key")
+    if source_key and source_key not in discovery_sources:
+        discovery_sources = [*discovery_sources, source_key]
+
     # Reintentar ante HTTP 429
     for intento in range(2):
         try:
             async with semaforo:
                 await _rate_limiter.esperar_si_necesario()
-                datos = await fetch_and_parse_profile_async(url_perfil)
+                datos = await fetch_and_parse_profile_async(
+                    url_perfil,
+                    id_doctoralia=doctoralia_id,
+                    fuente_busqueda=fuente_busqueda,
+                    discovery_sources=discovery_sources,
+                    priority_score=priority_score,
+                )
 
-            datos["doctoralia_id"] = doctoralia_id
-            await insertar_especialista(datos)
+            await upsert_perfil(datos)
             log.success(  # type: ignore[attr-defined]
                 f"Perfil guardado: {nombre} | id={doctoralia_id}"
             )
@@ -435,15 +455,18 @@ async def _scrapear_opiniones_medico(
     estado: dict,
     log,
     limite_opiniones: int,
-) -> tuple[dict, int]:
-    """Descarga y persiste las opiniones de un médico.
+) -> tuple[dict, int, bool]:
+    """Descarga y persiste las opiniones de un medico en ``doctor_opinions``.
+
+    Las opiniones se insertan con la nueva estructura que incluye
+    ``scraping_meta``, ``fecha_publicacion`` y ``_id`` canonico.
 
     Args:
-        medico: Documento del médico desde Mongo (debe tener ``doctoralia_id``
-            y ``total_opiniones``).
+        medico: Diccionario con ``doctoralia_id``, ``total_opiniones`` y
+            ``nombre``.
         estado: Estado actual del pipeline.
         log: Logger configurado.
-        limite_opiniones: Máximo de opiniones a descargar.
+        limite_opiniones: Maximo de opiniones a descargar.
 
     Returns:
         Tupla ``(estado_actualizado, cantidad_guardadas, real_scrape)``.
@@ -470,14 +493,11 @@ async def _scrapear_opiniones_medico(
         pass
 
     try:
+        # construir_resultado_opiniones ya agrega doctor_id y scraping_meta
         resultado = construir_resultado_opiniones(
             doctoralia_id, total_opiniones, max_opiniones=limite_opiniones
         )
         opiniones = resultado.get("opiniones", [])
-
-        # Enriquecer cada opinión con el doctor_id
-        for opinion in opiniones:
-            opinion["doctor_id"] = doctoralia_id
 
         guardadas = await insertar_opiniones_masivo(opiniones)
         log.success(  # type: ignore[attr-defined]
@@ -519,18 +539,28 @@ async def fase_opiniones(
     Returns:
         Estado actualizado tras procesar las opiniones.
     """
-    from app.db.mongo import get_mongo_async_db
+    from app.db.mongo import get_doctoralia_async_db
 
     log.info("FASE 4 — Scraping opiniones...")
 
     try:
-        db = get_mongo_async_db()
-        coleccion = db["especialistas"]
+        db = get_doctoralia_async_db()
+        coleccion = db["doctor_profiles"]
         cursor = coleccion.find(
-            {"doctoralia_id": {"$ne": None}, "total_opiniones": {"$gt": 0}},
-            {"doctoralia_id": 1, "total_opiniones": 1, "nombre": 1},
+            {"doctor.id_doctoralia": {"$ne": None}, "total_opiniones": {"$gt": 0}},
+            {"doctor.id_doctoralia": 1, "total_opiniones": 1, "doctor.nombre": 1},
         )
-        medicos = [doc async for doc in cursor]
+        medicos_raw = [doc async for doc in cursor]
+        # Normalizar para que el resto del codigo use las mismas claves
+        medicos = [
+            {
+                "doctoralia_id": doc.get("doctor", {}).get("id_doctoralia"),
+                "total_opiniones": doc.get("total_opiniones", 0),
+                "nombre": (doc.get("doctor") or {}).get("nombre", "Desconocido"),
+            }
+            for doc in medicos_raw
+            if (doc.get("doctor") or {}).get("id_doctoralia") is not None
+        ]
     except Exception as exc:
         log.error(f"FASE 4 — No se pudo conectar a Mongo: {exc}")
         return estado

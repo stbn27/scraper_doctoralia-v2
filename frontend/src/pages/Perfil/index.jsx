@@ -281,9 +281,9 @@ export default function Perfil() {
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold text-slate-100">{nombre} {apellido}</h2>
+              <h2 className="text-xl font-bold text-slate-500 dark:text-slate-100">{nombre} {apellido}</h2>
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
-              <p className="text-[10px] mt-2 bg-royalBlue-950/40 border border-white/5 px-2.5 py-1 rounded-full text-slate-400">
+              <p className="text-[10px] mt-2 bg-royalBlue-300/20 dark:bg-royalBlue-950/40 border border-white/5 px-2.5 py-1 rounded-full text-slate-400">
                 Miembro desde: {formattedDate}
               </p>
 
@@ -506,24 +506,22 @@ export default function Perfil() {
                             onChange={(e) => setEsPrincipal(e.target.checked)}
                             className="sr-only"
                           />
-                          <div className={`w-5 h-5 flex items-center justify-center border transition-all duration-300 ${
-                            esPrincipal 
-                              ? 'bg-royalBlue-500 border-royalBlue-400 rounded-full shadow-lg shadow-royalBlue-500/25' 
+                          <div className={`w-5 h-5 flex items-center justify-center border transition-all duration-300 ${esPrincipal
+                              ? 'bg-royalBlue-500 border-royalBlue-400 rounded-full shadow-lg shadow-royalBlue-500/25'
                               : 'bg-white/5 border-white/10 rounded-lg group-hover:border-white/20'
-                          }`}>
-                            <svg 
-                              className={`w-3 h-3 text-white transition-all duration-300 transform ${
-                                esPrincipal ? 'scale-100 opacity-100 rotate-0' : 'scale-0 opacity-0 -rotate-45'
-                              }`} 
-                              fill="none" 
-                              stroke="currentColor" 
+                            }`}>
+                            <svg
+                              className={`w-3 h-3 text-white transition-all duration-300 transform ${esPrincipal ? 'scale-100 opacity-100 rotate-0' : 'scale-0 opacity-0 -rotate-45'
+                                }`}
+                              fill="none"
+                              stroke="currentColor"
                               viewBox="0 0 24 24"
                             >
-                              <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth="3.5" 
-                                d="M5 13l4 4L19 7" 
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="3.5"
+                                d="M5 13l4 4L19 7"
                               />
                             </svg>
                           </div>
