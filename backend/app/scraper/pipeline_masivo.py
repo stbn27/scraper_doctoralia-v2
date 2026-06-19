@@ -1,22 +1,23 @@
 """
 Pipeline masivo de scraping Doctoralia.
 
-Ejecutar con::
+Ejecucion::
 
     python -m app.scraper.pipeline_masivo [opciones]
 
 Fases:
-  1. Cargar catálogo desde fixtures/catalogo_doctoralia.json a Mongo (colección catalogos)
-  2. Scrapear listados por especialidad+ciudad (todas las páginas)
-  3. Scrapear perfil individual de cada médico del listado
-  4. Scrapear opiniones de cada médico persistido
+  1. Construir el catalogo de especialidades y ciudades desde los sitemaps de
+     Doctoralia y cargarlo en la coleccion MongoDB ``catalogos``.
+  2. Scrapear listados por especialidad+ciudad (todas las paginas).
+  3. Scrapear el perfil individual de cada medico del listado.
+  4. Scrapear las opiniones de cada medico persistido.
 
 Uso::
 
     # Prueba con una especialidad (modo seguro):
     python -m app.scraper.pipeline_masivo --prueba --especialidad endodoncia --ciudad ciudad-de-mexico
 
-    # Todo el catálogo:
+    # Todo el catalogo:
     python -m app.scraper.pipeline_masivo --todo
 
     # Solo una fase:
@@ -31,20 +32,19 @@ Uso::
 """
 
 import asyncio
-import json
 import os
 import random
 import socket
 import time
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from urllib.parse import urlparse
 
 # --- Autodetectar entorno local vs Docker para MongoDB ---
 if not os.getenv("MONGO_URL"):
     try:
         socket.gethostbyname("mongodb")
     except socket.gaierror:
-        # Fuera del contenedor de Docker (en la máquina host)
+        # Fuera del contenedor de Docker (en la maquina host)
         os.environ["MONGO_URL"] = "mongodb://localhost:27017"
 
 # pyrefly: ignore [missing-import]
@@ -81,27 +81,103 @@ from app.db.repositorios.opiniones_repo import (
 )
 
 # ---------------------------------------------------------------------------
-# Rutas del proyecto
-# ---------------------------------------------------------------------------
-_RAIZ = Path(__file__).resolve().parents[2]
-_FIXTURES = _RAIZ / "fixtures"
-_CATALOGO_PATH = _FIXTURES / "catalogo_doctoralia.json"
-
-# ---------------------------------------------------------------------------
 # Rate limiter global (10 solicitudes / 60 segundos)
 # ---------------------------------------------------------------------------
 _rate_limiter = RateLimiter(max_requests=10, ventana_segundos=60)
+
+# ---------------------------------------------------------------------------
+# Sitemaps de Doctoralia (equivalente a buildCatalog en index.ts)
+# ---------------------------------------------------------------------------
+_BASE_URL = "https://www.doctoralia.com.mx"
+_SITEMAP_ESPECIALIDAD_CIUDAD = f"{_BASE_URL}/sitemap.specialization_city.xml"
+
+
+async def _fetch_text_async(url: str) -> str:
+    """Descarga texto de una URL de forma asincrona.
+
+    Args:
+        url: URL a descargar.
+
+    Returns:
+        Contenido de la respuesta como texto.
+    """
+    headers = {
+        "User-Agent": get_user_agent(),
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xml,*/*",
+    }
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as cliente:
+        respuesta = await cliente.get(url, headers=headers)
+        respuesta.raise_for_status()
+        return respuesta.text
+
+
+def _extract_locs_from_sitemap(xml: str) -> list[str]:
+    """Extrae todas las URLs de una respuesta XML de sitemap.
+
+    Args:
+        xml: Contenido XML del sitemap.
+
+    Returns:
+        Lista de URLs en las etiquetas ``<loc>``.
+    """
+    import re
+    return re.findall(r"<loc>([^<]+)</loc>", xml)
+
+
+async def build_pares_desde_sitemaps() -> list[dict]:
+    """Construye la lista de pares especialidad+ciudad desde los sitemaps de Doctoralia.
+
+    Equivalente a la funcion ``buildCatalog`` del ``index.ts`` original.
+    Descarga el sitemap ``sitemap.specialization_city.xml`` y extrae todas las
+    combinaciones canonicas de especialidad+ciudad sin leer ningun archivo local.
+
+    Returns:
+        Lista de diccionarios ``{especialidad_slug, ciudad_slug, url}``.
+
+    Ejemplo::
+
+        pares = await build_pares_desde_sitemaps()
+        # [{"especialidad_slug": "endodoncia", "ciudad_slug": "ciudad-de-mexico",
+        #   "url": "https://www.doctoralia.com.mx/endodoncia/ciudad-de-mexico"}, ...]
+    """
+    xml = await _fetch_text_async(_SITEMAP_ESPECIALIDAD_CIUDAD)
+    urls = _extract_locs_from_sitemap(xml)
+
+    pares: list[dict] = []
+    seen: set[str] = set()
+
+    for url in urls:
+        url = url.strip()
+        parsed = urlparse(url)
+        segments = [s for s in parsed.path.strip("/").split("/") if s]
+        if len(segments) != 2:
+            continue
+        especialidad_slug, ciudad_slug = segments
+        if ciudad_slug == "online":
+            continue
+        clave = f"{especialidad_slug}:{ciudad_slug}"
+        if clave in seen:
+            continue
+        seen.add(clave)
+        pares.append({
+            "especialidad_slug": especialidad_slug,
+            "ciudad_slug": ciudad_slug,
+            "url": url,
+        })
+
+    return pares
 
 
 # ===========================================================================
 # FASE 1 — Catálogo
 # ===========================================================================
 async def fase_catalogo(estado: dict, log) -> dict:
-    """Carga el catálogo local a la colección MongoDB ``catalogos``.
+    """Descarga el catalogo de Doctoralia y lo carga en la coleccion ``catalogos``.
 
-    Lee ``fixtures/catalogo_doctoralia.json``, extrae todos los pares
-    presenciales y online y los sube a Mongo mediante upsert. Si el catálogo
-    ya fue marcado como cargado en el estado, omite la fase.
+    Descarga los sitemaps de Doctoralia en tiempo real, sin leer archivos
+    locales de fixtures. Equivalente a ``initializeMassiveQueue`` del TS.
+    Si el catalogo ya fue marcado como cargado en el estado, omite la fase.
 
     Args:
         estado: Estado actual del pipeline.
@@ -111,40 +187,36 @@ async def fase_catalogo(estado: dict, log) -> dict:
         Estado actualizado con ``catalogos_cargados = True``.
     """
     if estado.get("catalogos_cargados"):
-        log.info("FASE 1 — Catálogo ya cargado anteriormente, omitiendo.")
+        log.info("FASE 1 — Catalogo ya cargado anteriormente, omitiendo.")
         return estado
 
-    log.info("FASE 1 — Cargando catálogo a Mongo...")
+    log.info("FASE 1 — Descargando catalogo desde sitemaps de Doctoralia...")
 
-    if not _CATALOGO_PATH.exists():
-        log.error(f"FASE 1 — Archivo no encontrado: {_CATALOGO_PATH}")
+    try:
+        pares = await build_pares_desde_sitemaps()
+    except Exception as exc:
+        log.error(f"FASE 1 — Error al descargar sitemaps: {exc}")
         return estado
 
-    with _CATALOGO_PATH.open("r", encoding="utf-8") as f:
-        catalogo = json.load(f)
-
-    documentos = []
-    for par in catalogo.get("pares_presencial", []):
-        documentos.append({**par, "modalidad": "presencial"})
-    for par in catalogo.get("pares_online", []):
-        documentos.append({**par, "modalidad": "online"})
-
-    if not documentos:
-        log.warning("FASE 1 — El catálogo no tiene pares.")
+    if not pares:
+        log.warning("FASE 1 — El sitemap no devolvio pares validos.")
         return estado
+
+    documentos = [{**par, "modalidad": "presencial"} for par in pares]
 
     try:
         resultado = await upsert_catalogos(documentos)
         log.success(  # type: ignore[attr-defined]
-            f"Catálogo: {resultado['insertados']} pares insertados, "
-            f"{resultado['actualizados']} ya existían"
+            f"Catalogo: {resultado['insertados']} pares insertados, "
+            f"{resultado['actualizados']} ya existian"
         )
         estado["catalogos_cargados"] = True
         guardar_estado(estado)
     except Exception as exc:
-        log.error(f"FASE 1 — Error al cargar catálogo: {exc}")
+        log.error(f"FASE 1 — Error al cargar catalogo: {exc}")
 
     return estado
+
 
 
 # ===========================================================================
@@ -182,44 +254,52 @@ async def _scrapear_par(
     try:
         async with semaforo:
             await _rate_limiter.esperar_si_necesario()
-            resultado, total_paginas = await scrape_listing_async(especialidad, ciudad, 1)
+            resultado, total_paginas = await scrape_listing_async(
+                especialidad, ciudad, 1
+            )
 
         doctores_pagina = resultado.get("doctores", [])
         total_paginas = total_paginas or 1
         if max_paginas:
             total_paginas = min(total_paginas, max_paginas)
 
-        log.info(
-            f"{clave} | Página 1/{total_paginas} — {len(doctores_pagina)} médicos"
-        )
+        log.info(f"{clave} | Página 1/{total_paginas} — {len(doctores_pagina)} médicos")
         for doc in doctores_pagina:
             if doc.get("doctoralia_id") and doc.get("url_perfil"):
-                cola.append({
-                    "doctoralia_id": doc["doctoralia_id"],
-                    "url_perfil": doc["url_perfil"],
-                    "nombre": doc.get("nombre") or "Desconocido",
-                })
+                cola.append(
+                    {
+                        "doctoralia_id": doc["doctoralia_id"],
+                        "url_perfil": doc["url_perfil"],
+                        "nombre": doc.get("nombre") or "Desconocido",
+                    }
+                )
 
         for pagina in range(2, total_paginas + 1):
             await espera_humana(2.0, 5.0)
             try:
                 async with semaforo:
                     await _rate_limiter.esperar_si_necesario()
-                    resultado, _ = await scrape_listing_async(especialidad, ciudad, pagina)
+                    resultado, _ = await scrape_listing_async(
+                        especialidad, ciudad, pagina
+                    )
                 doctores_pagina = resultado.get("doctores", [])
                 log.info(
                     f"{clave} | Página {pagina}/{total_paginas} — {len(doctores_pagina)} médicos"
                 )
                 for doc in doctores_pagina:
                     if doc.get("doctoralia_id") and doc.get("url_perfil"):
-                        cola.append({
-                            "doctoralia_id": doc["doctoralia_id"],
-                            "url_perfil": doc["url_perfil"],
-                            "nombre": doc.get("nombre") or "Desconocido",
-                        })
+                        cola.append(
+                            {
+                                "doctoralia_id": doc["doctoralia_id"],
+                                "url_perfil": doc["url_perfil"],
+                                "nombre": doc.get("nombre") or "Desconocido",
+                            }
+                        )
             except Exception as exc:
                 log.error(f"{clave} | Error en página {pagina}: {exc}")
-                estado = registrar_error(estado, "listados", f"{clave}/p{pagina}", str(exc))
+                estado = registrar_error(
+                    estado, "listados", f"{clave}/p{pagina}", str(exc)
+                )
 
         log.success(  # type: ignore[attr-defined]
             f"Listado completado: {clave} — {len(cola)} médicos en cola"
@@ -333,6 +413,7 @@ async def _scrapear_perfil(
                 try:
                     # fecha_consulta es string YYYY-MM-DD HH:MM:SS
                     from datetime import timedelta
+
                     fecha_consulta = datetime.strptime(fecha_raw, "%Y-%m-%d %H:%M:%S")
                     fecha_consulta = fecha_consulta.replace(tzinfo=timezone.utc)
                     if datetime.now(timezone.utc) - fecha_consulta < timedelta(days=7):
@@ -380,7 +461,9 @@ async def _scrapear_perfil(
                 )
                 await asyncio.sleep(300)
                 continue
-            log.error(f"Error HTTP perfil id={doctoralia_id} | url={url_perfil} — {exc}")
+            log.error(
+                f"Error HTTP perfil id={doctoralia_id} | url={url_perfil} — {exc}"
+            )
             estado = registrar_error(estado, "perfiles", url_perfil, str(exc))
             return estado, False
 
@@ -435,11 +518,18 @@ async def fase_perfiles(
             await espera_humana(1.0, 2.5)
 
         # Pausa de seguridad cada 60 perfiles descargados realmente en esta ejecución
-        if guardado and total_nuevos > 0 and total_nuevos % 60 == 0 and i < len(cola_perfiles) - 1:
+        if (
+            guardado
+            and total_nuevos > 0
+            and total_nuevos % 60 == 0
+            and i < len(cola_perfiles) - 1
+        ):
             log.info("Pausa de seguridad cada 60 perfiles nuevos — 30 segundos...")
             await asyncio.sleep(30)
 
-    total_errores = len([e for e in estado.get("errores", []) if e.get("fase") == "perfiles"])
+    total_errores = len(
+        [e for e in estado.get("errores", []) if e.get("fase") == "perfiles"]
+    )
     log.info(
         f"FASE 3 completada — Nuevos: {total_nuevos} | "
         f"Omitidos: {total_omitidos} | Errores: {total_errores}"
@@ -567,15 +657,15 @@ async def fase_opiniones(
 
     # Filtrar los que ya tienen opiniones en el estado
     medicos = [
-        m for m in medicos
+        m
+        for m in medicos
         if not opiniones_ya_completadas(estado, m.get("doctoralia_id"))
     ]
 
     # Aplicar Sharding determinista en Fase 4
     if partes is not None and parte_id is not None:
         medicos = [
-            m for m in medicos
-            if int(m.get("doctoralia_id", 0)) % partes == parte_id
+            m for m in medicos if int(m.get("doctoralia_id", 0)) % partes == parte_id
         ]
         log.info(
             f"FASE 4 SHARDING: Procesando segmento {parte_id} de {partes} "
@@ -602,7 +692,12 @@ async def fase_opiniones(
             await asyncio.sleep(random.uniform(1.5, 4.0))
 
         # Pausa de seguridad cada 60 médicos descargados realmente en esta ejecución
-        if real_scrape and total_reales > 0 and total_reales % 60 == 0 and i < len(medicos) - 1:
+        if (
+            real_scrape
+            and total_reales > 0
+            and total_reales % 60 == 0
+            and i < len(medicos) - 1
+        ):
             log.info("Pausa de seguridad cada 60 médicos nuevos — 30 segundos...")
             await asyncio.sleep(30)
 
@@ -659,28 +754,31 @@ async def ejecutar_pipeline(args) -> None:
     # --- Semáforo de concurrencia ---
     semaforo = asyncio.Semaphore(args.max_concurrencia)
 
-    # --- Construir lista de pares ---
-    if not _CATALOGO_PATH.exists():
-        log.error(f"Catálogo no encontrado: {_CATALOGO_PATH}")
-        return
-
-    with _CATALOGO_PATH.open("r", encoding="utf-8") as f:
-        catalogo = json.load(f)
-
-    todos_los_pares = catalogo.get("pares_presencial", [])
+    # --- Construir lista de pares desde sitemaps (igual que el TS) ---
+    log.info("Descargando lista de pares desde sitemaps de Doctoralia...")
+    try:
+        todos_los_pares = await build_pares_desde_sitemaps()
+        log.info(f"{len(todos_los_pares)} pares especialidad+ciudad obtenidos del sitemap.")
+    except Exception as exc:
+        log.error(f"No se pudo obtener el catalogo desde el sitemap: {exc}")
+        log.warning("Continuando sin catalogo: solo modo --especialidad/--ciudad funcionara.")
+        todos_los_pares = []
 
     if args.prueba or (args.especialidad and args.ciudad):
         pares = [
-            p for p in todos_los_pares
+            p
+            for p in todos_los_pares
             if p["especialidad_slug"] == args.especialidad
             and p["ciudad_slug"] == args.ciudad
         ]
         if not pares:
-            pares = [{
-                "especialidad_slug": args.especialidad,
-                "ciudad_slug": args.ciudad,
-                "url": f"https://www.doctoralia.com.mx/{args.especialidad}/{args.ciudad}",
-            }]
+            pares = [
+                {
+                    "especialidad_slug": args.especialidad,
+                    "ciudad_slug": args.ciudad,
+                    "url": f"https://www.doctoralia.com.mx/{args.especialidad}/{args.ciudad}",
+                }
+            ]
     elif args.todo:
         pares = todos_los_pares
     else:
@@ -691,7 +789,7 @@ async def ejecutar_pipeline(args) -> None:
         # Ordenamos determinísticamente para asegurar que todas las instancias coincidan en el orden
         todos_pares_ordenados = sorted(
             pares,
-            key=lambda x: (x.get("especialidad_slug", ""), x.get("ciudad_slug", ""))
+            key=lambda x: (x.get("especialidad_slug", ""), x.get("ciudad_slug", "")),
         )
         # Seleccionar por índice módulo parte_id
         pares = [
@@ -711,40 +809,6 @@ async def ejecutar_pipeline(args) -> None:
     limite_opiniones = 10 if args.prueba else args.limite_opiniones
 
     fase = args.fase if not args.prueba else "todas"
-
-    # --- Importación inteligente de Cola de Perfiles Maestra ---
-    # Si estamos en modo sharding paralelo, y el estado local de esta parte aún no tiene
-    # su cola de perfiles construida, pero existe el archivo de estado maestro general
-    # (fixtures/pipeline_estado.json) con los 200,000 médicos ya identificados en la Fase 2,
-    # podemos importar esa cola shardéandola directamente por ID. Esto permite a todas
-    # las partes saltarse la Fase 2 (listados) por completo, ahorrando ~2 horas.
-    if args.partes is not None and args.parte_id is not None and not estado.get("cola_perfiles") and not args.prueba:
-        ruta_maestra = _FIXTURES / "pipeline_estado.json"
-        if ruta_maestra.exists():
-            try:
-                with ruta_maestra.open("r", encoding="utf-8") as f:
-                    estado_maestro = json.load(f)
-                cola_maestra = estado_maestro.get("cola_perfiles", [])
-                if cola_maestra:
-                    # Sharding determinista basado en el ID de Doctoralia
-                    cola_perfiles_sharded = [
-                        item for item in cola_maestra
-                        if int(item.get("doctoralia_id", 0)) % args.partes == args.parte_id
-                    ]
-                    estado["cola_perfiles"] = cola_perfiles_sharded
-                    # Marcar todos los listados asignados como completados para omitir la Fase 2
-                    estado["listados_completados"] = [
-                        f"{p['especialidad_slug']}/{p['ciudad_slug']}" for p in pares
-                    ]
-                    estado["fase_actual"] = "perfiles"
-                    guardar_estado(estado)
-                    log.success(
-                        f"¡OPTIMIZACIÓN DETECTADA! Se importaron {len(cola_perfiles_sharded)} perfiles "
-                        f"de la cola maestra ({len(cola_maestra)} perfiles) para la parte {args.parte_id}. "
-                        f"La Fase 2 de listados se omitirá por completo en esta parte."
-                    )  # type: ignore[attr-defined]
-            except Exception as e:
-                log.warning(f"No se pudo importar la cola de perfiles del archivo maestro: {e}")
 
     cola_perfiles: list[dict] = []
 
@@ -769,7 +833,9 @@ async def ejecutar_pipeline(args) -> None:
                 )
 
         if not cola_perfiles:
-            log.info("FASE 3 — Cola vacía, no hay perfiles que scrapear en esta ejecución.")
+            log.info(
+                "FASE 3 — Cola vacía, no hay perfiles que scrapear en esta ejecución."
+            )
         else:
             estado = await fase_perfiles(
                 estado, log, cola_perfiles, semaforo, max_perfiles=max_perfiles
@@ -899,7 +965,9 @@ if __name__ == "__main__":
 
     # Validación de sharding (Partes Autónomas)
     if (args.partes is not None) != (args.parte_id is not None):
-        parser.error("Debes especificar tanto --partes como --parte-id para usar sharding.")
+        parser.error(
+            "Debes especificar tanto --partes como --parte-id para usar sharding."
+        )
 
     if args.partes is not None and (args.parte_id < 0 or args.parte_id >= args.partes):
         parser.error(f"--parte-id debe ser un entero entre 0 y {args.partes - 1}.")
