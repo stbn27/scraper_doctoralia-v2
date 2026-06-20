@@ -90,20 +90,35 @@ def register(data: UsuarioCreate):
     # Intentar insertar con rol_id (requiere tabla roles preexistente)
     try:
         cursor.execute(
-            "INSERT INTO usuarios (email, password_hash, rol_id) VALUES (%s, %s, %s)",
-            (data.email, hashed, 1),
+            """
+            INSERT INTO usuarios (email, password_hash, rol_id, nombre, apellido, telefono, avatar_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (data.email, hashed, 1, data.nombre, data.apellido, data.telefono, data.avatar_url),
         )
     except Exception:
         # Fallback: insertar sin rol_id si la columna no existe aún
         cursor.execute(
-            "INSERT INTO usuarios (email, password_hash) VALUES (%s, %s)",
-            (data.email, hashed),
+            """
+            INSERT INTO usuarios (email, password_hash, nombre, apellido, telefono, avatar_url)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (data.email, hashed, data.nombre, data.apellido, data.telefono, data.avatar_url),
         )
     conn.commit()
     nuevo_id = cursor.lastrowid
     cursor.close()
     conn.close()
-    return {"id": nuevo_id, "email": data.email, "rol": "USER", "created_at": datetime.utcnow()}
+    return {
+        "id": nuevo_id,
+        "email": data.email,
+        "nombre": data.nombre,
+        "apellido": data.apellido,
+        "telefono": data.telefono,
+        "avatar_url": data.avatar_url,
+        "rol": "USER",
+        "created_at": datetime.utcnow(),
+    }
 
 
 @router.post("/auth/login", response_model=TokenResponse)

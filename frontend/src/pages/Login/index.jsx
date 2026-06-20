@@ -68,8 +68,8 @@ export default function Login() {
 
       if (!password.trim()) {
          newErrors.password = "La contraseña es obligatoria.";
-      } else if (password.length < 6) {
-         newErrors.password = "La contraseña debe tener al menos 6 caracteres.";
+      } else if (password.length < 2) {
+         newErrors.password = "La contraseña debe tener al menos 2 caracteres.";
       }
 
       if (isRegister) {
@@ -190,11 +190,11 @@ export default function Login() {
                {/* Botón de cerrar -> Busqueda o regresar en la vista anterior */}
                <button
                   type="button"
-                  className="absolute -top-3.5 -right-3.5 w-9 h-9 flex items-center justify-center rounded-full bg-[#0d0d0f]/90 border border-white/10 hover:border-royalBlue-500/50 hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
+                  className="absolute -top-3.5 -right-3.5 w-12 h-12 flex items-center justify-center rounded-full bg-[#0d0d0f]/90 border border-white/10 hover:border-royalBlue-500/50 hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
                   onClick={() => navigate(-1)}
                   title="Cerrar"
                >
-                  <RiCloseLine className="text-xl transition-all group-hover:animate-pulse" />
+                  <RiCloseLine className="text-2xl transition-all group-hover:animate-pulse" />
                </button>
 
                {/* Header */}

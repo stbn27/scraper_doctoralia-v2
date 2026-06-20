@@ -13,6 +13,11 @@ class UsuarioCreate(BaseModel):
 
     email: EmailStr
     password: str
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    telefono: Optional[str] = None
+    avatar_url: Optional[str] = None
+
 
 
 class UsuarioResponse(BaseModel):
