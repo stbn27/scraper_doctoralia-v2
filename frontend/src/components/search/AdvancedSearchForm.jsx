@@ -141,6 +141,7 @@ export function AdvancedSearchForm({ onClose }) {
                 onChange={(selected) => setMaxOpinions(selected ? selected.value : 30)}
                 isDisabled={processing}
                 placeholder="Selecciona opiniones..."
+                menuPortalTarget={document.body}
               />
             </div>
 
@@ -164,7 +165,7 @@ export function AdvancedSearchForm({ onClose }) {
           </div>
 
           {analyze && (
-            <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
+            <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3 animate-expand-fade">
               <label className="block text-sm font-medium text-slate-300">
                 Selecciona tu modelo de IA:
               </label>

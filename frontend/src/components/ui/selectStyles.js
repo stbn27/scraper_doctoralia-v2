@@ -37,6 +37,10 @@ export const selectStyles = {
     background: 'var(--bg-body)',
     border: '1px solid var(--glass-border)',
   }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 9999,
+  }),
   option: (base, state) => ({
     ...base,
     cursor: 'pointer',

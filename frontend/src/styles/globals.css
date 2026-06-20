@@ -434,3 +434,19 @@ body {
 .animate-login-fade {
   animation: login-fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ─── Animación suave para paneles colapsables/alertas de UI ─── */
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-expand-fade {
+  animation: expand-fade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
