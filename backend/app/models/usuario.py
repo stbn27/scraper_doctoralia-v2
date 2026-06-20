@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
@@ -17,7 +18,6 @@ class UsuarioCreate(BaseModel):
     apellido: Optional[str] = None
     telefono: Optional[str] = None
     avatar_url: Optional[str] = None
-
 
 
 class UsuarioResponse(BaseModel):

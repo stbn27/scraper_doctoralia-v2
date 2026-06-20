@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   RiHistoryLine,
   RiSearchLine,
@@ -7,16 +7,17 @@ import {
   RiEmotionSadLine,
   RiCalendarLine,
   RiMapPinLine,
-  RiCompass3Line
-} from 'react-icons/ri';
-import { PageWrapper } from '@/components/layout/PageWrapper';
-import { BubbleBackground } from '@/components/layout/BubbleBackground';
-import { Navbar } from '@/components/layout/Navbar';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/useToast';
-import { getSearchHistory, limpiarHistorial } from '@/services/api';
+  RiCompass3Line,
+  RiArrowLeftLine
+} from "react-icons/ri";
+import { PageWrapper } from "@/components/layout/PageWrapper";
+import { BubbleBackground } from "@/components/layout/BubbleBackground";
+import { Navbar } from "@/components/layout/Navbar";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
+import { getSearchHistory, limpiarHistorial } from "@/services/api";
 
 export default function Historial() {
   const { user, loading: authLoading } = useAuth();
@@ -29,7 +30,7 @@ export default function Historial() {
   // Redirigir si no autenticado
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/login', { state: { from: '/historial' } });
+      navigate("/login", { state: { from: "/historial" } });
     }
   }, [user, authLoading, navigate]);
 
@@ -41,8 +42,11 @@ export default function Historial() {
       const data = await getSearchHistory();
       setHistory(data || []);
     } catch (err) {
-      console.error('Error al cargar historial:', err);
-      addToast({ type: 'error', message: 'Error al cargar el historial de búsquedas.' });
+      console.error("Error al cargar historial:", err);
+      addToast({
+        type: "error",
+        message: "Error al cargar el historial de búsquedas.",
+      });
     } finally {
       setLoading(false);
     }
@@ -58,16 +62,21 @@ export default function Historial() {
   const repeatSearch = (entry) => {
     const params = new URLSearchParams();
     const filtros = entry.filtros || {};
-    
-    const especialidad = filtros.especialidad || entry.especialidad || '';
-    const ciudad = filtros.ciudad || entry.ciudad || entry.ubicacion || '';
-    
-    if (especialidad) params.set('especialidad', especialidad);
-    if (ciudad) params.set('ciudad', ciudad);
-    
+
+    const especialidad = filtros.especialidad || entry.especialidad || "";
+    const ciudad = filtros.ciudad || entry.ciudad || entry.ubicacion || "";
+
+    if (especialidad) params.set("especialidad", especialidad);
+    if (ciudad) params.set("ciudad", ciudad);
+
     // Mapear el resto de los filtros para recrear la consulta exacta
     Object.keys(filtros).forEach((key) => {
-      if (key !== 'especialidad' && key !== 'ciudad' && filtros[key] !== undefined && filtros[key] !== null) {
+      if (
+        key !== "especialidad" &&
+        key !== "ciudad" &&
+        filtros[key] !== undefined &&
+        filtros[key] !== null
+      ) {
         params.set(key, String(filtros[key]));
       }
     });
@@ -75,17 +84,31 @@ export default function Historial() {
     navigate(`/busqueda?${params.toString()}`);
   };
 
+  // Volver al perfil
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/perfil");
+    }
+  };
+
   /**
    * Limpia todo el historial.
    */
   const handleClearHistory = async () => {
-    if (window.confirm('¿Estás seguro de eliminar todo tu historial de búsqueda?')) {
+    if (
+      window.confirm("¿Estás seguro de eliminar todo tu historial de búsqueda?")
+    ) {
       try {
         await limpiarHistorial();
         setHistory([]);
-        addToast({ type: 'success', message: 'Historial de búsqueda eliminado.' });
+        addToast({
+          type: "success",
+          message: "Historial de búsqueda eliminado.",
+        });
       } catch {
-        addToast({ type: 'error', message: 'Error al limpiar el historial.' });
+        addToast({ type: "error", message: "Error al limpiar el historial." });
       }
     }
   };
@@ -94,12 +117,12 @@ export default function Historial() {
    * Formatea la fecha.
    */
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('es-MX', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(dateStr).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -125,9 +148,20 @@ export default function Historial() {
       <Navbar />
 
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
+
+        {/* Botón volver */}
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <RiArrowLeftLine /> Volver a mi perfil
+        </button>
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <RiHistoryLine className="text-royalBlue-400" /> Historial de búsqueda
+            <RiHistoryLine className="text-royalBlue-400" /> Historial de
+            búsqueda
           </h1>
           {history.length > 0 && (
             <Button
@@ -160,21 +194,28 @@ export default function Historial() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-100">
-                      Búsqueda de {entry.especialidad || 'Especialista'}
+                      Búsqueda de {entry.especialidad || "Especialista"}
                     </span>
-                    <Badge variant={entry.origen === 'chat' ? 'purple' : 'blue'} className="text-[10px]">
-                      Origen: {entry.origen === 'chat' ? 'Chat' : 'Tradicional'}
+                    <Badge
+                      variant={entry.origen === "chat" ? "purple" : "blue"}
+                      className="text-[10px]"
+                    >
+                      Origen: {entry.origen === "chat" ? "Chat" : "Tradicional"}
                     </Badge>
                   </div>
 
-                  <div className="flex flex-wrap gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <div
+                    className="flex flex-wrap gap-4 text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     {entry.ciudad && (
                       <span className="flex items-center gap-1">
                         <RiMapPinLine /> {entry.ciudad}
                       </span>
                     )}
                     <span className="flex items-center gap-1">
-                      <RiCalendarLine /> {formatDate(entry.fecha || entry.created_at)}
+                      <RiCalendarLine />{" "}
+                      {formatDate(entry.fecha || entry.created_at)}
                     </span>
                     {entry.total_resultados !== undefined && (
                       <span className="flex items-center gap-1 text-slate-400">
@@ -197,10 +238,16 @@ export default function Historial() {
           </div>
         ) : (
           <div className="glass-card p-12 text-center max-w-lg mx-auto">
-            <RiEmotionSadLine className="text-5xl mx-auto mb-4" style={{ color: 'var(--text-muted)' }} />
-            <h2 className="text-lg font-semibold mb-2">Todavía no has realizado búsquedas.</h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-              Tus consultas e intenciones de búsqueda se guardarán aquí para que puedas repetirlas rápidamente.
+            <RiEmotionSadLine
+              className="text-5xl mx-auto mb-4"
+              style={{ color: "var(--text-muted)" }}
+            />
+            <h2 className="text-lg font-semibold mb-2">
+              Todavía no has realizado búsquedas.
+            </h2>
+            <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+              Tus consultas e intenciones de búsqueda se guardarán aquí para que
+              puedas repetirlas rápidamente.
             </p>
             <Link to="/busqueda">
               <Button variant="primary" icon={<RiSearchLine />}>

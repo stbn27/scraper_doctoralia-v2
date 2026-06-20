@@ -3,8 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { RiCloseLine, RiRobot2Line, RiSearchLine, RiInformationLine, RiCheckLine, RiErrorWarningLine } from 'react-icons/ri';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
+import Select from 'react-select';
+import { selectStyles } from '@/components/ui/selectStyles';
 import { useToast } from '@/hooks/useToast';
 import { scrapeAnalyze, listarTokensLLM } from '@/services/api';
+
+const maxOpinionsOptions = [
+  { value: 20, label: '20 opiniones' },
+  { value: 30, label: '30 opiniones' },
+  { value: 40, label: '40 opiniones' },
+  { value: 50, label: '50 opiniones' },
+];
 
 export function AdvancedSearchForm({ onClose }) {
   const navigate = useNavigate();
@@ -119,40 +129,37 @@ export function AdvancedSearchForm({ onClose }) {
             disabled={processing}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Input
-              id="adv-opinions"
-              label="Opiniones a analizar (Max)"
-              type="number"
-              min="1"
-              max="200"
-              value={maxOpinions}
-              onChange={(e) => setMaxOpinions(e.target.value)}
-              disabled={processing}
-            />
-
-            <div className="space-y-3 pt-6">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={scrapeOnly} 
-                  onChange={() => handleCheckboxChange('scrape')}
-                  disabled={processing}
-                  className="w-4 h-4 accent-royalBlue-500 rounded bg-white/10 border-white/20"
-                />
-                <span className="text-sm text-slate-300">Solo hacer Scraping (Extraer datos)</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+                Opiniones a analizar (Max)
               </label>
+              <Select
+                styles={selectStyles}
+                options={maxOpinionsOptions}
+                value={maxOpinionsOptions.find(opt => opt.value === maxOpinions) || maxOpinionsOptions[1]}
+                onChange={(selected) => setMaxOpinions(selected ? selected.value : 30)}
+                isDisabled={processing}
+                placeholder="Selecciona opiniones..."
+              />
+            </div>
 
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={analyze} 
-                  onChange={() => handleCheckboxChange('analyze')}
-                  disabled={processing}
-                  className="w-4 h-4 accent-royalBlue-500 rounded bg-white/10 border-white/20"
-                />
-                <span className="text-sm text-slate-300">Realizar Análisis con IA</span>
-              </label>
+            <div className="space-y-3 pb-1">
+              <Checkbox
+                id="scrape-only"
+                label="Solo hacer Scraping (Extraer datos)"
+                checked={scrapeOnly}
+                onChange={() => handleCheckboxChange('scrape')}
+                disabled={processing}
+              />
+
+              <Checkbox
+                id="analyze-ia"
+                label="Realizar Análisis con IA"
+                checked={analyze}
+                onChange={() => handleCheckboxChange('analyze')}
+                disabled={processing}
+              />
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { RiHeartLine, RiEmotionSadLine, RiSearchLine } from 'react-icons/ri';
+import { RiHeartLine, RiEmotionSadLine, RiSearchLine, RiArrowLeftLine } from 'react-icons/ri';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
@@ -58,6 +58,15 @@ export default function Favoritos() {
     }
   };
 
+  // Volver
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/busqueda");
+    }
+  };
+
   if (authLoading || (!user && loading)) {
     return (
       <PageWrapper name="favoritos">
@@ -81,7 +90,17 @@ export default function Favoritos() {
       <Navbar />
 
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold flex items-center gap-2 mb-6">
+
+        {/* Botón volver */}
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <RiArrowLeftLine /> Regresar
+        </button>
+
+        <h1 className="text-2xl font-bold flex items-center gap-2 mb-6 mt-3">
           <RiHeartLine className="text-red-400" /> Mis especialistas favoritos
         </h1>
 

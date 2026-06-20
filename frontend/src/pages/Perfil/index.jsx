@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   RiUserLine,
   RiMapPinLine,
@@ -12,23 +12,24 @@ import {
   RiEditLine,
   RiCheckboxCircleLine,
   RiArrowRightSLine,
-  RiArrowLeftLine
-} from 'react-icons/ri';
-import { PageWrapper } from '@/components/layout/PageWrapper';
-import { BubbleBackground } from '@/components/layout/BubbleBackground';
-import { Navbar } from '@/components/layout/Navbar';
-import { ModelosIA } from './ModelosIA';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/useToast';
+  RiArrowLeftLine,
+} from "react-icons/ri";
+import { PageWrapper } from "@/components/layout/PageWrapper";
+import { BubbleBackground } from "@/components/layout/BubbleBackground";
+import { Navbar } from "@/components/layout/Navbar";
+import { ModelosIA } from "./ModelosIA";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
 import {
   listarDirecciones,
   crearDireccion,
   actualizarDireccion,
-  eliminarDireccion
-} from '@/services/api';
+  eliminarDireccion,
+} from "@/services/api";
 
 export default function Perfil() {
   const { user, updateProfile, cerrarSesion } = useAuth();
@@ -36,14 +37,15 @@ export default function Perfil() {
   const { addToast } = useToast();
 
   // Estados del perfil
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [imgError, setImgError] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
 
-  const isAvatarInvalid = avatarUrl.trim() !== '' && (!avatarUrl.startsWith('http') || imgError);
+  const isAvatarInvalid =
+    avatarUrl.trim() !== "" && (!avatarUrl.startsWith("http") || imgError);
 
   // Estados de direcciones
   const [direcciones, setDirecciones] = useState([]);
@@ -52,12 +54,12 @@ export default function Perfil() {
   const [showDirForm, setShowDirForm] = useState(false);
 
   // Campos formulario dirección
-  const [alias, setAlias] = useState('');
-  const [calle, setCalle] = useState('');
-  const [municipioAlcaldia, setMunicipioAlcaldia] = useState('');
-  const [ciudad, setCiudad] = useState('');
-  const [estado, setEstado] = useState('');
-  const [codigoPostal, setCodigoPostal] = useState('');
+  const [alias, setAlias] = useState("");
+  const [calle, setCalle] = useState("");
+  const [municipioAlcaldia, setMunicipioAlcaldia] = useState("");
+  const [ciudad, setCiudad] = useState("");
+  const [estado, setEstado] = useState("");
+  const [codigoPostal, setCodigoPostal] = useState("");
   const [esPrincipal, setEsPrincipal] = useState(false);
   const [dirSaving, setDirSaving] = useState(false);
   const [dirToDelete, setDirToDelete] = useState(null);
@@ -65,10 +67,10 @@ export default function Perfil() {
   // Cargar perfil
   useEffect(() => {
     if (user) {
-      setNombre(user.nombre || user.name || '');
-      setApellido(user.apellido || user.lastName || '');
-      setTelefono(user.telefono || '');
-      setAvatarUrl(user.avatar_url || user.avatar || '');
+      setNombre(user.nombre || user.name || "");
+      setApellido(user.apellido || user.lastName || "");
+      setTelefono(user.telefono || "");
+      setAvatarUrl(user.avatar_url || user.avatar || "");
     }
   }, [user]);
 
@@ -85,10 +87,10 @@ export default function Perfil() {
       // La API puede devolver un array directo o un wrapper { items: [], data: [] }
       const list = Array.isArray(data)
         ? data
-        : (data?.items || data?.data || data?.direcciones || []);
+        : data?.items || data?.data || data?.direcciones || [];
       setDirecciones(list);
     } catch (err) {
-      console.error('Error al cargar direcciones:', err);
+      console.error("Error al cargar direcciones:", err);
     } finally {
       setDirsLoading(false);
     }
@@ -101,11 +103,14 @@ export default function Perfil() {
   // Guardar perfil
   const handleSaveProfile = async () => {
     if (!nombre.trim()) {
-      addToast({ type: 'error', message: 'El nombre es obligatorio.' });
+      addToast({ type: "error", message: "El nombre es obligatorio." });
       return;
     }
     if (isAvatarInvalid) {
-      addToast({ type: 'error', message: 'Por favor introduce una URL de foto de perfil válida.' });
+      addToast({
+        type: "error",
+        message: "Por favor introduce una URL de foto de perfil válida.",
+      });
       return;
     }
     setProfileSaving(true);
@@ -114,15 +119,15 @@ export default function Perfil() {
         nombre,
         apellido,
         telefono,
-        avatar_url: avatarUrl
+        avatar_url: avatarUrl,
       });
       if (res.success) {
-        addToast({ type: 'success', message: 'Perfil actualizado con éxito.' });
+        addToast({ type: "success", message: "Perfil actualizado con éxito." });
       } else {
-        addToast({ type: 'error', message: res.message });
+        addToast({ type: "error", message: res.message });
       }
     } catch {
-      addToast({ type: 'error', message: 'Error al actualizar perfil.' });
+      addToast({ type: "error", message: "Error al actualizar perfil." });
     } finally {
       setProfileSaving(false);
     }
@@ -131,12 +136,12 @@ export default function Perfil() {
   // Abrir formulario dirección para crear
   const handleNewDir = () => {
     setEditingDir(null);
-    setAlias('');
-    setCalle('');
-    setMunicipioAlcaldia('');
-    setCiudad('');
-    setEstado('');
-    setCodigoPostal('');
+    setAlias("");
+    setCalle("");
+    setMunicipioAlcaldia("");
+    setCiudad("");
+    setEstado("");
+    setCodigoPostal("");
     setEsPrincipal(direcciones.length === 0); // Si es la primera, principal
     setShowDirForm(true);
   };
@@ -144,25 +149,37 @@ export default function Perfil() {
   // Abrir formulario dirección para editar
   const handleEditDir = (dir) => {
     setEditingDir(dir);
-    setAlias(dir.alias || '');
-    setCalle(dir.calle || '');
-    setMunicipioAlcaldia(dir.municipio_alcaldia || '');
-    setCiudad(dir.ciudad || '');
-    setEstado(dir.estado || '');
-    setCodigoPostal(dir.codigo_postal || '');
+    setAlias(dir.alias || "");
+    setCalle(dir.calle || "");
+    setMunicipioAlcaldia(dir.municipio_alcaldia || "");
+    setCiudad(dir.ciudad || "");
+    setEstado(dir.estado || "");
+    setCodigoPostal(dir.codigo_postal || "");
     setEsPrincipal(dir.es_principal || false);
     setShowDirForm(true);
   };
 
   // Guardar dirección
   const handleSaveDir = async () => {
-    if (!alias.trim() || !calle.trim() || !ciudad.trim() || !codigoPostal.trim()) {
-      addToast({ type: 'error', message: 'Por favor completa los campos requeridos.' });
+    if (
+      !alias.trim() ||
+      !calle.trim() ||
+      !ciudad.trim() ||
+      !codigoPostal.trim()
+    ) {
+      addToast({
+        type: "error",
+        message: "Por favor completa los campos requeridos.",
+      });
       return;
     }
 
     setDirSaving(true);
-    const slug = ciudad.toLowerCase().replace(/\s+/g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const slug = ciudad
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
     const payload = {
       alias,
@@ -171,24 +188,24 @@ export default function Perfil() {
       ciudad,
       ciudad_slug: slug,
       estado,
-      pais: 'México',
+      pais: "México",
       codigo_postal: codigoPostal,
-      es_principal: esPrincipal
+      es_principal: esPrincipal,
     };
 
     try {
       if (editingDir) {
         await actualizarDireccion(editingDir.id || editingDir._id, payload);
-        addToast({ type: 'success', message: 'Dirección actualizada.' });
+        addToast({ type: "success", message: "Dirección actualizada." });
       } else {
         await crearDireccion(payload);
-        addToast({ type: 'success', message: 'Dirección agregada.' });
+        addToast({ type: "success", message: "Dirección agregada." });
       }
       setShowDirForm(false);
       loadDirecciones();
     } catch (err) {
       console.error(err);
-      addToast({ type: 'error', message: 'Error al guardar dirección.' });
+      addToast({ type: "error", message: "Error al guardar dirección." });
     } finally {
       setDirSaving(false);
     }
@@ -203,10 +220,10 @@ export default function Perfil() {
     if (!dirToDelete) return;
     try {
       await eliminarDireccion(dirToDelete);
-      addToast({ type: 'success', message: 'Dirección eliminada.' });
+      addToast({ type: "success", message: "Dirección eliminada." });
       loadDirecciones();
     } catch {
-      addToast({ type: 'error', message: 'Error al eliminar dirección.' });
+      addToast({ type: "error", message: "Error al eliminar dirección." });
     } finally {
       setDirToDelete(null);
     }
@@ -216,30 +233,40 @@ export default function Perfil() {
   const handleSetPrincipal = async (dir) => {
     try {
       await actualizarDireccion(dir.id || dir._id, { es_principal: true });
-      addToast({ type: 'success', message: 'Dirección principal actualizada.' });
+      addToast({
+        type: "success",
+        message: "Dirección principal actualizada.",
+      });
       loadDirecciones();
     } catch {
-      addToast({ type: 'error', message: 'Error al actualizar dirección principal.' });
+      addToast({
+        type: "error",
+        message: "Error al actualizar dirección principal.",
+      });
     }
   };
 
   // Cerrar sesión
   const handleLogout = () => {
     cerrarSesion();
-    addToast({ type: 'info', message: 'Sesión cerrada.' });
-    navigate('/');
+    addToast({ type: "info", message: "Sesión cerrada." });
+    navigate("/");
   };
 
   const formattedDate = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
-    : 'Reciente';
+    ? new Date(user.created_at).toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "Reciente";
 
   // Volver a la búsqueda
   const handleBack = () => {
     if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else {
-      navigate('/busqueda');
+      navigate("/busqueda");
     }
   };
 
@@ -250,25 +277,23 @@ export default function Perfil() {
 
       <div className="relative z-10 pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-
           {/* Columna Izquierda: Información de Usuario */}
           <div className="lg:col-span-4 lg:sticky lg:top-24 h-fit space-y-6">
+            
             {/* Botón volver */}
             <button
               onClick={handleBack}
               className="flex items-center gap-2 text-sm hover:text-royalBlue-400 transition-colors"
-              style={{ color: 'var(--text-muted)' }}
+              style={{ color: "var(--text-muted)" }}
             >
               <RiArrowLeftLine /> Volver a la búsqueda
             </button>
+
             <div className="glass-card p-6 flex flex-col items-center text-center">
               {/* Avatar */}
               <div className="relative mb-4">
-                <div
-                  className="w-24 h-24 rounded-3xl bg-royalBlue-800/40 border border-white/10 flex items-center justify-center overflow-hidden hover:border-royalBlue-400/50 transition-all duration-300 shadow-xl"
-                >
-                  {avatarUrl && avatarUrl.startsWith('http') && !imgError ? (
+                <div className="w-24 h-24 rounded-3xl bg-royalBlue-800/40 border border-white/10 flex items-center justify-center overflow-hidden hover:border-royalBlue-400/50 transition-all duration-300 shadow-xl">
+                  {avatarUrl && avatarUrl.startsWith("http") && !imgError ? (
                     <img
                       src={avatarUrl}
                       alt="Avatar de usuario"
@@ -281,41 +306,44 @@ export default function Perfil() {
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold text-slate-500 dark:text-slate-100">{nombre} {apellido}</h2>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
+              <h2 className="text-xl font-bold text-slate-500 dark:text-slate-100">
+                {nombre} {apellido}
+              </h2>
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {user?.email}
+              </p>
               <p className="text-[10px] mt-2 bg-royalBlue-300/20 dark:bg-royalBlue-950/40 border border-white/5 px-2.5 py-1 rounded-full text-slate-400">
                 Miembro desde: {formattedDate}
               </p>
 
               {/* Accesos rápidos */}
               <div className="w-full border-t border-white/10 mt-6 pt-4 space-y-2">
+
                 <Link
                   to="/favoritos"
                   className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors text-sm"
                 >
                   <span className="flex items-center gap-2 text-slate-300">
-                    <RiHeartLine className="text-red-400 text-base" /> Mis favoritos
+                    <RiHeartLine className="text-red-400 text-base" />
+                    Mis favoritos
                   </span>
-                  <RiArrowRightSLine style={{ color: 'var(--text-muted)' }} />
+                  <RiArrowRightSLine style={{ color: "var(--text-muted)" }} />
                 </Link>
+
                 <Link
                   to="/historial"
                   className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors text-sm"
                 >
                   <span className="flex items-center gap-2 text-slate-300">
-                    <RiHistoryLine className="text-royalBlue-400 text-base" /> Historial de búsqueda
+                    <RiHistoryLine className="text-royalBlue-400 text-base" />{" "}
+                    Historial de búsqueda
                   </span>
-                  <RiArrowRightSLine style={{ color: 'var(--text-muted)' }} />
+                  <RiArrowRightSLine style={{ color: "var(--text-muted)" }} />
                 </Link>
-                <Link
-                  to="/busqueda"
-                  className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors text-sm"
-                >
-                  <span className="flex items-center gap-2 text-slate-300">
-                    <RiUserLine className="text-emerald-400 text-base" /> Buscar especialistas
-                  </span>
-                  <RiArrowRightSLine style={{ color: 'var(--text-muted)' }} />
-                </Link>
+
               </div>
 
               {/* Logout */}
@@ -330,11 +358,11 @@ export default function Perfil() {
 
           {/* Columna Derecha: Editar Datos y Direcciones */}
           <div className="lg:col-span-8 space-y-6">
-
             {/* Editor Datos Personales */}
             <div className="glass-card p-6 space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
-                <RiUserLine className="text-royalBlue-400" /> Información personal
+                <RiUserLine className="text-royalBlue-400" /> Información
+                personal
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -363,12 +391,15 @@ export default function Perfil() {
                   placeholder="Ej. 5512345678"
                 />
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold opacity-80" style={{ color: 'var(--text-muted)' }}>
+                  <label
+                    className="block text-xs font-semibold opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Correo electrónico
                   </label>
                   <input
                     type="email"
-                    value={user?.email || ''}
+                    value={user?.email || ""}
                     readOnly
                     className="glass-input w-full px-4 py-2.5 text-sm opacity-60 cursor-not-allowed"
                   />
@@ -383,12 +414,16 @@ export default function Perfil() {
                       id="profile-avatar-url"
                       label="URL de foto de perfil (opcional)"
                       type="url"
-                      value={avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : ''}
-                      onChange={(e) => setAvatarUrl(e.target.value || '')}
+                      value={
+                        avatarUrl && avatarUrl.startsWith("http")
+                          ? avatarUrl
+                          : ""
+                      }
+                      onChange={(e) => setAvatarUrl(e.target.value || "")}
                       placeholder="https://ejemplo.com/mi-foto.jpg"
                     />
                   </div>
-                  {avatarUrl && avatarUrl.startsWith('http') && !imgError && (
+                  {avatarUrl && avatarUrl.startsWith("http") && !imgError && (
                     <img
                       src={avatarUrl}
                       alt="Vista previa"
@@ -397,9 +432,14 @@ export default function Perfil() {
                     />
                   )}
                 </div>
-                {avatarUrl && avatarUrl.startsWith('http') && !imgError && (
+                {avatarUrl && avatarUrl.startsWith("http") && !imgError && (
                   <div className="flex justify-end pt-0.5">
-                    <span className="text-[11px] text-right" style={{ color: 'var(--text-muted)' }}>Vista previa del avatar</span>
+                    <span
+                      className="text-[11px] text-right"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Vista previa del avatar
+                    </span>
                   </div>
                 )}
                 {isAvatarInvalid && (
@@ -426,7 +466,8 @@ export default function Perfil() {
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <RiMapPinLine className="text-royalBlue-400" /> Direcciones del paciente
+                  <RiMapPinLine className="text-royalBlue-400" /> Direcciones
+                  del paciente
                 </h3>
                 {!showDirForm && (
                   <Button
@@ -444,7 +485,7 @@ export default function Perfil() {
               {showDirForm && (
                 <div className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4 transition-all">
                   <h4 className="text-sm font-semibold text-royalBlue-300">
-                    {editingDir ? 'Editar dirección' : 'Nueva dirección'}
+                    {editingDir ? "Editar dirección" : "Nueva dirección"}
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -497,39 +538,13 @@ export default function Perfil() {
                       placeholder="Ej. CDMX"
                     />
                     <div className="flex items-center h-full pt-6">
-                      <label htmlFor="dir-principal" className="flex items-center gap-2 cursor-pointer select-none group text-xs">
-                        <div className="relative flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            id="dir-principal"
-                            checked={esPrincipal}
-                            onChange={(e) => setEsPrincipal(e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-5 h-5 flex items-center justify-center border transition-all duration-300 ${esPrincipal
-                              ? 'bg-royalBlue-500 border-royalBlue-400 rounded-full shadow-lg shadow-royalBlue-500/25'
-                              : 'bg-white/5 border-white/10 rounded-lg group-hover:border-white/20'
-                            }`}>
-                            <svg
-                              className={`w-3 h-3 text-white transition-all duration-300 transform ${esPrincipal ? 'scale-100 opacity-100 rotate-0' : 'scale-0 opacity-0 -rotate-45'
-                                }`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="3.5"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                        <span className="text-slate-300 group-hover:text-white transition-colors duration-200">
-                          Marcar como dirección principal
-                        </span>
-                      </label>
+                      <Checkbox
+                        id="dir-principal"
+                        label="Marcar como dirección principal"
+                        checked={esPrincipal}
+                        onChange={setEsPrincipal}
+                        className="text-xs"
+                      />
                     </div>
                   </div>
 
@@ -555,7 +570,10 @@ export default function Perfil() {
 
               {/* Lista de Direcciones */}
               {dirsLoading ? (
-                <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                <div
+                  className="py-8 text-center text-sm"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Cargando direcciones...
                 </div>
               ) : direcciones.length > 0 ? (
@@ -563,14 +581,17 @@ export default function Perfil() {
                   {direcciones.map((dir) => (
                     <div
                       key={dir.id || dir._id}
-                      className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${dir.es_principal
-                        ? 'bg-royalBlue-950/20 border-royalBlue-500/30'
-                        : 'bg-white/5 border-white/5 hover:border-white/10'
-                        }`}
+                      className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        dir.es_principal
+                          ? "bg-royalBlue-950/20 border-royalBlue-500/30"
+                          : "bg-white/5 border-white/5 hover:border-white/10"
+                      }`}
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <strong className="text-sm text-slate-100">{dir.alias}</strong>
+                          <strong className="text-sm text-slate-100">
+                            {dir.alias}
+                          </strong>
                           {dir.es_principal && (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
                               Principal
@@ -578,9 +599,13 @@ export default function Perfil() {
                           )}
                         </div>
                         <p className="text-xs text-slate-300">
-                          {dir.calle}, Col. {dir.municipio_alcaldia || 'N/A'}, CP {dir.codigo_postal}
+                          {dir.calle}, Col. {dir.municipio_alcaldia || "N/A"},
+                          CP {dir.codigo_postal}
                         </p>
-                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        <p
+                          className="text-[11px]"
+                          style={{ color: "var(--text-muted)" }}
+                        >
                           {dir.ciudad}, {dir.estado}, {dir.pais}
                         </p>
                       </div>
@@ -592,7 +617,8 @@ export default function Perfil() {
                             className="p-2 text-xs rounded-lg hover:bg-white/10 text-emerald-400 font-semibold transition-colors flex items-center gap-1"
                             title="Marcar como principal"
                           >
-                            <RiCheckboxCircleLine className="text-base" /> Principal
+                            <RiCheckboxCircleLine className="text-base" />{" "}
+                            Principal
                           </button>
                         )}
                         <button
@@ -614,7 +640,10 @@ export default function Perfil() {
                   ))}
                 </div>
               ) : (
-                <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                <div
+                  className="py-8 text-center text-sm"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Aún no tienes direcciones registradas.
                 </div>
               )}
