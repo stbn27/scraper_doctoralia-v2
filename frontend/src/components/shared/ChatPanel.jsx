@@ -20,6 +20,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
         const [showLocationBtn, setShowLocationBtn] = useState(false);
         const messagesEndRef = useRef(null);
         const textareaRef = useRef(null);
+        const scrollContainerRef = useRef(null);
         const detectedDataRef = useRef(detectedData);
 
         useEffect(() => {
@@ -27,12 +28,23 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
         }, [detectedData]);
 
         const scrollToBottom = useCallback(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTo({
+                                top: scrollContainerRef.current.scrollHeight,
+                                behavior: 'smooth'
+                        });
+                }
         }, []);
 
         useEffect(() => {
                 scrollToBottom();
         }, [messages, isTyping, scrollToBottom]);
+
+        useEffect(() => {
+                if (!isTyping) {
+                        textareaRef.current?.focus();
+                }
+        }, [isTyping]);
 
         const sendMessage = useCallback(
                 async (text) => {
@@ -119,7 +131,10 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                 </div>
                         </div>
 
-                        <div className={`flex-1 min-h-0 overflow-y-auto ${compact ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}>
+                        <div
+                                ref={scrollContainerRef}
+                                className={`flex-1 min-h-0 overflow-y-auto ${compact ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}
+                        >
                                 {messages.map((msg, i) => (
                                         <MessageBubble key={i} message={msg} />
                                 ))}
