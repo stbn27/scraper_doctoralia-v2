@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RiGoogleFill, RiLoginBoxLine, RiUserAddLine } from "react-icons/ri";
+import { RiGoogleFill, RiLoginBoxLine, RiUserAddLine, RiCloseLine } from "react-icons/ri";
 import { BubbleBackground } from "@/components/layout/BubbleBackground";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Button } from "@/components/ui/Button";
@@ -185,7 +185,18 @@ export default function Login() {
          <BubbleBackground />
 
          <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-            <div className={`glass-card w-full p-8 transition-all duration-500 ease-out ${isRegister ? 'max-w-[640px]' : 'max-w-[440px]'}`}>
+            <div className={`glass-card relative w-full p-8 transition-all duration-500 ease-out ${isRegister ? 'max-w-[640px]' : 'max-w-[440px]'}`}>
+
+               {/* Botón de cerrar -> Busqueda o regresar en la vista anterior */}
+               <button
+                  type="button"
+                  className="absolute -top-3.5 -right-3.5 w-9 h-9 flex items-center justify-center rounded-full bg-[#0d0d0f]/90 border border-white/10 hover:border-royalBlue-500/50 hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
+                  onClick={() => navigate(-1)}
+                  title="Cerrar"
+               >
+                  <RiCloseLine className="text-xl transition-all group-hover:animate-pulse" />
+               </button>
+
                {/* Header */}
                <div className="text-center mb-6">
                   <img
@@ -414,15 +425,15 @@ export default function Login() {
 
                {/* Google */}
                {/* <Button
-            variant="outline"
-            fullWidth
-            loading={googleLoading}
-            icon={<RiGoogleFill className="text-lg" />}
-            onClick={handleGoogle}
-            className="bg-white/5 hover:bg-white/10"
-          >
-            Continuar con Google
-          </Button> */}
+                     variant="outline"
+                     fullWidth
+                     loading={googleLoading}
+                     icon={<RiGoogleFill className="text-lg" />}
+                     onClick={handleGoogle}
+                     className="bg-white/5 hover:bg-white/10"
+                  >
+                     Continuar con Google
+               </Button> */}
 
                {/* Enlace alternar */}
                <p
