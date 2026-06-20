@@ -9,6 +9,7 @@ import {
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { SearchSidebar } from '@/components/search/SearchSidebar';
 import { SpecialistCard } from '@/components/shared/SpecialistCard';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -416,6 +417,7 @@ export default function Search() {
                     </main>
                 </div>
             </div>
+            <Footer />
         </PageWrapper>
     );
 }

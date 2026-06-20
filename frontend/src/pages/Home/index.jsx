@@ -47,7 +47,11 @@ export default function Home() {
 
         {/* PRESENTACION */}
         <div className="flex-1 order-1 justify-center p-6 hidden md:flex flex-col items-center w-full max-w-[600px] gap-4">
-          <h1 className='font-secondary text-5xl font-bold'>Bienvenido a <span className="text-royalBlue-500">MedRec</span></h1>
+
+          <h1 className='font-secondary text-5xl font-bold'>
+            Bienvenido a <span className="text-royalBlue-500">MedRec</span>
+          </h1>
+
           <p className='text-2xl'>Cuentanos que tienes y te podemos recomendar a los mejores especialistas médicos, cerca de tu <span className="text-royalBlue-500">zona</span></p>
           <p className='text-2xl'>O si prefieres, inicia sesión para poder guardar tus preferencias y recibir recomendaciones personalizadas.</p>
           <button
