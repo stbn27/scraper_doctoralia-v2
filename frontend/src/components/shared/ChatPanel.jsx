@@ -85,9 +85,12 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                         setShowLocationBtn(false);
                                 }
 
+                                const rawCiudad = response?.ciudad ?? detectedDataRef.current.ciudad;
+                                const cleanCiudad = rawCiudad ? rawCiudad.split(',')[0].trim() : null;
+
                                 const next = {
                                         especialidad: response?.especialidad ?? detectedDataRef.current.especialidad,
-                                        ciudad: response?.ciudad ?? detectedDataRef.current.ciudad,
+                                        ciudad: cleanCiudad,
                                         ready: Boolean(response?.ready || detectedDataRef.current.ready),
                                 };
                                 setDetectedData(next);
