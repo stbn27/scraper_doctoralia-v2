@@ -20,7 +20,7 @@ export function Footer() {
                             <h2 class="mb-6 text-sm font-semibold text-heading uppercase">Siguenos</h2>
                             <ul class="text-body font-medium">
                                 <li class="mb-4">
-                                    <a href="#" class="hover:underline ">Github</a>
+                                    <a href="www.github.com/stbn27" class="hover:underline ">Github</a>
                                 </li>
                                 <li>
                                     <a href="#" class="hover:underline">Instagram</a>

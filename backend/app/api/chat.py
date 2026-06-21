@@ -10,6 +10,8 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import random
+import json
 from typing import Optional
 
 # pyrefly: ignore [missing-import]
@@ -61,6 +63,98 @@ def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
         return row["ciudad"] if row else None
     except Exception:
         return None
+
+
+def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
+    """
+    Obtiene hasta 3 ubicaciones (ciudades/estados) registradas para el usuario.
+    """
+    try:
+        conn = get_mysql_conn()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT ciudad, estado FROM usuarios_direcciones
+            WHERE usuario_id = %s
+            ORDER BY es_principal DESC, id DESC
+            LIMIT 3
+            """,
+            (usuario_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        ubicaciones = []
+        for r in rows:
+            c = r.get("ciudad")
+            e = r.get("estado")
+            if c and e:
+                if c.strip().lower() == e.strip().lower():
+                    ubicaciones.append(c.strip())
+                else:
+                    ubicaciones.append(f"{c.strip()}, {e.strip()}")
+            elif c:
+                ubicaciones.append(c.strip())
+            elif e:
+                ubicaciones.append(e.strip())
+        return list(dict.fromkeys(ubicaciones))
+    except Exception:
+        return []
+
+
+def _obtener_especialidades_frecuentes(usuario_id: int) -> list[str]:
+    """
+    Obtiene las especialidades más buscadas por el usuario desde su historial.
+    """
+    try:
+        conn = get_mysql_conn()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT especialidad, COUNT(*) as cnt
+            FROM historial_busquedas
+            WHERE usuario_id = %s AND especialidad IS NOT NULL AND especialidad != ''
+            GROUP BY especialidad
+            ORDER BY cnt DESC, id DESC
+            LIMIT 4
+            """,
+            (usuario_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return [r["especialidad"].strip() for r in rows if r.get("especialidad")]
+    except Exception:
+        return []
+
+
+def _obtener_especialidades_sugeridas(usuario_id: int) -> list[str]:
+    """
+    Retorna especialidades sugeridas combinando el historial del usuario y comunes.
+    """
+    frecuentes = _obtener_especialidades_frecuentes(usuario_id)
+    comunes = ['Pediatra', 'Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista', 'Ginecólogo', 'Oftalmólogo', 'Psicólogo']
+
+    sugeridas = []
+    vistas = set()
+
+    for f in frecuentes:
+        f_norm = f.strip().lower()
+        if f_norm not in vistas:
+            vistas.add(f_norm)
+            sugeridas.append(f)
+
+    random.shuffle(comunes)
+    for c in comunes:
+        if len(sugeridas) >= 4:
+            break
+        c_norm = c.strip().lower()
+        if c_norm not in vistas:
+            vistas.add(c_norm)
+            sugeridas.append(c)
+
+    return sugeridas
 
 
 @router.post("/chat/interpretar", response_model=ChatInterpretResponse)
@@ -128,7 +222,8 @@ async def interpretar_consulta_autenticado(
     HTTPException 503
         Si todos los proveedores LLM no están disponibles.
     """
-    ubicacion_usuario = _obtener_ciudad_usuario(current_user["id"])
+    usuario_id = current_user["id"]
+    ubicacion_usuario = _obtener_ciudad_usuario(usuario_id)
 
     try:
         resultado = await chat_service.interpretar_consulta_medica(
@@ -139,6 +234,27 @@ async def interpretar_consulta_autenticado(
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+    filtros = resultado.get("filtros") or {}
+    ubicacion_detectada = filtros.get("ubicacion")
+
+    # 1. Si no hay ubicación en los filtros, sugerir ubicaciones registradas del usuario
+    if not ubicacion_detectada:
+        if not resultado.get("sql"):
+            resultado["sql"] = []
+        if "LOCATION_USER" not in resultado["sql"]:
+            resultado["sql"].append("LOCATION_USER")
+
+        ubicaciones = _obtener_ubicaciones_usuario(usuario_id)
+        if ubicaciones:
+            resultado["ubicaciones_usuario"] = ubicaciones
+
+    # 2. Si no hay especialidad detectada en los filtros, sugerir especialidades frecuentes o aleatorias
+    especialidad_detectada = filtros.get("especialidad")
+    if not especialidad_detectada:
+        sugerencias_especialidades = _obtener_especialidades_sugeridas(usuario_id)
+        if sugerencias_especialidades:
+            resultado["sugerencias"] = sugerencias_especialidades
 
     return resultado
 

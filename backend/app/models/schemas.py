@@ -390,6 +390,7 @@ class ChatInterpretResponse(BaseModel):
     historial_mensajes: Optional[list[Any]] = None
     ready: bool = False
     model: Optional[ModeloInfoChat] = None
+    ubicaciones_usuario: Optional[list[str]] = None
 
 
 class RecomendarRequest(BaseModel):

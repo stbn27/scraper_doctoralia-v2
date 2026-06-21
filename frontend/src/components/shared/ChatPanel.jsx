@@ -18,6 +18,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
         const [detectedData, setDetectedData] = useState({ especialidad: null, ciudad: null, ready: false });
         const [currentSuggestions, setCurrentSuggestions] = useState(['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista']);
         const [showLocationBtn, setShowLocationBtn] = useState(false);
+        const [userLocations, setUserLocations] = useState([]);
         const messagesEndRef = useRef(null);
         const textareaRef = useRef(null);
         const scrollContainerRef = useRef(null);
@@ -54,6 +55,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                         const newHistory = [...messages, userMsg];
                         setMessages(newHistory);
                         setInput('');
+                        setUserLocations([]);
                         setIsTyping(true);
 
                         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -71,7 +73,13 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                         setCurrentSuggestions(response.suggestions);
                                 }
 
-                                if (response.sql && response.sql.includes('UBICACION_USUARIO')) {
+                                if (response.ubicaciones_usuario && response.ubicaciones_usuario.length > 0) {
+                                        setUserLocations(response.ubicaciones_usuario);
+                                } else {
+                                        setUserLocations([]);
+                                }
+
+                                if (response.sql && (response.sql.includes('UBICACION_USUARIO') || response.sql.includes('LOCATION_USER'))) {
                                         setShowLocationBtn(true);
                                 } else {
                                         setShowLocationBtn(false);
@@ -109,7 +117,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                 e.target.style.height = Math.min(e.target.scrollHeight, 80) + 'px';
         };
 
-        const showChips = messages.length <= 1 || (messages.length <= 3 && !detectedData.especialidad);
+        const showChips = currentSuggestions && currentSuggestions.length > 0 && !detectedData.especialidad;
 
         return (
                 <div className={`flex h-full min-h-0 flex-col ${className}`}>
@@ -195,7 +203,28 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                 </div>
                         )}
 
-                        {showLocationBtn && !isTyping && (
+                        {userLocations && userLocations.length > 0 && !isTyping && (
+                                <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
+                                        {userLocations.slice(0, 3).map((loc, idx) => (
+                                                <button
+                                                        key={`user-loc-${idx}`}
+                                                        onClick={() => {
+                                                                sendMessage(`Mi ubicación es ${loc}`);
+                                                                setUserLocations([]);
+                                                        }}
+                                                        className="bg-royalBlue-600 hover:bg-royalBlue-700 text-white rounded-xl px-3 py-1.5 transition-all duration-200 flex flex-col items-start press-effect border border-royalBlue-400/30 shadow-md"
+                                                >
+                                                        <span className="text-xs font-semibold leading-tight flex items-center gap-1">
+                                                                <RiSearchLine className="text-[10px]" />
+                                                                Usar mi ubicación
+                                                        </span>
+                                                        <span className="text-[10px] opacity-75 leading-tight mt-0.5">{loc}</span>
+                                                </button>
+                                        ))}
+                                </div>
+                        )}
+
+                        {showLocationBtn && (!userLocations || userLocations.length === 0) && !isTyping && (
                                 <div className="px-4 pb-2 shrink-0 flex">
                                         <button
                                                 onClick={() => {
