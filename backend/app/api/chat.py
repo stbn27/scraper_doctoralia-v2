@@ -99,7 +99,8 @@ def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
             elif e:
                 ubicaciones.append(e.strip())
         return list(dict.fromkeys(ubicaciones))
-    except Exception:
+    except Exception as exc:
+        logger.error(f"Error en _obtener_ubicaciones_usuario: {exc}")
         return []
 
 

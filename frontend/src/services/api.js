@@ -494,7 +494,10 @@ export async function chatMessage(history = []) {
     throw new Error('No hay mensaje para enviar al chat');
   }
 
-  const data = await realizarPeticion('/chat/interpretar', {
+  const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
+  const endpoint = token ? '/chat/interpretar/auth' : '/chat/interpretar';
+
+  const data = await realizarPeticion(endpoint, {
     method: 'POST',
     body: JSON.stringify({
       consulta,
@@ -516,5 +519,6 @@ export async function chatMessage(history = []) {
     sql: data?.sql ?? null,
     ready: Boolean(data?.ready),
     suggestions: Array.isArray(data?.sugerencias) ? data.sugerencias : [],
+    ubicaciones_usuario: Array.isArray(data?.ubicaciones_usuario) ? data.ubicaciones_usuario : [],
   };
 }
