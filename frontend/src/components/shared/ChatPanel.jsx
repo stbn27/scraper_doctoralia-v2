@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RiRobot2Line, RiSendPlaneLine, RiSearchLine } from 'react-icons/ri';
+import { RiRobot2Line, RiSendPlaneLine, RiSearchLine, RiMapPinLine } from 'react-icons/ri';
 import { Button } from '@/components/ui/Button';
 import { chatMessage } from '@/services/api';
 
@@ -204,7 +204,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                         )}
 
                         {userLocations && userLocations.length > 0 && !isTyping && (
-                                <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
+                                <div className="px-4 pb-4 shrink-0 flex flex-col gap-3 w-full">
                                         {userLocations.slice(0, 3).map((loc, idx) => (
                                                 <button
                                                         key={`user-loc-${idx}`}
@@ -212,13 +212,13 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                                                 sendMessage(`Mi ubicación es ${loc}`);
                                                                 setUserLocations([]);
                                                         }}
-                                                        className="bg-royalBlue-600 hover:bg-royalBlue-700 text-white rounded-xl px-3 py-1.5 transition-all duration-200 flex flex-col items-start press-effect border border-royalBlue-400/30 shadow-md"
+                                                        className="w-full bg-royalBlue-900/60 hover:bg-royalBlue-800/80 text-neutral-light/90 border border-royalBlue-500/30 rounded-xl px-4 py-3 transition-all duration-200 flex flex-col items-start press-effect backdrop-blur-sm shadow-sm"
                                                 >
-                                                        <span className="text-xs font-semibold leading-tight flex items-center gap-1">
-                                                                <RiSearchLine className="text-[10px]" />
+                                                        <span className="text-sm font-semibold leading-tight flex items-center gap-2 mb-1">
+                                                                <RiMapPinLine className="text-royalBlue-300" />
                                                                 Usar mi ubicación
                                                         </span>
-                                                        <span className="text-[10px] opacity-75 leading-tight mt-0.5">{loc}</span>
+                                                        <span className="text-xs opacity-75 leading-tight">{loc}</span>
                                                 </button>
                                         ))}
                                 </div>

@@ -135,7 +135,16 @@ def _obtener_especialidades_sugeridas(usuario_id: int) -> list[str]:
     Retorna especialidades sugeridas combinando el historial del usuario y comunes.
     """
     frecuentes = _obtener_especialidades_frecuentes(usuario_id)
-    comunes = ['Pediatra', 'Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista', 'Ginecólogo', 'Oftalmólogo', 'Psicólogo']
+    comunes = [
+        "Pediatra",
+        "Dentista",
+        "Cardiólogo",
+        "Dermatólogo",
+        "Ortopedista",
+        "Ginecólogo",
+        "Oftalmólogo",
+        "Psicólogo",
+    ]
 
     sugeridas = []
     vistas = set()
