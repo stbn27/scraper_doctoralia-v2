@@ -63,9 +63,16 @@ def _regex_ci(valor: str) -> dict:
     """
     valor_limpio = valor.lower().replace("-", " ").strip()
     patron = ""
+    vocal_map = {
+        "a": "[aáAÁ]", "á": "[aáAÁ]",
+        "e": "[eéEÉ]", "é": "[eéEÉ]",
+        "i": "[iíIÍ]", "í": "[iíIÍ]",
+        "o": "[oóOÓ]", "ó": "[oóOÓ]",
+        "u": "[uúüUÚÜ]", "ú": "[uúüUÚÜ]", "ü": "[uúüUÚÜ]"
+    }
     for char in valor_limpio:
-        if char in "aeiouáéíóúü":
-            patron += "[aeiouáéíóúü\ufffd]"
+        if char in vocal_map:
+            patron += vocal_map[char]
         elif char == " ":
             patron += ".*"
         else:
