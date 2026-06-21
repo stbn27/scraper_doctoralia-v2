@@ -257,7 +257,7 @@ def _extraer_analisis_resumen(analisis_doc: Optional[dict]) -> Optional[dict]:
     }
 
 
-def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict]) -> dict:
+def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict], ciudad_buscada: Optional[str] = None) -> dict:
     """
     Construye la representación de card de un especialista (doctor_profiles)
     enriquecida con análisis IA.
@@ -280,6 +280,15 @@ def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict]) -> dict:
     # Filtrar direcciones con datos válidos
     direcciones_validas = [d for d in direcciones if d.get("ciudad") or d.get("calle")]
     direccion_principal = direcciones_validas[0] if direcciones_validas else None
+
+    if direccion_principal and ciudad_buscada:
+        ciu_norm = _normalizar(ciudad_buscada)
+        for d in direcciones_validas:
+            c = d.get("ciudad", "")
+            calle = d.get("calle", "")
+            if ciu_norm in _normalizar(c) or ciu_norm in _normalizar(calle):
+                direccion_principal = d
+                break
 
     # Especialidad principal
     especialidades = doctor.get("especialidades") or []
@@ -320,7 +329,7 @@ def _construir_card(doctor_doc: dict, analisis_doc: Optional[dict]) -> dict:
         "cedulas": doctor.get("cedulas") or [],
         "cedula": (doctor.get("cedulas") or [None])[0],
         "total_opiniones": doctor_doc.get("total_opiniones", 0),
-        "rating_global": None,  # no disponible en doctor_profiles
+        "rating_global": doctor_doc.get("calificacion_global") or doctor_doc.get("rating_global"),
         "direccion_principal": direccion_principal,
         "consultorios": direcciones_validas,
         "pacientes": doctor.get("pacientes_que_atiende"),
@@ -438,10 +447,11 @@ async def buscar_especialistas_paginado(
 
     # Construir cards
     results = []
+    ciudad_buscada = params.get("ciudad") or params.get("ciudad_slug")
     for doc in docs:
         did = (doc.get("doctor") or {}).get("id_doctoralia")
         analisis_doc = mapa_analisis.get(did) if did else None
-        card = _construir_card(_serializar_id(dict(doc)), analisis_doc)
+        card = _construir_card(_serializar_id(dict(doc)), analisis_doc, ciudad_buscada=ciudad_buscada)
         results.append(card)
 
     # Reordenar: analizados primero, luego por puntuacion/orden en memoria

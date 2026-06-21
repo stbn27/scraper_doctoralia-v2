@@ -175,7 +175,10 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                                                 onClick={() => {
                                                                         const params = new URLSearchParams();
                                                                         if (detectedData.especialidad) params.set('especialidad', detectedData.especialidad);
-                                                                        if (detectedData.ciudad) params.set('ciudad', detectedData.ciudad);
+                                                                        if (detectedData.ciudad) {
+                                                                                const firstPart = detectedData.ciudad.split(',')[0].trim();
+                                                                                params.set('ciudad', firstPart);
+                                                                        }
                                                                         navigate(`/busqueda?${params.toString()}`);
                                                                 }}
                                                                 className="rounded-xl py-3 text-base"
