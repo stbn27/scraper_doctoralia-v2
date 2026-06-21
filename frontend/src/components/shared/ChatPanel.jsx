@@ -216,7 +216,7 @@ export function ChatPanel({ className = '', compact = false, onDetectedChange })
                                                 >
                                                         <span className="text-sm font-semibold leading-tight flex items-center gap-2 mb-1">
                                                                 <RiMapPinLine className="text-royalBlue-300" />
-                                                                Usar mi ubicación
+                                                                Usar mi ubicación registrada
                                                         </span>
                                                         <span className="text-xs opacity-75 leading-tight">{loc}</span>
                                                 </button>

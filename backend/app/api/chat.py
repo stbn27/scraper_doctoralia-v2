@@ -51,7 +51,7 @@ def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT ciudad FROM usuarios_direcciones
+            SELECT municipio_alcaldia, ciudad, estado FROM usuarios_direcciones
             WHERE usuario_id = %s AND es_principal = TRUE
             LIMIT 1
             """,
@@ -60,7 +60,23 @@ def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return row["ciudad"] if row else None
+        
+        if not row:
+            return None
+            
+        mun = row.get("municipio_alcaldia")
+        ciu = row.get("ciudad")
+        est = row.get("estado")
+        
+        parts = []
+        if mun and mun.strip():
+            parts.append(mun.strip())
+        if ciu and ciu.strip() and ciu.strip().lower() != (mun.strip().lower() if mun else ""):
+            parts.append(ciu.strip())
+        if est and est.strip() and est.strip().lower() != (ciu.strip().lower() if ciu else "") and est.strip().lower() != (mun.strip().lower() if mun else ""):
+            parts.append(est.strip())
+            
+        return ", ".join(parts) if parts else None
     except Exception:
         return None
 
@@ -74,7 +90,7 @@ def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT ciudad, estado FROM usuarios_direcciones
+            SELECT municipio_alcaldia, ciudad, estado FROM usuarios_direcciones
             WHERE usuario_id = %s
             ORDER BY es_principal DESC, id DESC
             LIMIT 3
@@ -86,19 +102,24 @@ def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
         conn.close()
 
         ubicaciones = []
-        for r in rows:
-            c = r.get("ciudad")
-            e = r.get("estado")
-            if c and e:
-                if c.strip().lower() == e.strip().lower():
-                    ubicaciones.append(c.strip())
-                else:
-                    ubicaciones.append(f"{c.strip()}, {e.strip()}")
-            elif c:
-                ubicaciones.append(c.strip())
-            elif e:
-                ubicaciones.append(e.strip())
-        return list(dict.fromkeys(ubicaciones))
+        for row in rows:
+            mun = row.get("municipio_alcaldia")
+            ciu = row.get("ciudad")
+            est = row.get("estado")
+            
+            parts = []
+            if mun and mun.strip():
+                parts.append(mun.strip())
+            if ciu and ciu.strip() and ciu.strip().lower() != (mun.strip().lower() if mun else ""):
+                parts.append(ciu.strip())
+            if est and est.strip() and est.strip().lower() != (ciu.strip().lower() if ciu else "") and est.strip().lower() != (mun.strip().lower() if mun else ""):
+                parts.append(est.strip())
+                
+            if parts:
+                loc = ", ".join(parts)
+                if loc not in ubicaciones:
+                    ubicaciones.append(loc)
+        return ubicaciones
     except Exception as exc:
         logger.error(f"Error en _obtener_ubicaciones_usuario: {exc}")
         return []
