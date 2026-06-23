@@ -142,10 +142,12 @@ export default function Login() {
                navigate(from, { replace: true });
             } else {
                addToast({ type: "error", message: result.message });
+               setPassword("");
             }
          }
       } catch (err) {
          addToast({ type: "error", message: "Ocurrió un error inesperado." });
+         setPassword("");
       } finally {
          setLoading(false);
       }

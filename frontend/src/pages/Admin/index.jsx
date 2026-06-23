@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
@@ -69,7 +70,7 @@ const ESTATUS_COLORS = {
 function StatCard({ icon: Icon, label, value, sub, color = '#4f7dff' }) {
   return (
     <div className="glass-card flex items-start gap-4 px-6 py-5 border border-[var(--glass-border)]">
-      <div 
+      <div
         className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center"
         style={{ background: `${color}22` }}
       >
@@ -86,7 +87,7 @@ function StatCard({ icon: Icon, label, value, sub, color = '#4f7dff' }) {
 
 function Badge({ texto, color = 'var(--text-muted)' }) {
   return (
-    <span 
+    <span
       className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--glass-bg)] border border-[var(--glass-border)] shrink-0"
       style={{ color }}
     >
@@ -150,12 +151,12 @@ function UrlScrapingSection({ onScraped }) {
   return (
     <div className="glass-card border border-[var(--glass-border)] px-5 py-4 mb-5 flex flex-col gap-3">
       <div className="text-[13px] font-semibold text-[var(--text-primary)]">Validación y Scraping Manual de Doctoralia</div>
-      
+
       <div className="flex gap-2.5 items-center">
-        <input 
-          type="text" 
+        <input
+          type="text"
           className="glass-input flex-1 px-3 py-2 text-[13px]"
-          value={url} 
+          value={url}
           onChange={e => { setUrl(e.target.value); setValidationResult(null); }}
           placeholder="https://www.doctoralia.com.mx/..."
           disabled={loading}
@@ -174,10 +175,10 @@ function UrlScrapingSection({ onScraped }) {
           ) : validationResult.valida ? (
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-1.5 text-emerald-500"><RiCheckLine /> Perfil nuevo y válido para scraping.</div>
-              <Checkbox 
-                label="Generar análisis IA tras scraping" 
-                checked={analyze} 
-                onChange={e => setAnalyze(e.target.checked)} 
+              <Checkbox
+                label="Generar análisis IA tras scraping"
+                checked={analyze}
+                onChange={e => setAnalyze(e.target.checked)}
                 disabled={loading}
               />
               <Button onClick={handleScrape} disabled={loading} className="text-xs" variant="primary">
@@ -309,11 +310,11 @@ export function Pagination({ page, pages, limit, onPageChange, onLimitChange }) 
 
   return (
     <div style={{ padding: '12px 16px', borderTop: '1px solid var(--glass-border)', display: 'flex', gap: 16, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-      
+
       {/* Límite */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Mostrar:</span>
-        <select 
+        <select
           value={limit}
           onChange={e => onLimitChange(Number(e.target.value))}
           className="glass-input"
@@ -414,7 +415,7 @@ export default function AdminPage() {
   const [filtros, setFiltros] = useState({
     q: '', conAnalisis: null, modeloUsado: '', estatusAnalisis: '', page: 1, limit: 20, sort_by: '', sort_order: ''
   });
-  
+
   const [deleteModal, setDeleteModal] = useState({ open: false, row: null });
 
   useEffect(() => {
@@ -471,7 +472,7 @@ export default function AdminPage() {
       'opiniones': 'total_opiniones',
       'fecha_scraping': 'metadata.fecha_consulta'
     };
-    
+
     const sort_by = map[columnId];
     if (!sort_by) return;
 
@@ -509,7 +510,7 @@ export default function AdminPage() {
               </div>
             )}
             <div>
-              <div 
+              <div
                 className="hover:underline hover:text-primary-400 cursor-pointer"
                 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}
                 onClick={(e) => { e.stopPropagation(); navigate(`/admin/especialistas/${esp.doctoralia_id}`); }}
@@ -587,10 +588,10 @@ export default function AdminPage() {
         return (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {fuenteUrl ? (
-              <a 
-                href={fuenteUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href={fuenteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 title="Perfil Oficial Doctoralia"
                 style={{ color: 'var(--color-primary-500)', background: 'rgba(79,125,255,0.1)', padding: 6, borderRadius: 6 }}
                 onClick={(e) => e.stopPropagation()}
@@ -633,187 +634,186 @@ export default function AdminPage() {
 
       <div className="relative z-10 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto" style={{ color: 'var(--text-primary)' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: 'rgba(79,125,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <RiShieldLine size={22} style={{ color: 'var(--color-primary-500)' }} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Panel de Administración</h1>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Vista completa del sistema MedRec</p>
-        </div>
-        <button
-          onClick={cargarTabla}
-          className="glass-input"
-          style={{ marginLeft: 'auto', borderRadius: 8, padding: '7px 12px', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-        >
-          <RiRefreshLine size={14} /> Actualizar
-        </button>
-      </div>
-
-      {/* Estadísticas globales */}
-      {!cargando && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <StatCard icon={RiUserLine} label="Especialistas en BD" value={stats.especialistas?.total} color="#4f7dff" />
-          <StatCard icon={RiBrainLine} label="Con análisis IA" value={stats.especialistas?.con_analisis}
-            sub={`Sin análisis: ${fmt(stats.especialistas?.sin_analisis)}`} color="#10b981" />
-          <StatCard icon={RiFileList2Line} label="Opiniones en BD" value={stats.opiniones?.total} color="#f59e0b" />
-          <StatCard icon={RiDatabase2Line} label="Análisis generados" value={stats.analisis?.total} color="#a78bfa" />
-          <StatCard icon={RiUserLine} label="Usuarios registrados" value={stats.usuarios?.total} color="#fb923c" />
-          <StatCard
-            icon={RiTimeLine}
-            label="Último scraping"
-            value="—"
-            sub={fmtFecha(stats.scraping?.ultimo_registro)}
-            color="var(--text-muted)"
-          />
-        </div>
-      )}
-
-      {/* TABS */}
-      <div className="flex border-b border-[var(--glass-border)] mb-6">
-        <button
-          className={`px-6 py-3 font-semibold text-[14px] transition-colors ${
-            activeTab === 'especialistas'
-              ? 'text-[var(--color-primary-500)] border-b-2 border-[var(--color-primary-500)]'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-          onClick={() => setActiveTab('especialistas')}
-        >
-          Especialistas
-        </button>
-        <button
-          className={`px-6 py-3 font-semibold text-[14px] transition-colors ${
-            activeTab === 'usuarios'
-              ? 'text-[var(--color-primary-500)] border-b-2 border-[var(--color-primary-500)]'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-          onClick={() => setActiveTab('usuarios')}
-        >
-          Usuarios
-        </button>
-      </div>
-
-      {activeTab === 'especialistas' && (
-        <>
-          <UrlScrapingSection onScraped={cargarTabla} />
-
-          {/* Filtros */}
-          <PanelFiltros filtros={filtros} onChange={setFiltros} />
-
-          {/* Tabla (TanStack) */}
-          <div className="glass-card" style={{
-        marginTop: 16, border: '1px solid var(--glass-border)', overflow: 'hidden',
-      }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
-            Especialistas — <span style={{ color: 'var(--text-primary)' }}>{fmt(data?.total)}</span> resultados
-          </span>
-          {cargandoTabla && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cargando...</span>}
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: 'rgba(79,125,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <RiShieldLine size={22} style={{ color: 'var(--color-primary-500)' }} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Panel de Administración</h1>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Vista completa del sistema MedRec</p>
+          </div>
+          <button
+            onClick={cargarTabla}
+            className="glass-input"
+            style={{ marginLeft: 'auto', borderRadius: 8, padding: '7px 12px', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          >
+            <RiRefreshLine size={14} /> Actualizar
+          </button>
         </div>
 
-        {cargandoTabla && espData.length === 0 ? <div style={{ padding: 20 }}><Skeleton /></div> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr key={headerGroup.id} style={{ background: 'var(--glass-bg)' }}>
-                    {headerGroup.headers.map(header => {
-                      const isSortable = ['especialista', 'especialidades', 'ciudad', 'opiniones', 'fecha_scraping'].includes(header.id);
-                      
-                      const mapSort = {
-                        'especialista': 'doctor.nombre',
-                        'especialidades': 'doctor.especialidades',
-                        'ciudad': 'doctor.direcciones.ciudad',
-                        'opiniones': 'total_opiniones',
-                        'fecha_scraping': 'metadata.fecha_consulta'
-                      };
-                      
-                      const isSorted = isSortable && filtros.sort_by === mapSort[header.id];
-                      
-                      return (
-                        <th 
-                          key={header.id} 
-                          style={{ 
-                            padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 600, 
-                            color: isSorted ? 'var(--color-primary-500)' : 'var(--text-muted)', 
-                            textTransform: 'uppercase', whiteSpace: 'nowrap',
-                            cursor: isSortable ? 'pointer' : 'default',
-                            userSelect: 'none'
-                          }}
-                          onClick={() => isSortable && handleSort(header.id)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                            {isSortable && (
-                              <span style={{ display: 'inline-flex', flexDirection: 'column', fontSize: 10, opacity: isSorted ? 1 : 0.4 }}>
-                                {(!isSorted || filtros.sort_order === 'asc') && <RiArrowUpLine style={{ marginBottom: -3 }} />}
-                                {(!isSorted || filtros.sort_order === 'desc') && <RiArrowDownLine />}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map(row => (
-                  <tr key={row.id} className="hover:bg-primary-500/10" style={{ borderBottom: '1px solid var(--glass-border)', transition: 'background 0.2s' }}>
-                    {row.getVisibleCells().map(cell => (
-                      <td key={cell.id} style={{ padding: '12px 16px' }}
-                          onClick={(e) => {
-                            if (cell.column.id === 'seq' || cell.column.id === 'especialista') {
-                                navigate(`/admin/especialistas/${row.original.doctoralia_id}`);
-                            }
-                          }}
-                          className={(cell.column.id === 'seq' || cell.column.id === 'especialista') ? 'cursor-pointer' : ''}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {espData.length === 0 && (
-                  <tr>
-                    <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-                      Sin resultados para la búsqueda actual
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Estadísticas globales */}
+        {!cargando && stats && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <StatCard icon={RiUserLine} label="Especialistas en BD" value={stats.especialistas?.total} color="#4f7dff" />
+            <StatCard icon={RiBrainLine} label="Con análisis IA" value={stats.especialistas?.con_analisis}
+              sub={`Sin análisis: ${fmt(stats.especialistas?.sin_analisis)}`} color="#10b981" />
+            <StatCard icon={RiFileList2Line} label="Opiniones en BD" value={stats.opiniones?.total} color="#f59e0b" />
+            <StatCard icon={RiDatabase2Line} label="Análisis generados" value={stats.analisis?.total} color="#a78bfa" />
+            <StatCard icon={RiUserLine} label="Usuarios registrados" value={stats.usuarios?.total} color="#fb923c" />
+            <StatCard
+              icon={RiTimeLine}
+              label="Último scraping"
+              value="—"
+              sub={fmtFecha(stats.scraping?.ultimo_registro)}
+              color="var(--text-muted)"
+            />
           </div>
         )}
 
-        <Pagination 
-          page={filtros.page} 
-          pages={data?.pages || 0} 
-          limit={filtros.limit}
-          onPageChange={p => setFiltros(f => ({ ...f, page: p }))}
-          onLimitChange={l => setFiltros(f => ({ ...f, limit: l, page: 1 }))}
+        {/* TABS */}
+        <div className="flex border-b border-[var(--glass-border)] mb-6">
+          <button
+            className={`px-6 py-3 font-semibold text-[14px] transition-colors ${activeTab === 'especialistas'
+                ? 'text-[var(--color-primary-500)] border-b-2 border-[var(--color-primary-500)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            onClick={() => setActiveTab('especialistas')}
+          >
+            Especialistas
+          </button>
+          <button
+            className={`px-6 py-3 font-semibold text-[14px] transition-colors ${activeTab === 'usuarios'
+                ? 'text-[var(--color-primary-500)] border-b-2 border-[var(--color-primary-500)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            onClick={() => setActiveTab('usuarios')}
+          >
+            Usuarios
+          </button>
+        </div>
+
+        {activeTab === 'especialistas' && (
+          <>
+            <UrlScrapingSection onScraped={cargarTabla} />
+
+            {/* Filtros */}
+            <PanelFiltros filtros={filtros} onChange={setFiltros} />
+
+            {/* Tabla (TanStack) */}
+            <div className="glass-card" style={{
+              marginTop: 16, border: '1px solid var(--glass-border)', overflow: 'hidden',
+            }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Especialistas — <span style={{ color: 'var(--text-primary)' }}>{fmt(data?.total)}</span> resultados
+                </span>
+                {cargandoTabla && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cargando...</span>}
+              </div>
+
+              {cargandoTabla && espData.length === 0 ? <div style={{ padding: 20 }}><Skeleton /></div> : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      {table.getHeaderGroups().map(headerGroup => (
+                        <tr key={headerGroup.id} style={{ background: 'var(--glass-bg)' }}>
+                          {headerGroup.headers.map(header => {
+                            const isSortable = ['especialista', 'especialidades', 'ciudad', 'opiniones', 'fecha_scraping'].includes(header.id);
+
+                            const mapSort = {
+                              'especialista': 'doctor.nombre',
+                              'especialidades': 'doctor.especialidades',
+                              'ciudad': 'doctor.direcciones.ciudad',
+                              'opiniones': 'total_opiniones',
+                              'fecha_scraping': 'metadata.fecha_consulta'
+                            };
+
+                            const isSorted = isSortable && filtros.sort_by === mapSort[header.id];
+
+                            return (
+                              <th
+                                key={header.id}
+                                style={{
+                                  padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 600,
+                                  color: isSorted ? 'var(--color-primary-500)' : 'var(--text-muted)',
+                                  textTransform: 'uppercase', whiteSpace: 'nowrap',
+                                  cursor: isSortable ? 'pointer' : 'default',
+                                  userSelect: 'none'
+                                }}
+                                onClick={() => isSortable && handleSort(header.id)}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                  {isSortable && (
+                                    <span style={{ display: 'inline-flex', flexDirection: 'column', fontSize: 10, opacity: isSorted ? 1 : 0.4 }}>
+                                      {(!isSorted || filtros.sort_order === 'asc') && <RiArrowUpLine style={{ marginBottom: -3 }} />}
+                                      {(!isSorted || filtros.sort_order === 'desc') && <RiArrowDownLine />}
+                                    </span>
+                                  )}
+                                </div>
+                              </th>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {table.getRowModel().rows.map(row => (
+                        <tr key={row.id} className="hover:bg-primary-500/10" style={{ borderBottom: '1px solid var(--glass-border)', transition: 'background 0.2s' }}>
+                          {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} style={{ padding: '12px 16px' }}
+                              onClick={(e) => {
+                                if (cell.column.id === 'seq' || cell.column.id === 'especialista') {
+                                  navigate(`/admin/especialistas/${row.original.doctoralia_id}`);
+                                }
+                              }}
+                              className={(cell.column.id === 'seq' || cell.column.id === 'especialista') ? 'cursor-pointer' : ''}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      {espData.length === 0 && (
+                        <tr>
+                          <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                            Sin resultados para la búsqueda actual
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <Pagination
+                page={filtros.page}
+                pages={data?.pages || 0}
+                limit={filtros.limit}
+                onPageChange={p => setFiltros(f => ({ ...f, page: p }))}
+                onLimitChange={l => setFiltros(f => ({ ...f, limit: l, page: 1 }))}
+              />
+            </div>
+          </>
+        )}
+
+        {activeTab === 'usuarios' && <UsersTab />}
+
+        <ConfirmModal
+          isOpen={deleteModal.open}
+          onClose={() => setDeleteModal({ open: false, row: null })}
+          onConfirm={handleDelete}
+          title="Eliminar Especialista"
+          message={`¿Estás seguro de que deseas eliminar a ${deleteModal.row?.nombre}? Esta operación es destructiva e irreversible. También se eliminarán las opiniones y el análisis IA asociado.`}
+          confirmText="Eliminar permanentemente"
+          cancelText="Cancelar"
         />
-      </div>
-        </>
-      )}
-
-      {activeTab === 'usuarios' && <UsersTab />}
-
-      <ConfirmModal 
-        isOpen={deleteModal.open}
-        onClose={() => setDeleteModal({ open: false, row: null })}
-        onConfirm={handleDelete}
-        title="Eliminar Especialista"
-        message={`¿Estás seguro de que deseas eliminar a ${deleteModal.row?.nombre}? Esta operación es destructiva e irreversible. También se eliminarán las opiniones y el análisis IA asociado.`}
-        confirmText="Eliminar permanentemente"
-        cancelText="Cancelar"
-      />
 
       </div>
+      <Footer />
     </PageWrapper>
   );
 }

@@ -54,21 +54,15 @@ export function AuthProvider({ children }) {
     recargarUsuario();
   }, [recargarUsuario]);
 
-  /**
-   * Inicia sesión con la API del backend.
-   */
   const iniciarSesion = useCallback(async (email, password) => {
-    setLoading(true);
     try {
       const result = await apiIniciarSesion(email, password);
       setUser(result.user);
       setToken(result.token);
       return { success: true, message: '¡Bienvenido de nuevo!' };
     } catch (error) {
-      console.error("Error de inicio de sesión:", error);
-      return { success: false, message: error.message || 'Credenciales incorrectas.' };
-    } finally {
-      setLoading(false);
+      //console.error("Error de inicio de sesión:", error);
+      return { success: false, message: error.message || 'Usuario o contraseña incorrectos.' };
     }
   }, []);
 
@@ -79,15 +73,12 @@ export function AuthProvider({ children }) {
    * @param {Object} extraFields — nombre, apellido, telefono, avatar_url opcionales
    */
   const registrarUsuario = useCallback(async (email, password, extraFields = {}) => {
-    setLoading(true);
     try {
       await apiRegistrarUsuario(email, password, extraFields);
       return { success: true, message: 'Usuario registrado con éxito. Ahora puedes iniciar sesión.' };
     } catch (error) {
       console.error("Error de registro:", error);
       return { success: false, message: error.message || 'Error al registrar el usuario.' };
-    } finally {
-      setLoading(false);
     }
   }, []);
 

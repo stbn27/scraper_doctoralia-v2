@@ -166,7 +166,7 @@ def login(data: UsuarioLogin):
     conn.close()
 
     if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
 
     rol = user.get("rol_nombre") or "USER"
     token = create_access_token({"sub": str(user["id"]), "rol": rol})

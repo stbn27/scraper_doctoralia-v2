@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
 
 /**
@@ -8,15 +8,19 @@ import { RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
  * <Input id="email" label="Correo electrónico" type="email" error={errors.email} />
  * <Input id="password" label="Contraseña" type="password" />
  */
-export function Input({
+export const Input = forwardRef(({
   label,
   error,
   type = 'text',
   id,
   className = '',
   ...rest
-}) {
+}, ref) => {
   const [showPassword, setShowPassword] = useState(false);
+  const inputRef = useRef(null);
+
+  useImperativeHandle(ref, () => inputRef.current);
+
   const isPassword = type === 'password';
   const inputType = isPassword && showPassword ? 'text' : type;
 
@@ -29,6 +33,7 @@ export function Input({
       )}
       <div className="relative">
         <input
+          ref={inputRef}
           id={id}
           type={inputType}
           className={`glass-input w-full px-4 py-2.5 text-sm ${error ? 'border-red-500 focus:border-red-500' : ''}`}
@@ -37,7 +42,13 @@ export function Input({
         {isPassword && (
           <button
             type="button"
-            onClick={() => setShowPassword(!showPassword)}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setShowPassword(!showPassword);
+              setTimeout(() => {
+                inputRef.current?.focus();
+              }, 0);
+            }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-lg hover:text-royalBlue-400 transition-colors"
             style={{ color: 'var(--text-muted)' }}
             tabIndex={-1}
@@ -52,4 +63,7 @@ export function Input({
       )}
     </div>
   );
-}
+});
+
+Input.displayName = 'Input';
+

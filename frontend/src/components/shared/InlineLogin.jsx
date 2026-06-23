@@ -49,9 +49,11 @@ export function InlineLogin({ onSuccess }) {
         }
       } else {
         addToast({ type: 'error', message: result.message });
+        setPassword('');
       }
     } catch (err) {
       addToast({ type: 'error', message: 'Error al iniciar sesión.' });
+      setPassword('');
     } finally {
       setLoading(false);
     }
