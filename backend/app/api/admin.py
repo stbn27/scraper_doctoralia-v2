@@ -22,6 +22,9 @@ from app.db.mongo import get_doctoralia_async_db
 from app.db.mysql import get_mysql_conn
 from app.security import get_current_user
 
+# pyrefly: ignore [missing-import]
+from pydantic import BaseModel
+
 router = APIRouter(prefix="/admin", tags=["Administración"])
 
 
@@ -159,6 +162,76 @@ async def obtener_estadisticas_globales(
 
 
 # =============================================================================
+# GET /admin/usuarios
+# =============================================================================
+
+
+@router.get("/usuarios")
+def listar_usuarios_admin(
+    _admin: dict = Depends(_requerir_admin),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    q: Optional[str] = Query(None),
+):
+    """
+    Lista usuarios registrados para el panel de administración.
+    """
+    conn = get_mysql_conn()
+    cursor = conn.cursor(dictionary=True)
+
+    where_clause = ""
+    params = []
+    if q:
+        where_clause = "WHERE u.nombre LIKE %s OR u.email LIKE %s OR u.apellido LIKE %s"
+        like_q = f"%{q}%"
+        params.extend([like_q, like_q, like_q])
+
+    # Total
+    cursor.execute(f"SELECT COUNT(*) AS total FROM usuarios u {where_clause}", params)
+    total_row = cursor.fetchone()
+    total = total_row["total"] if total_row else 0
+
+    # Data
+    offset = (page - 1) * limit
+    params.extend([limit, offset])
+
+    try:
+        cursor.execute(f"""
+            SELECT u.id, u.email, u.nombre, u.apellido, u.telefono, u.avatar_url, u.created_at, r.nombre AS rol
+            FROM usuarios u
+            LEFT JOIN roles r ON u.rol_id = r.id
+            {where_clause}
+            ORDER BY u.created_at DESC
+            LIMIT %s OFFSET %s
+        """, params)
+        usuarios = cursor.fetchall()
+    except Exception:
+        # Fallback si no existe tabla roles
+        cursor.execute(f"""
+            SELECT u.id, u.email, u.nombre, u.apellido, u.telefono, u.avatar_url, u.created_at, 'USER' AS rol
+            FROM usuarios u
+            {where_clause}
+            ORDER BY u.created_at DESC
+            LIMIT %s OFFSET %s
+        """, params)
+        usuarios = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    for u in usuarios:
+        if u.get("created_at"):
+            u["created_at"] = u["created_at"].isoformat()
+
+    return {
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit if total > 0 else 1,
+        "usuarios": usuarios
+    }
+
+
+# =============================================================================
 # GET /admin/especialistas
 # =============================================================================
 
@@ -179,6 +252,8 @@ async def listar_especialistas_admin(
     ),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    sort_by: Optional[str] = Query(None, description="Campo para ordenar"),
+    sort_order: Optional[str] = Query(None, description="Orden (asc o desc)"),
     _admin: dict = Depends(_requerir_admin),
 ):
     """
@@ -282,10 +357,15 @@ async def listar_especialistas_admin(
     pages = math.ceil(total / limit) if limit and total else 0
     skip = (page - 1) * limit
 
+    sort_dict = [("queue_meta.persistedAt", -1)]
+    if sort_by and sort_order:
+        direccion = 1 if sort_order.lower() == "asc" else -1
+        sort_dict = [(sort_by, direccion)]
+
     docs = [
         doc
         async for doc in col_doc.find(filtro_doc)
-        .sort("queue_meta.persistedAt", -1)
+        .sort(sort_dict)
         .skip(skip)
         .limit(limit)
     ]
@@ -345,10 +425,13 @@ async def listar_especialistas_admin(
                 "opiniones_analizadas": meta_ana.get("opiniones_enviadas"),
             }
 
-        # Dirección principal
+        # Ciudades únicas
         direcciones = doctor.get("direcciones") or []
-        dir_validas = [d for d in direcciones if d.get("ciudad")]
-        dir_principal = dir_validas[0] if dir_validas else None
+        ciudades_lista = []
+        for d in direcciones:
+            c = d.get("ciudad")
+            if c and c not in ciudades_lista:
+                ciudades_lista.append(c)
 
         especialistas.append(
             {
@@ -356,7 +439,7 @@ async def listar_especialistas_admin(
                 "doctoralia_id": did,
                 "nombre": doctor.get("nombre", ""),
                 "especialidades": doctor.get("especialidades") or [],
-                "ciudad": dir_principal.get("ciudad") if dir_principal else None,
+                "ciudades": ciudades_lista,
                 "estado": (doctor.get("estado") or [None])[0],
                 "foto_perfil": doctor.get("foto_perfil"),
                 "cedulas": doctor.get("cedulas") or [],
@@ -472,8 +555,8 @@ async def detalle_especialista_admin(
         meta_op = ana.get("metadata_opiniones") or {}
         analisis_completo = {
             "estatus": ana.get("estatus_analisis"),
-            "modelo_usado": ana.get("modelo_usado"),
-            "version_prompt": ana.get("version_prompt"),
+            "modelo_usado": ana.get("modelo_usado") or meta_ana.get("modelo") or meta_ana.get("modelo_usado"),
+            "version_prompt": ana.get("version_prompt") or meta_ana.get("version_prompt") or ana.get("prompt_version"),
             "fecha_analisis": str(meta_ana.get("fecha", "")),
             "puntuacion": a.get("puntuacion"),
             "resumen": a.get("resumen"),
@@ -491,6 +574,7 @@ async def detalle_especialista_admin(
         }
 
     return {
+        "_id": str(doc.get("_id", "")),
         "doctor": doc.get("doctor"),
         "doctoralia_id": doctoralia_id,
         "total_opiniones_perfil": doc.get("total_opiniones", 0),
@@ -575,4 +659,107 @@ async def resumen_scraping(
         "ultimos_scrapeados": ultimos,
         "total_en_cola": total_en_cola,
         "top_fuentes_descubrimiento": fuentes,
+    }
+
+
+# =============================================================================
+# DELETE /admin/especialistas/{doctoralia_id}
+# =============================================================================
+
+
+@router.delete("/especialistas/{doctoralia_id}")
+async def eliminar_especialista_admin(
+    doctoralia_id: int,
+    _admin: dict = Depends(_requerir_admin),
+):
+    """
+    Elimina en cascada un especialista y toda su información relacionada.
+    
+    Borra de las siguientes colecciones:
+    1. doctor_opinions
+    2. analisis_especialistas
+    3. doctor_profiles
+    
+    Parámetros
+    ----------
+    doctoralia_id : int
+        ID numérico del especialista en Doctoralia.
+        
+    Retorna
+    -------
+    dict
+        Resultado de la operación indicando registros eliminados.
+    """
+    db = get_doctoralia_async_db()
+    
+    # 1. Comprobar que el especialista existe
+    doc = await db["doctor_profiles"].find_one({"doctor.id_doctoralia": doctoralia_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Especialista no encontrado")
+        
+    # En un cluster MongoDB replica set, podríamos usar db.client.start_session() y start_transaction().
+    # Como fallback seguro, hacemos las eliminaciones secuencialmente e informamos.
+    try:
+        # 1. Opiniones
+        opiniones_res = await db["doctor_opinions"].delete_many({"doctor_id": doctoralia_id})
+        
+        # 2. Análisis
+        analisis_res = await db["analisis_especialistas"].delete_many({"id_doctoralia": doctoralia_id})
+        
+        # 3. Perfil
+        perfil_res = await db["doctor_profiles"].delete_one({"doctor.id_doctoralia": doctoralia_id})
+        
+        return {
+            "eliminado": True,
+            "doctoralia_id": doctoralia_id,
+            "detalle": {
+                "opiniones_eliminadas": opiniones_res.deleted_count,
+                "analisis_eliminados": analisis_res.deleted_count,
+                "perfil_eliminado": perfil_res.deleted_count > 0
+            }
+        }
+    except Exception as e:
+        # En caso de error, el error se levanta con detalle parcial
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error parcial en la eliminación en cascada: {str(e)}"
+        )
+
+
+class ValidarUrlRequest(BaseModel):
+    url: str
+
+@router.post("/especialistas/validar-url")
+async def validar_url_admin(
+    payload: ValidarUrlRequest,
+    _admin: dict = Depends(_requerir_admin),
+):
+    """
+    Valida una URL de Doctoralia y verifica si ya existe en la base de datos.
+    """
+    url = payload.url.strip()
+    if not url.startswith("http") or "doctoralia.com.mx" not in url:
+        return {"valida": False, "existe": False, "error": "URL no pertenece a doctoralia.com.mx o formato incorrecto"}
+        
+    db = get_doctoralia_async_db()
+    
+    # Buscar por url exacta o regex
+    doc = await db["doctor_profiles"].find_one({
+        "$or": [
+            {"doctor.url_perfil": url},
+            {"metadata.fuente": url}
+        ]
+    })
+    
+    if doc:
+        return {
+            "valida": True,
+            "existe": True,
+            "doctoralia_id": doc.get("doctor", {}).get("id_doctoralia"),
+            "nombre": doc.get("doctor", {}).get("nombre", "")
+        }
+        
+    return {
+        "valida": True,
+        "existe": False
     }

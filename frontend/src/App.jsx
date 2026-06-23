@@ -13,6 +13,7 @@ const Perfil = lazy(() => import('@/pages/Perfil/index'));
 const Favoritos = lazy(() => import('@/pages/Favoritos/index'));
 const Historial = lazy(() => import('@/pages/Historial/index'));
 const Admin = lazy(() => import('@/pages/Admin/index'));
+const AdminDetail = lazy(() => import('@/pages/Admin/Detail'));
 
 /**
  * ProtectedRoute — Redirige a /login si no hay sesión activa.
@@ -119,6 +120,10 @@ export default function App() {
           <Route
             path="/admin"
             element={<AdminRoute><Admin /></AdminRoute>}
+          />
+          <Route
+            path="/admin/especialistas/:id"
+            element={<AdminRoute><AdminDetail /></AdminRoute>}
           />
           {/* Redirección del dashboard legacy hacia el perfil */}
           <Route path="/dashboard" element={<Navigate to="/perfil" replace />} />

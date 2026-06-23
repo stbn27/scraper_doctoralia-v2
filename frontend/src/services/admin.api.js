@@ -53,9 +53,30 @@ export async function getEspecialistasAdmin(filtros = {}) {
   if (filtros.estatusAnalisis) params.set('estatus_analisis', filtros.estatusAnalisis);
   if (filtros.page)           params.set('page', String(filtros.page));
   if (filtros.limit)          params.set('limit', String(filtros.limit));
+  
+  if (filtros.sort_by && filtros.sort_order) {
+    params.set('sort_by', filtros.sort_by);
+    params.set('sort_order', filtros.sort_order);
+  }
 
   const query = params.toString();
   return realizarPeticion(`/admin/especialistas${query ? `?${query}` : ''}`);
+}
+
+/**
+ * Lista usuarios para el panel admin.
+ *
+ * @param {Object} [filtros={}] - Filtros y paginación
+ * @returns {Promise<{ total: number, page: number, pages: number, usuarios: Array }>}
+ */
+export async function getUsuariosAdmin(filtros = {}) {
+  const params = new URLSearchParams();
+  if (filtros.q)     params.set('q', filtros.q);
+  if (filtros.page)  params.set('page', String(filtros.page));
+  if (filtros.limit) params.set('limit', String(filtros.limit));
+  
+  const query = params.toString();
+  return realizarPeticion(`/admin/usuarios${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -75,4 +96,48 @@ export async function getDetalleEspecialistaAdmin(doctoraliaId) {
  */
 export async function getResumenScraping() {
   return realizarPeticion('/admin/scraping/resumen');
+}
+
+/**
+ * Valida una URL de Doctoralia.
+ *
+ * @param {string} url - URL del perfil
+ * @returns {Promise<Object>} Resultado de la validación
+ */
+export async function validarUrlAdmin(url) {
+  return realizarPeticion('/admin/especialistas/validar-url', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
+/**
+ * Ejecuta el scraping y análisis opcional de un perfil manualmente.
+ *
+ * @param {Object} payload - { url, analyze, model }
+ * @returns {Promise<Object>} Resultado del scraping
+ */
+export async function ejecutarScrapingManual(payload) {
+  return realizarPeticion('/especialistas/avanzada/scrape-analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      url: payload.url,
+      analyze: payload.analyze,
+      model: payload.model || 'deepseek',
+      max_opinions: 30,
+      scrape_only: !payload.analyze
+    }),
+  });
+}
+
+/**
+ * Elimina un especialista en cascada.
+ *
+ * @param {number} doctoraliaId
+ * @returns {Promise<Object>}
+ */
+export async function deleteEspecialistaAdmin(doctoraliaId) {
+  return realizarPeticion(`/admin/especialistas/${doctoraliaId}`, {
+    method: 'DELETE',
+  });
 }
