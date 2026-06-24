@@ -123,6 +123,10 @@ export default function AdminDetail() {
   const diseasesContainerRef = useRef(null);
   const [showDiseasesButton, setShowDiseasesButton] = useState(false);
 
+  const [expandedServices, setExpandedServices] = useState(false);
+  const servicesContainerRef = useRef(null);
+  const [servicesHeightLimit, setServicesHeightLimit] = useState(450);
+
   const observerRef = useRef();
 
   useEffect(() => {
@@ -139,6 +143,19 @@ export default function AdminDetail() {
       clearTimeout(timer);
       window.removeEventListener("resize", checkOverflow);
     };
+  }, [data]);
+
+  useEffect(() => {
+    if (servicesContainerRef.current && data?.doctor?.servicios_y_precios?.length > 10) {
+      const children = servicesContainerRef.current.children;
+      if (children && children.length >= 10) {
+        const tenthChild = children[9];
+        const rect = tenthChild.getBoundingClientRect();
+        const containerRect = servicesContainerRef.current.getBoundingClientRect();
+        const heightOf10 = rect.bottom - containerRect.top;
+        setServicesHeightLimit(heightOf10);
+      }
+    }
   }, [data]);
 
   const cargarData = useCallback(async () => {
@@ -405,6 +422,7 @@ export default function AdminDetail() {
 
           <div style={{ flex: 1, minWidth: 250 }}>
             <h1
+              className="font-secondary"
               style={{
                 fontSize: 24,
                 fontWeight: 700,
@@ -677,7 +695,8 @@ export default function AdminDetail() {
                       }}
                     >
                       <div>
-                        <h4
+                        <h4                        
+                          className="font-secondary"
                           style={{
                             fontSize: 13,
                             color: "var(--text-muted)",
@@ -686,7 +705,7 @@ export default function AdminDetail() {
                         >
                           Resumen
                         </h4>
-                        <p
+                        <p                          
                           style={{
                             fontSize: 14,
                             color: "var(--text-primary)",
@@ -698,7 +717,7 @@ export default function AdminDetail() {
                         </p>
                       </div>
                       <div>
-                        <h4
+                        <h4                          
                           style={{
                             fontSize: 13,
                             color: "var(--text-muted)",
@@ -707,7 +726,7 @@ export default function AdminDetail() {
                         >
                           Justificación
                         </h4>
-                        <p
+                        <p                          
                           style={{
                             fontSize: 13,
                             color: "var(--text-primary)",
@@ -736,6 +755,7 @@ export default function AdminDetail() {
                       }}
                     >
                       <h4
+                        className="font-secondary"
                         style={{
                           fontSize: 13,
                           color: "#10b981",
@@ -781,6 +801,7 @@ export default function AdminDetail() {
                       }}
                     >
                       <h4
+                        className="font-secondary"
                         style={{
                           fontSize: 13,
                           color: "#ef4444",
@@ -831,6 +852,7 @@ export default function AdminDetail() {
                         }}
                       >
                         <h4
+                          className="font-secondary"
                           style={{
                             fontSize: 13,
                             color: "#f59e0b",
@@ -1062,7 +1084,7 @@ export default function AdminDetail() {
                 Enfermedades Tratadas
               </h4>
               {doc.principales_enfermedades_tratadas &&
-              doc.principales_enfermedades_tratadas.length > 0 ? (
+                doc.principales_enfermedades_tratadas.length > 0 ? (
                 <div className="flex flex-col gap-2">
                   <div
                     ref={diseasesContainerRef}
@@ -1218,42 +1240,71 @@ export default function AdminDetail() {
           }
         >
           {doc.servicios_y_precios && doc.servicios_y_precios.length > 0 ? (
-            <div
-              className="glass-card"
-              style={{
-                overflow: "hidden",
-                border: "1px solid var(--glass-border)",
-              }}
-            >
-              {doc.servicios_y_precios.map((s, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "12px 16px",
-                    borderBottom:
-                      i < doc.servicios_y_precios.length - 1
-                        ? "1px solid var(--glass-border)"
-                        : "none",
-                  }}
+            <div className="flex flex-col gap-2">
+              <div
+                ref={servicesContainerRef}
+                className="glass-card transition-[max-height] duration-500 ease-in-out"
+                style={{
+                  overflow: "hidden",
+                  border: "1px solid var(--glass-border)",
+                  maxHeight: doc.servicios_y_precios.length > 10
+                    ? (expandedServices ? `${servicesContainerRef.current?.scrollHeight || 1000}px` : `${servicesHeightLimit}px`)
+                    : "none",
+                }}
+              >
+                {doc.servicios_y_precios.map((s, i) => {
+                  const isExtra = i >= 10;
+                  return (
+                    <div
+                      key={i}
+                      className="transition-all duration-500 ease-in-out"
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        padding: "12px 16px",
+                        borderBottom:
+                          i < doc.servicios_y_precios.length - 1
+                            ? "1px solid var(--glass-border)"
+                            : "none",
+                        opacity: isExtra && !expandedServices ? 0 : 1,
+                        transform: isExtra && !expandedServices ? "translateY(-10px)" : "translateY(0)",
+                        pointerEvents: isExtra && !expandedServices ? "none" : "auto",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, color: "var(--text-primary)" }}>
+                        {s.servicio}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: s.precio
+                            ? "var(--text-primary)"
+                            : "var(--text-muted)",
+                        }}
+                      >
+                        {s.precio || "Precio no especificado"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {doc.servicios_y_precios.length > 10 && (
+                <button
+                  onClick={() => setExpandedServices(!expandedServices)}
+                  className="self-center mt-2 text-xs font-semibold text-royalBlue-400 hover:text-royalBlue-300 transition-colors flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 outline-none"
                 >
-                  <div style={{ fontSize: 13, color: "var(--text-primary)" }}>
-                    {s.servicio}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: s.precio
-                        ? "var(--text-primary)"
-                        : "var(--text-muted)",
-                    }}
-                  >
-                    {s.precio || "Precio no disponible"}
-                  </div>
-                </div>
-              ))}
+                  {expandedServices ? (
+                    <>
+                      Ver menos <IconArrowUp className="text-sm" />
+                    </>
+                  ) : (
+                    <>
+                      Ver más <IconArrowDown className="text-sm" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
