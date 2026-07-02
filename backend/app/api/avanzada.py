@@ -6,12 +6,21 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
 import asyncio
+import hashlib
+import json
+import os
+import re
+
+# pyrefly: ignore [missing-import]
+import httpx
 
 from app.db.mongo import get_doctoralia_async_db, get_mongo_db
 from app.db.mysql import get_mysql_conn
 from app.security import get_current_user
 
 router = APIRouter(prefix="/especialistas/avanzada", tags=["Búsqueda Avanzada"])
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 class AvanzadaRequest(BaseModel):
@@ -20,6 +29,97 @@ class AvanzadaRequest(BaseModel):
     scrape_only: bool = True
     analyze: bool = False
     model: Optional[str] = None
+    ollama_model: Optional[str] = None  # Modelo específico de Ollama si aplica
+
+
+def _extraer_doctor_id_de_html(html: str) -> int | None:
+    """
+    Intenta extraer el ID numérico de Doctoralia desde el HTML del perfil.
+    Prueba múltiples estrategias: JSON-LD, data attributes y patrones JS.
+
+    Args:
+        html: HTML crudo del perfil de Doctoralia.
+
+    Returns:
+        ID numérico del doctor, o None si no se pudo extraer.
+    """
+    # Estrategia 1: JSON-LD con @type Doctor o Physician
+    ld_blocks = re.findall(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL)
+    for block in ld_blocks:
+        try:
+            data = json.loads(block)
+            # puede ser una lista
+            if isinstance(data, list):
+                items = data
+            elif isinstance(data, dict) and "@graph" in data:
+                items = data["@graph"]
+            else:
+                items = [data]
+            for item in items:
+                if isinstance(item, dict) and item.get("@type") in ("Physician", "Doctor", "Person", "MedicalBusiness"):
+                    url_item = item.get("url", item.get("@id", ""))
+                    m = re.search(r'/(\d+)(?:[/?#]|$)', url_item)
+                    if m:
+                        return int(m.group(1))
+        except Exception:
+            pass
+
+    # Estrategia 2: data-doctor-id / data-user-id en cualquier tag HTML
+    m = re.search(r'data-doctor-id=["\']?(\d+)["\']?', html)
+    if m:
+        return int(m.group(1))
+
+    m = re.search(r'data-user-id=["\']?(\d+)["\']?', html)
+    if m:
+        return int(m.group(1))
+
+    # Estrategia 3: variable JS con el ID del doctor
+    patterns = [
+        r'"doctor_id"\s*:\s*(\d+)',
+        r'"userId"\s*:\s*(\d+)',
+        r'"docId"\s*:\s*(\d+)',
+        r"doctorId[\s:=]+(\d+)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, html)
+        if m:
+            return int(m.group(1))
+
+    return None
+
+
+def _doctor_id_sintetico_desde_url(url: str) -> int:
+    """
+    Genera un ID entero estable a partir de la URL usando los últimos 8 dígitos
+    de su hash MD5. Sirve como fallback cuando no se puede extraer el ID real.
+
+    Args:
+        url: URL del perfil de Doctoralia.
+
+    Returns:
+        Entero positivo reproducible para esa URL.
+    """
+    digest = hashlib.md5(url.encode()).hexdigest()
+    return int(digest[:8], 16)  # máx ~4.29 mil millones, suficiente para colisiones bajas
+
+
+@router.get("/ollama-status")
+async def ollama_status():
+    """
+    Verifica si Ollama está disponible localmente y devuelve los modelos instalados.
+
+    Returns:
+        Objeto con {disponible: bool, modelos: list[str], url: str}
+    """
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            modelos = [m["name"] for m in data.get("models", [])]
+            return {"disponible": True, "modelos": modelos, "url": OLLAMA_BASE_URL}
+    except Exception:
+        return {"disponible": False, "modelos": [], "url": OLLAMA_BASE_URL}
 
 
 @router.post("/scrape-analyze")
@@ -59,17 +159,41 @@ async def scrape_analyze(
 
     # 2. Scraping del Perfil
     from app.scraper.doctoralia import fetch_and_parse_profile_async
+    import httpx as _httpx_scraper
 
     try:
+        # Descargar HTML antes de parsear para poder extraer el ID
+        from app.scraper.utils.base import get_user_agent
+        _headers = {
+            "User-Agent": get_user_agent(),
+            "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,*/*",
+        }
+        async with _httpx_scraper.AsyncClient(timeout=30, follow_redirects=True) as _cli:
+            _resp = await _cli.get(data.url, headers=_headers)
+            _resp.raise_for_status()
+            _html_raw = _resp.text
+
         profile = await fetch_and_parse_profile_async(data.url)
+
+        # Intentar extraer el ID real desde el HTML descargado
+        doctor_id = profile.get("doctor", {}).get("id_doctoralia")
+        if not doctor_id:
+            doctor_id = _extraer_doctor_id_de_html(_html_raw)
+
+        # Si aún no hay ID, generar uno sintético reproducible desde la URL
+        if not doctor_id:
+            doctor_id = _doctor_id_sintetico_desde_url(data.url)
+            profile["doctor"]["id_doctoralia"] = doctor_id
+            profile["_id"] = f"doctor:{doctor_id}"
+        else:
+            profile["doctor"]["id_doctoralia"] = doctor_id
+            profile["_id"] = f"doctor:{doctor_id}"
+
+    except _httpx_scraper.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Error HTTP al obtener el perfil ({e.response.status_code}): {data.url}")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al procesar el perfil: {e}")
-
-    doctor_id = profile.get("doctor", {}).get("id_doctoralia")
-    if not doctor_id:
-        raise HTTPException(
-            status_code=400, detail="No se pudo obtener el ID del doctor del perfil."
-        )
 
     # 3. Guardar Perfil en MongoDB
     db_async = get_doctoralia_async_db()
@@ -126,8 +250,10 @@ async def scrape_analyze(
             if operations:
                 await col_opinions.bulk_write(operations)
 
-    # 5. Analizar
-    if data.analyze and token_str:
+    # 5. Analizar con Ollama (sin token, local) o con modelo externo (con token)
+    usar_ollama = data.analyze and data.model == "ollama"
+
+    if data.analyze and (token_str or usar_ollama):
         # Importaciones tardías para evitar dependencias circulares/carga pesada global
         from app.nlp.modelos import obtener_modelo
         from app.nlp.preprocesador import preparar_datos_para_analisis
@@ -155,8 +281,12 @@ async def scrape_analyze(
 
         if datos["apto_para_ia"]:
             modelo = obtener_modelo(data.model)
-            # Inyección dinámica del API key
-            # Monkey patch al modelo para que use este token
+
+            # Configurar modelo Ollama con el modelo específico si se indicó
+            if usar_ollama and data.ollama_model:
+                modelo._modelo = data.ollama_model
+
+            # Inyección dinámica del API key (solo para modelos externos)
             # Asumimos que los modelos en base_modelo.py leen self.api_key o usarán os.environ.
             # Lo más limpio es setear la variable o pasarla en kwargs.
             # Verificaremos cómo lo usan, por ahora agregamos la propiedad

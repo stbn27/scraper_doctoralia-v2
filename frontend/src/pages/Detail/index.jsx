@@ -24,6 +24,7 @@ import {
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { ScoreDonut } from '@/components/ui/ScoreDonut';
@@ -32,12 +33,14 @@ import { Button } from '@/components/ui/Button';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
 import { useToast } from '@/hooks/useToast';
 import { useAuth } from '@/hooks/useAuth';
+
 import {
   obtenerDetalleEspecialista,
   addFavorite,
   removeFavorite,
   isFavorite
 } from '@/services/api';
+import { formatDateES } from '../../utils/formatFecha';
 
 /**
  * Detail — Página de detalle del especialista.
@@ -144,6 +147,7 @@ export default function Detail() {
   const ia = specialist.analisis || {};
   const localMetrics = ia.metricas_opiniones || ia.metricas_locales || {};
   const hasIa = ia.tiene_analisis;
+  const metadata = specialist.metadata || {};
 
   const data = {
     _id: specialist._id,
@@ -167,6 +171,7 @@ export default function Detail() {
   const consultorio = data.consultorio;
   const visibleServices = showAllServices ? data.servicios : data.servicios.slice(0, 6);
   const profileUrl = data.url_perfil;
+  const ultima_actualizacion_perfil = metadata?.fecha_consulta;
 
   const handleBack = () => {
     if (window.history.state && window.history.state.idx > 0) {
@@ -314,6 +319,9 @@ export default function Detail() {
                 {fav ? 'En favoritos' : 'Guardar'}
               </button>
             </div>
+            <div className="flex justify-end mt-4">
+              <span className="text-xs font-thin text-muted opacity-75">{`Última actualización del perfil: ${formatDateES(ultima_actualizacion_perfil)}`}</span>
+            </div>
           </div>
         </section>
 
@@ -424,6 +432,9 @@ export default function Detail() {
                 <MetricCard label="Long. promedio" value={`${Math.round(localMetrics.longitud_promedio_palabras || 0)} pal.`} />
                 <MetricCard label="Textos cortos" value={`${(localMetrics.porcentaje_texto_corto || 0).toFixed(1).replace('.0', '')}%`} />
               </div>
+              <div className="flex justify-end mt-2">
+                <span className='text-xs font-thin text-muted opacity-75'>{`Última actualización análisis: ${formatDateES(ia.fecha_analisis)}`}</span>
+              </div>
             </div>
           ) : (
             <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>
@@ -492,7 +503,7 @@ export default function Detail() {
         {consultorio && (
           <section className="scroll-reveal px-1">
             <h2 className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-              Ubicación
+              CONSULTORIOS
             </h2>
             <div className="flex items-start gap-3">
               <div className="mt-0.5 p-1.5 rounded-lg bg-royalBlue-500/10 shrink-0">
@@ -515,6 +526,7 @@ export default function Detail() {
         )}
 
       </div>
+      <Footer />
     </PageWrapper>
   );
 }

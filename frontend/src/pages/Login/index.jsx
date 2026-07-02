@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RiGoogleFill, RiLoginBoxLine, RiUserAddLine, RiCloseLine } from "react-icons/ri";
+import { RiGoogleFill, RiLoginBoxLine, RiUserAddLine, RiCloseLine, RiSunLine, RiMoonLine } from "react-icons/ri";
 import { BubbleBackground } from "@/components/layout/BubbleBackground";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import logo from "@/assets/logo.png";
+import { Footer } from "@/components/layout/Footer";
+import { ThemeContext } from '@/context/ThemeContext.jsx';
 
 /**
  * Login — Pantalla de autenticación y registro.
@@ -30,6 +32,7 @@ export default function Login() {
    const [errors, setErrors] = useState({});
    const [loading, setLoading] = useState(false);
    const [googleLoading, setGoogleLoading] = useState(false);
+   const { theme, toggleTheme } = useContext(ThemeContext);
 
    // Determinar la redirección tras login
    const from = location.state?.from || "/busqueda";
@@ -186,13 +189,22 @@ export default function Login() {
       <PageWrapper name="login" className="relative">
          <BubbleBackground />
 
-         <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+         <div className="relative z-10 min-h-screen flex items-center justify-center p-4 overflow-hidden">
+            <button
+               type="button"
+               onClick={(event) => toggleTheme(event)}
+               aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+               className="flex absolute -top-3.5 -right-3.5 w-12 h-12 items-center justify-center rounded-full dark:bg-[#0d0d0f]/90 bg-slate-100/90 border border-white/10 hover:border-royalBlue-100 hover:text-blue dark:hover:border-royalBlue-500/50 hover:bg-gray-500/30 dark:hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
+            >
+               {theme === 'dark' ? <RiSunLine /> : <RiMoonLine />}
+            </button>
+
             <div className={`glass-card relative w-full p-8 transition-all duration-500 ease-out ${isRegister ? 'max-w-[640px]' : 'max-w-[440px]'}`}>
 
                {/* Botón de cerrar -> Busqueda o regresar en la vista anterior */}
                <button
                   type="button"
-                  className="absolute -top-3.5 -right-3.5 w-12 h-12 flex items-center justify-center rounded-full bg-[#0d0d0f]/90 border border-white/10 hover:border-royalBlue-500/50 hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
+                  className="absolute -top-3.5 -right-3.5 w-12 h-12 flex items-center justify-center rounded-full dark:bg-[#0d0d0f]/90 bg-slate-100/90 border border-white/10 hover:border-royalBlue-100 dark:hover:border-royalBlue-500/50 hover:bg-gray-500/30 dark:hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
                   onClick={() => navigate(-1)}
                   title="Cerrar"
                >
@@ -222,11 +234,10 @@ export default function Login() {
                {/* Tabs */}
                <div className="flex border-b border-white/10 mb-6">
                   <button
-                     className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
-                        !isRegister
+                     className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${!isRegister
                            ? "border-royalBlue-500 text-royalBlue-400"
                            : "border-transparent text-slate-400 hover:text-white"
-                     }`}
+                        }`}
                      onClick={() => {
                         setIsRegister(false);
                         setErrors({});
@@ -235,11 +246,10 @@ export default function Login() {
                      Ingresar
                   </button>
                   <button
-                     className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${
-                        isRegister
+                     className={`flex-1 pb-3 text-sm font-semibold transition-all duration-200 border-b-2 ${isRegister
                            ? "border-royalBlue-500 text-royalBlue-400"
                            : "border-transparent text-slate-400 hover:text-white"
-                     }`}
+                        }`}
                      onClick={() => {
                         setIsRegister(true);
                         setErrors({});
@@ -455,6 +465,7 @@ export default function Login() {
                </p>
             </div>
          </div>
+         <Footer />
       </PageWrapper>
    );
 }

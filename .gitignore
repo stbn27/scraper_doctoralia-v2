@@ -25,6 +25,7 @@ docs/otros/**
 docs/general/**
 docs/db/**
 docs/docker/**
+docs/reporte/**
 
 # Arquivos de configuración
 .env
