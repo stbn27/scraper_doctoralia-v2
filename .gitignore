@@ -1,36 +1,19 @@
 # Sistema
-.vscode
-.idea
+.idea/
+.vscode/
+.cursor/
 
-# Directorios de dependencias
-**/node_modules/**
-**/venv/**
-**/test/**
-**/tests/**
-**/fixtures/**
-**/.venv
-**/.agents/**
-frontend/.agents/
-frontend/node_modules/**
-frontend/src/test/**
-frontend/dist/**
-backend/logs/**
-backend/**/__pycache__/**
-backup/**
+# Backups
+/backups/
 
 # Documentos
-docs/ia/**
-docs/sugerencias/**
-docs/otros/**
-docs/general/**
-docs/db/**
-docs/docker/**
-docs/reporte/**
-
-# Arquivos de configuración
-.env
-**/.env
+/docs/
 
 # Logs
-*.log
-**/**.out
+./**/*.log
+./**/*.out
+
+# Crendenciales
+.env
+.env.*
+**/!.env

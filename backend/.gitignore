@@ -1,0 +1,16 @@
+logs/
+otros/
+**/__pycache__/**
+fixtures/
+fixtures/**
+.venv
+venv/
+**/__pycache__/
+test/
+/**/__pycache__/**
+migrations/
+
+app/api/docs/
+
+# Archivos
+.env

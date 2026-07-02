@@ -1,0 +1,9 @@
+# Directorios
+.agents/
+node_modules/
+src/test/
+dist/
+
+# Archivos
+./bun.lock
+.env
