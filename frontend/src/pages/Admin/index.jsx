@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   RiSearchLine, RiRefreshLine, RiShieldLine,
   RiDatabase2Line, RiFileList2Line, RiBrainLine,
   RiUserLine, RiTimeLine, RiFilterLine, RiDeleteBinLine, RiExternalLinkLine,
   RiArrowUpLine, RiArrowDownLine, RiArrowLeftSLine, RiArrowRightSLine,
-  RiAlertLine, RiCheckLine
+  RiAlertLine, RiCheckLine,
+  RiUserStarLine
 } from 'react-icons/ri';
 import {
   useReactTable,
@@ -169,8 +170,8 @@ function UrlScrapingSection({ onScraped }) {
       {validationResult && (
         <div className="mt-2 text-[13px]">
           {validationResult.existe ? (
-            <div className="flex items-center gap-1.5 text-amber-500">
-              <RiAlertLine /> El perfil ya existe en la base de datos: <strong className="text-[var(--text-primary)]">{validationResult.nombre}</strong> (ID: {validationResult.doctoralia_id}).
+            <div className="flex items-center gap-1.5 text-amber-500 flex-wrap">
+              <RiAlertLine /> El perfil ya existe en la base de datos: <Link to={`/admin/especialistas/${validationResult.doctoralia_id}`} className="text-[var(--text-primary)] hover:text-[var(--color-primary-400)] hover:underline font-semibold">{validationResult.nombre}</Link> (<Link to={`/admin/especialistas/${validationResult.doctoralia_id}`} className="text-[var(--color-primary-400)] hover:underline font-semibold">ID: {validationResult.doctoralia_id}</Link>).
             </div>
           ) : validationResult.valida ? (
             <div className="flex flex-wrap items-center gap-4">
@@ -220,13 +221,21 @@ function PanelFiltros({ filtros, onChange }) {
   const [qInput, setQInput] = useState(filtros.q);
 
   useEffect(() => {
+    setQInput(filtros.q || '');
+  }, [filtros.q]);
+
+  useEffect(() => {
     const handler = setTimeout(() => {
-      if (qInput !== filtros.q) {
+      if (qInput !== (filtros.q || '')) {
         onChange(f => ({ ...f, q: qInput, page: 1 }));
       }
     }, 500);
     return () => clearTimeout(handler);
   }, [qInput, filtros.q, onChange]);
+
+  const hasActiveFilters = Boolean(
+    filtros.q || (filtros.conAnalisis !== null && filtros.conAnalisis !== undefined) || filtros.modeloUsado || filtros.estatusAnalisis
+  );
 
   return (
     <div className="glass-card" style={{
@@ -251,7 +260,7 @@ function PanelFiltros({ filtros, onChange }) {
         <Select
           options={OPT_ANALISIS}
           styles={selectStyles}
-          value={OPT_ANALISIS.find(o => o.value === (filtros.conAnalisis === null ? '' : String(filtros.conAnalisis)))}
+          value={OPT_ANALISIS.find(o => o.value === (filtros.conAnalisis === null || filtros.conAnalisis === undefined ? '' : String(filtros.conAnalisis)))}
           onChange={item => onChange(f => ({ ...f, conAnalisis: item.value === '' ? null : item.value === 'true', page: 1 }))}
           isSearchable={false}
           menuPortalTarget={document.body}
@@ -281,6 +290,18 @@ function PanelFiltros({ filtros, onChange }) {
           menuPortalTarget={document.body}
         />
       </div>
+
+      {hasActiveFilters && (
+        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <Button
+            variant="secondary"
+            onClick={() => onChange({ q: '', conAnalisis: null, modeloUsado: '', estatusAnalisis: '', page: 1, limit: filtros.limit || 20, sort_by: '', sort_order: '' })}
+            className="text-xs px-3 py-2 h-[38px]"
+          >
+            Limpiar filtros
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -407,14 +428,45 @@ export default function AdminPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('especialistas');
+  const [activeTab, setActiveTab] = useState(() => {
+    return sessionStorage.getItem('admin_active_tab') || 'especialistas';
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('admin_active_tab', activeTab);
+  }, [activeTab]);
+
   const [stats, setStats] = useState(null);
   const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [cargandoTabla, setCargandoTabla] = useState(false);
-  const [filtros, setFiltros] = useState({
-    q: '', conAnalisis: null, modeloUsado: '', estatusAnalisis: '', page: 1, limit: 20, sort_by: '', sort_order: ''
+  const [filtros, setFiltros] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('admin_especialistas_filtros');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          q: parsed.q || '',
+          conAnalisis: parsed.conAnalisis !== undefined ? parsed.conAnalisis : null,
+          modeloUsado: parsed.modeloUsado || '',
+          estatusAnalisis: parsed.estatusAnalisis || '',
+          page: parsed.page || 1,
+          limit: parsed.limit || 20,
+          sort_by: parsed.sort_by || '',
+          sort_order: parsed.sort_order || ''
+        };
+      }
+    } catch (e) {}
+    return {
+      q: '', conAnalisis: null, modeloUsado: '', estatusAnalisis: '', page: 1, limit: 20, sort_by: '', sort_order: ''
+    };
   });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('admin_especialistas_filtros', JSON.stringify(filtros));
+    } catch (e) {}
+  }, [filtros]);
 
   const [deleteModal, setDeleteModal] = useState({ open: false, row: null });
 
@@ -662,8 +714,9 @@ export default function AdminPage() {
             <StatCard icon={RiBrainLine} label="Con análisis IA" value={stats.especialistas?.con_analisis}
               sub={`Sin análisis: ${fmt(stats.especialistas?.sin_analisis)}`} color="#10b981" />
             <StatCard icon={RiFileList2Line} label="Opiniones en BD" value={stats.opiniones?.total} color="#f59e0b" />
+            <StatCard icon={RiUserStarLine} label="Especialistas sin opiniones" value={stats.especialistas?.sin_opiniones} color="#f59e0b" />
+            <StatCard icon={RiUserStarLine} label="Especialistas con opiniones" value={stats.especialistas?.con_opiniones} color="#4f7dff" />
             <StatCard icon={RiDatabase2Line} label="Análisis generados" value={stats.analisis?.total} color="#a78bfa" />
-            <StatCard icon={RiUserLine} label="Usuarios registrados" value={stats.usuarios?.total} color="#fb923c" />
             <StatCard
               icon={RiTimeLine}
               label="Último scraping"
@@ -671,6 +724,7 @@ export default function AdminPage() {
               sub={fmtFecha(stats.scraping?.ultimo_registro)}
               color="var(--text-muted)"
             />
+            <StatCard icon={RiUserLine} label="Usuarios registrados" value={stats.usuarios?.total} color="#fb923c" />
           </div>
         )}
 

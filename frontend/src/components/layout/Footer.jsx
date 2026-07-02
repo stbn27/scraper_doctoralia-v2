@@ -18,23 +18,23 @@ export function Footer() {
                     </div>
                     <div className="grid grid-cols-2 gap-8 sm:gap-6 sm:grid-cols-2">
                         <div>
-                            <h2 className="mb-6 text-sm font-semibold text-heading uppercase">Siguenos</h2>
+                            <h2 className="mb-6 text-xs font-semibold text-heading uppercase">Siguenos</h2>
                             <ul className="text-body font-medium">
-                                <li className="mb-4">
+                                <li className="mb-2 text-xs">
                                     <a href="www.github.com/stbn27" className="hover:underline ">Github</a>
                                 </li>
-                                <li>
+                                <li className='text-xs'>
                                     <a href="#" className="hover:underline">Instagram</a>
                                 </li>
                             </ul>
                         </div>
                         <div>
-                            <h2 className="mb-6 text-sm font-semibold text-heading uppercase">Legal</h2>
+                            <h2 className="mb-6 text-xs font-semibold text-heading uppercase">Legal</h2>
                             <ul className="text-body font-medium">
-                                <li className="mb-4">
+                                <li className="mb-2 text-xs">
                                     <a href="#" className="hover:underline">Política de privacidad</a>
                                 </li>
-                                <li>
+                                <li className='text-xs'>
                                     <a href="#" className="hover:underline">Términos y Condiciones</a>
                                 </li>
                             </ul>
@@ -44,16 +44,16 @@ export function Footer() {
                 <hr className="my-6 border-default sm:mx-auto lg:my-8" />
                 <div className="sm:flex sm:items-center sm:justify-between">
 
-                    <span className="text-sm text-body sm:text-center">© {new Date().getFullYear()} <a href="#" className="ms-4 hover:underline">MedRec™</a>. Todos los derechos reservados.
+                    <span className="text-xs text-body sm:text-center">© {new Date().getFullYear()} <a href="#" className="ms-4 hover:underline">MedRec™</a>. Todos los derechos reservados.
                     </span>
 
                     <div className="flex mt-4 sm:justify-center sm:mt-0 gap-5">
-                        <a href="https://github.com/stbn27" target="_blank" rel="noopener noreferrer" className="text-body hover:text-heading">
+                        <a href="https://github.com/stbn27" target="_blank" rel="noopener noreferrer" className="text-body text-xs hover:text-heading">
                             <RiGithubFill className="w-5 h-5" />
                             <span className="sr-only">Desarrollador Github</span>
                         </a>
 
-                        <a href="#" className="text-body hover:text-heading">
+                        <a href="#" className="text-body text-xs hover:text-heading">
                             <RiInstagramLine className="w-5 h-5" />
                             <span className="sr-only">Instagram desarrollador</span>
                         </a>

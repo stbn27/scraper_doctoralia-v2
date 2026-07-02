@@ -116,7 +116,7 @@ export function Navbar() {
                             px-4 py-2
                             border border-transparent rounded-xl
                             bg-royalBlue-600 hover:bg-transparent hover:border hover:border-royalBlue-500
-                            text-sm font-medium text-white
+                            text-sm font-medium text-white hover:text-royalBlue-500 dark:hover:text-royalBlue-500
                             transition-colors duration-500"
                     >
                         <RiLoginBoxLine/>

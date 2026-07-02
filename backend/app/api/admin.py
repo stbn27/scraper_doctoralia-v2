@@ -94,6 +94,10 @@ async def obtener_estadisticas_globales(
     total_ciudades = await db["cities"].count_documents({})
     total_especialidades = await db["specializations"].count_documents({})
 
+    # Especialistas con y sin opiniones
+    especialistas_con_opiniones = await db["doctor_opinions"].distinct("doctor_id")
+    especialistas_sin_opiniones = total_especialistas - len(especialistas_con_opiniones)
+
     # Análisis por estado
     pipeline_estados = [
         {"$group": {"_id": "$estatus_analisis", "total": {"$sum": 1}}},
@@ -145,6 +149,8 @@ async def obtener_estadisticas_globales(
             "total": total_especialistas,
             "con_analisis": con_analisis,
             "sin_analisis": total_especialistas - con_analisis,
+            "con_opiniones": len(especialistas_con_opiniones),
+            "sin_opiniones": especialistas_sin_opiniones,
         },
         "opiniones": {"total": total_opiniones},
         "analisis": {
@@ -736,20 +742,47 @@ async def validar_url_admin(
 ):
     """
     Valida una URL de Doctoralia y verifica si ya existe en la base de datos.
+    Soporta normalización de URLs (limpieza de fragmentos, query params y slashes).
     """
     url = payload.url.strip()
     if not url.startswith("http") or "doctoralia.com.mx" not in url:
         return {"valida": False, "existe": False, "error": "URL no pertenece a doctoralia.com.mx o formato incorrecto"}
         
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    clean_url = parsed._replace(query="", fragment="").geturl().rstrip('/')
+    clean_path = parsed.path.rstrip('/')
+
     db = get_doctoralia_async_db()
     
-    # Buscar por url exacta o regex
-    doc = await db["doctor_profiles"].find_one({
-        "$or": [
-            {"doctor.url_perfil": url},
-            {"metadata.fuente": url}
-        ]
-    })
+    condiciones = [
+        {"doctor.url_perfil": clean_url},
+        {"doctor.url_perfil": clean_url + "/"},
+        {"metadata.fuente": clean_url},
+        {"metadata.fuente": clean_url + "/"},
+        {"scraping_meta.url_origen": clean_url},
+        {"scraping_meta.url_origen": clean_url + "/"},
+    ]
+
+    # Extraer path o slug para comparar de forma flexible ante variaciones en la URL
+    if clean_path and clean_path != "/":
+        regex_path = re.escape(clean_path)
+        condiciones.extend([
+            {"doctor.url_perfil": {"$regex": regex_path, "$options": "i"}},
+            {"metadata.fuente": {"$regex": regex_path, "$options": "i"}}
+        ])
+        
+        path_parts = [p for p in clean_path.split('/') if p]
+        if path_parts and path_parts[0] not in ('buscar', 'clinicas', 'centros-medicos', 'enfermedades', 'medicamentos', 'preguntas-respuestas'):
+            slug = path_parts[0]
+            if len(slug) > 3:
+                regex_slug = f"/{re.escape(slug)}(/|$)"
+                condiciones.extend([
+                    {"doctor.url_perfil": {"$regex": regex_slug, "$options": "i"}},
+                    {"metadata.fuente": {"$regex": regex_slug, "$options": "i"}}
+                ])
+
+    doc = await db["doctor_profiles"].find_one({"$or": condiciones})
     
     if doc:
         return {

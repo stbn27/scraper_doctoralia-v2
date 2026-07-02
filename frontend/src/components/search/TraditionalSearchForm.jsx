@@ -474,12 +474,12 @@ export function TraditionalSearchForm({
                 </Button>
             </div>
 
-            <div className="pt-2 border-t border-royalBlue-900"></div>
+            <div className="pt-2 border-t border-neutral-300/50 dark:border-royalBlue-900"></div>
 
             {/* Boton de búsqueda avanzada */}
             <Button 
                 variant="outline" 
-                className="mt-1 text-royalBlue-200/40" 
+                className="mt-1 text-gray-800 dark:text-royalBlue-200/40" 
                 fullWidth
                 onClick={onAdvancedSearchClick}
             >

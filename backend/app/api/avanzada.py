@@ -131,6 +131,10 @@ async def scrape_analyze(
             status_code=400, detail="URL inválida. Debe ser un perfil de Doctoralia."
         )
 
+    from urllib.parse import urlparse
+    parsed_url = urlparse(data.url.strip())
+    data.url = parsed_url._replace(query="", fragment="").geturl().rstrip('/')
+
     # 1. Validar Token si se requiere análisis
     token_str = None
     if data.analyze:

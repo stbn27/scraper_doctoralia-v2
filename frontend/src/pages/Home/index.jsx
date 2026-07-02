@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { PageWrapper } from '@/components/layout/PageWrapper';
+import { Footer } from "@/components/layout/Footer";
 import ChatPanel from '@/components/shared/ChatPanel';
 import InlineLogin from '@/components/shared/InlineLogin';
+import { ThemeContext } from '@/context/ThemeContext.jsx';
+import { RiSunLine, RiMoonLine } from "react-icons/ri";
 
 /** Mensaje inicial del asistente */
 const INITIAL_MESSAGE = {
@@ -21,12 +24,22 @@ const QUICK_CHIPS = ['Dentista', 'Cardiólogo', 'Dermatólogo', 'Ortopedista'];
 export default function Home() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('login'); // 'chat' | 'login'
+  const { theme, toggleTheme } = useContext(ThemeContext);
 
   return (
     <PageWrapper name="home" className="relative">
       <BubbleBackground />
 
       <div className="relative z-10 min-h-screen flex items-center justify-center gap-5 p-4 overflow-hidden">
+
+        <button
+          type="button"
+          onClick={(event) => toggleTheme(event)}
+          aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          className="flex absolute -top-3.5 -right-3.5 w-12 h-12 items-center justify-center rounded-full dark:bg-[#0d0d0f]/90 bg-slate-100/90 border border-white/10 hover:border-royalBlue-100 hover:text-blue dark:hover:border-royalBlue-500/50 hover:bg-gray-500/30 dark:hover:bg-slate-900 text-slate-400 hover:text-white shadow-xl transition-all duration-300 z-20 group hover:scale-110"
+        >
+          {theme === 'dark' ? <RiSunLine /> : <RiMoonLine />}
+        </button>
 
         {/* CHAT */}
         <div className="order-2 w-full max-w-[700px]">
@@ -65,6 +78,7 @@ export default function Home() {
         </div>
 
       </div>
+      <Footer />
     </PageWrapper>
   );
 }
