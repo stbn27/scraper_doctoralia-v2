@@ -590,6 +590,7 @@ async def detalle_especialista_admin(
         "analisis": analisis_completo,
         "scraping": {
             "ultimo_scraping": persisted_at.isoformat() if persisted_at else None,
+            "ultima_actualizacion": meta.get("ultima_actualizacion"),
             "fecha_consulta": meta.get("fecha_consulta"),
             "fuente": meta.get("fuente"),
             "fuente_busqueda": meta.get("fuente_busqueda"),
@@ -598,6 +599,235 @@ async def detalle_especialista_admin(
             "priority_score": queue.get("priority_score"),
             "discovery_sources": queue.get("discovery_sources") or [],
         },
+    }
+
+
+# =============================================================================
+# POST /admin/especialistas/{doctoralia_id}/analizar
+# =============================================================================
+
+
+class AdminAnalizarRequest(BaseModel):
+    max_opinions: int = 50
+
+
+@router.post("/especialistas/{doctoralia_id}/analizar")
+async def analizar_especialista_admin(
+    doctoralia_id: int,
+    payload: AdminAnalizarRequest,
+    _admin: dict = Depends(_requerir_admin),
+):
+    """
+    Dispara el análisis IA de un especialista ya almacenado en la BD.
+
+    A diferencia del endpoint de usuario, el admin no requiere un token
+    personal. El sistema selecciona automáticamente el primer modelo
+    disponible según la prioridad: ollama → gemini → groq → deepseek → minimax.
+
+    Para Ollama se verifica primero que el servicio esté activo.
+    Para los modelos externos se verifica que exista la variable de entorno
+    con la clave de API correspondiente.
+
+    Parámetros
+    ----------
+    doctoralia_id : int
+        ID numérico del especialista en Doctoralia.
+    payload.max_opinions : int
+        Máximo de opiniones a enviar al modelo (default 50).
+
+    Retorna
+    -------
+    dict
+        { mensaje, doctoralia_id, modelo_usado }
+    """
+    import asyncio
+    import os
+    from datetime import datetime, timezone
+
+    db = get_doctoralia_async_db()
+
+    # 1. Cargar perfil
+    doc = await db["doctor_profiles"].find_one({"doctor.id_doctoralia": doctoralia_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Especialista no encontrado")
+
+    # 2. Seleccionar modelo disponible por prioridad
+    PRIORIDAD = ["ollama", "gemini", "groq", "deepseek", "minimax"]
+    ENV_KEYS = {
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "minimax": "MINIMAX_API_KEY",
+    }
+    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    modelo_elegido = None
+    token_elegido = None
+
+    for nombre in PRIORIDAD:
+        if nombre == "ollama":
+            # Verificar que Ollama esté activo
+            try:
+                import httpx as _hx
+                async with _hx.AsyncClient(timeout=3.0) as c:
+                    r = await c.get(f"{OLLAMA_BASE_URL}/api/tags")
+                    r.raise_for_status()
+                modelo_elegido = "ollama"
+                token_elegido = None
+                break
+            except Exception:
+                continue
+        else:
+            key_env = ENV_KEYS.get(nombre, "")
+            key_val = os.getenv(key_env, "").strip()
+            if key_val:
+                modelo_elegido = nombre
+                token_elegido = key_val
+                break
+
+    if not modelo_elegido:
+        raise HTTPException(
+            status_code=503,
+            detail="No hay modelo de IA disponible. Configure al menos una variable de entorno de API key o inicie Ollama.",
+        )
+
+    # 3. Cargar opiniones de la BD
+    opiniones_db = await (
+        db["doctor_opinions"]
+        .find({"doctor_id": doctoralia_id})
+        .sort("fecha_publicacion", -1)
+        .limit(payload.max_opinions)
+        .to_list(length=payload.max_opinions)
+    )
+
+    # 4. Preparar datos para el análisis
+    from app.nlp.preprocesador import preparar_datos_para_analisis
+    from app.nlp.prompt_builder import (
+        construir_prompt_sistema,
+        construir_prompt_usuario,
+        reforzar_resultado_analisis,
+    )
+    from app.nlp.modelos import obtener_modelo
+
+    datos = preparar_datos_para_analisis(doc, opiniones_db, min_opiniones_ia=1)
+
+    if not datos["apto_para_ia"]:
+        doc_no_apto = {
+            "id_doctoralia": doctoralia_id,
+            "doctor_id": doctoralia_id,
+            "doctoralia_id": doctoralia_id,
+            "estatus_analisis": "sin_opiniones",
+            "estado": "sin_opiniones",
+            "metadata_analisis": {
+                "fecha": datetime.now(timezone.utc).isoformat(),
+                "error_detalle": datos.get("razon_no_apto"),
+            },
+            "fecha_analisis": datetime.now(timezone.utc),
+            "error_detalle": datos.get("razon_no_apto"),
+        }
+        await db["analisis_especialistas"].update_one(
+            {"id_doctoralia": doctoralia_id},
+            {"$set": doc_no_apto},
+            upsert=True,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"El especialista no tiene opiniones suficientes para analizar: {datos.get('razon_no_apto')}",
+        )
+
+    # 5. Instanciar modelo e inyectar token si aplica
+    modelo = obtener_modelo(modelo_elegido)
+    if token_elegido:
+        if modelo_elegido == "groq":
+            from groq import Groq  # pyrefly: ignore [missing-import]
+            modelo._api_key = token_elegido
+            modelo._cliente = Groq(api_key=token_elegido)
+        elif modelo_elegido == "gemini":
+            from google import genai  # pyrefly: ignore [missing-import]
+            from google.genai import types  # pyrefly: ignore [missing-import]
+            modelo._api_key = token_elegido
+            modelo._cliente = genai.Client(api_key=token_elegido)
+        elif modelo_elegido == "deepseek":
+            from openai import OpenAI  # pyrefly: ignore [missing-import]
+            modelo._api_key = token_elegido
+            modelo._cliente = OpenAI(api_key=token_elegido, base_url="https://api.deepseek.com")
+        elif modelo_elegido == "minimax":
+            if hasattr(modelo, "api_key"):
+                modelo.api_key = token_elegido
+
+    # 6. Ejecutar análisis
+    prompt_sistema = construir_prompt_sistema()
+    prompt_usuario = construir_prompt_usuario(datos)
+
+    try:
+        respuesta_raw = await asyncio.to_thread(modelo.analizar, prompt_sistema, prompt_usuario)
+        resultado_ia = modelo.parsear_respuesta(respuesta_raw)
+        resultado_ia = reforzar_resultado_analisis(resultado_ia, datos)
+
+        especialidad_nom = (doc.get("doctor") or {}).get("especialidad", "") or doc.get("especialidad", "")
+        doc_analisis = {
+            "id_doctoralia": doctoralia_id,
+            "doctor_id": doctoralia_id,
+            "doctoralia_id": doctoralia_id,
+            "nombre_especialista": (doc.get("doctor") or {}).get("nombre", ""),
+            "especialidad": especialidad_nom,
+            "estatus_analisis": "completado",
+            "estado": "completado",
+            "fecha_analisis": datetime.now(timezone.utc),
+            "modelo_usado": modelo_elegido,
+            "version_prompt": "v2",
+            "analisis": {
+                "puntuacion": resultado_ia.get("puntuacion_recomendacion"),
+                "resumen": resultado_ia.get("resumen"),
+                "puntos_fuertes": resultado_ia.get("puntos_fuertes", []),
+                "puntos_debiles": resultado_ia.get("puntos_debiles", []),
+                "confiabilidad": resultado_ia.get("confiabilidad_opiniones"),
+                "justificacion": resultado_ia.get("justificacion_puntuacion"),
+            },
+            "metadata_analisis": {
+                "fecha": datetime.now(timezone.utc).isoformat(),
+                "opiniones_enviadas": len(datos.get("opiniones_procesadas", [])),
+                "error_detalle": None,
+            },
+            "metadata_opiniones": datos.get("metricas_locales", {}),
+            "metricas_locales": datos.get("metricas_locales", {}),
+            "metadatos_muestreo": datos.get("metadatos_muestreo", {}),
+            "perfil_limpio": datos.get("perfil_limpio", {}),
+            "alertas_preprocesamiento": datos.get("alertas", []),
+            "resultado_ia": resultado_ia,
+            "error_detalle": None,
+            "fatal_proveedor": False,
+        }
+        await db["analisis_especialistas"].update_one(
+            {"id_doctoralia": doctoralia_id},
+            {"$set": doc_analisis},
+            upsert=True,
+        )
+    except Exception as e:
+        doc_error = {
+            "id_doctoralia": doctoralia_id,
+            "doctor_id": doctoralia_id,
+            "doctoralia_id": doctoralia_id,
+            "estatus_analisis": "error",
+            "estado": "error",
+            "error_detalle": str(e),
+            "metadata_analisis": {
+                "fecha": datetime.now(timezone.utc).isoformat(),
+                "error_detalle": str(e),
+            },
+            "fecha_analisis": datetime.now(timezone.utc),
+        }
+        await db["analisis_especialistas"].update_one(
+            {"id_doctoralia": doctoralia_id},
+            {"$set": doc_error},
+            upsert=True,
+        )
+        raise HTTPException(status_code=500, detail=f"Error en análisis IA: {e}")
+
+    return {
+        "mensaje": "Análisis generado con éxito.",
+        "doctoralia_id": doctoralia_id,
+        "modelo_usado": modelo_elegido,
     }
 
 

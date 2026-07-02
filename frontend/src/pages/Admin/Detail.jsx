@@ -31,7 +31,8 @@ import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import {
   getDetalleEspecialistaAdmin,
   deleteEspecialistaAdmin,
-  ejecutarScrapingManual,
+  reescrapearEspecialistaAdmin,
+  analizarEspecialistaAdmin,
 } from "@/services/admin.api";
 
 import { getOpiniones } from "@/services/opiniones.api";
@@ -243,10 +244,7 @@ export default function AdminDetail() {
     if (!data?.scraping?.fuente) return;
     try {
       setActionLoading(true);
-      await ejecutarScrapingManual({
-        url: data.scraping.fuente,
-        analyze: false,
-      });
+      await reescrapearEspecialistaAdmin(data.scraping.fuente);
       addToast({ type: "success", message: "Re-scraping completado" });
       cargarData();
     } catch (e) {
@@ -257,16 +255,14 @@ export default function AdminDetail() {
   };
 
   const handleAnalyze = async () => {
-    if (!data?.scraping?.fuente) return;
+    if (!data?.doctoralia_id) return;
     try {
       setActionLoading(true);
-      await ejecutarScrapingManual({
-        url: data.scraping.fuente,
-        analyze: true,
-        model: "deepseek", // or allow select
-        max_opinions: numOpinions,
+      const res = await analizarEspecialistaAdmin(data.doctoralia_id, numOpinions);
+      addToast({
+        type: "success",
+        message: `Análisis ejecutado con éxito (modelo: ${res.modelo_usado || "desconocido"})`,
       });
-      addToast({ type: "success", message: "Análisis ejecutado con éxito" });
       setAnalysisModal(false);
       cargarData();
     } catch (e) {
@@ -459,9 +455,12 @@ export default function AdminDetail() {
               </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 <strong style={{ color: "var(--text-primary)" }}>
-                  Último scraping:
+                  Última actualización:
                 </strong>{" "}
-                {fmtFecha(data.scraping?.ultimo_scraping)}
+                {fmtFecha(
+                  data.scraping?.ultima_actualizacion ||
+                  data.scraping?.ultimo_scraping
+                )}
               </div>
               <div
                 style={{
@@ -1438,6 +1437,7 @@ export default function AdminDetail() {
         isOpen={deleteModal}
         onClose={() => setDeleteModal(false)}
         onConfirm={handleDelete}
+        loading={actionLoading}
         title="Eliminar Especialista"
         message={`¿Estás seguro de que deseas eliminar a ${normalizeName(doc.nombre)}? Esta operación eliminará el perfil, análisis y opiniones, y no se puede deshacer.`}
         confirmText="Eliminar permanentemente"
@@ -1448,6 +1448,7 @@ export default function AdminDetail() {
         isOpen={analysisModal}
         onClose={() => setAnalysisModal(false)}
         onConfirm={handleAnalyze}
+        loading={actionLoading}
         title="Generar Análisis IA"
         message={`¿Generar un nuevo análisis para este especialista? Esto reemplazará el análisis actual si existe.`}
         confirmText="Iniciar Análisis"

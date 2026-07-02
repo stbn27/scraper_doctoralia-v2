@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 
 from pymongo import ASCENDING
 
-from app.db.mongo import get_mongo_db
+from app.db.mongo import get_doctoralia_db
 
 
 _indices_creados = False
@@ -24,30 +24,30 @@ _COLECCION = "analisis_especialistas"
 
 def _obtener_coleccion():
     """
-    Retorna la colección `analisis_especialistas` de MongoDB (síncrona).
+    Retorna la colección `analisis_especialistas` de MongoDB Doctoralia (síncrona).
 
     Retorna
     -------
     Collection
         Colección de PyMongo para operaciones síncronas.
     """
-    db = get_mongo_db()
+    db = get_doctoralia_db()
     return db[_COLECCION]
 
 
 def _asegurar_indices():
     """
     Crea los índices necesarios en la colección si aún no se han creado.
-    Índices: doctor_id (único), estado, fecha_analisis.
+    Índices: doctor_id, id_doctoralia, estado, fecha_analisis.
     """
     global _indices_creados
     if _indices_creados:
         return
 
     coleccion = _obtener_coleccion()
-    coleccion.create_index(
-        [("doctor_id", ASCENDING)], unique=True, sparse=True
-    )
+    coleccion.create_index([("id_doctoralia", ASCENDING)])
+    coleccion.create_index([("doctor_id", ASCENDING)])
+    coleccion.create_index([("estatus_analisis", ASCENDING)])
     coleccion.create_index([("estado", ASCENDING)])
     coleccion.create_index([("fecha_analisis", ASCENDING)])
     _indices_creados = True
@@ -55,12 +55,12 @@ def _asegurar_indices():
 
 def guardar_analisis(doc: dict) -> str:
     """
-    Upsert de un documento de análisis por doctor_id.
+    Upsert de un documento de análisis por id_doctoralia o doctor_id.
 
     Parámetros
     ----------
     doc : dict
-        Documento completo de análisis con doctor_id.
+        Documento completo de análisis.
 
     Retorna
     -------
@@ -69,10 +69,15 @@ def guardar_analisis(doc: dict) -> str:
     """
     _asegurar_indices()
     coleccion = _obtener_coleccion()
-    doctor_id = doc.get("doctor_id")
+    did = doc.get("id_doctoralia") or doc.get("doctor_id") or doc.get("doctoralia_id")
+    if did is not None:
+        doc["id_doctoralia"] = did
+        doc["doctor_id"] = did
+        doc["doctoralia_id"] = did
 
+    filtro = {"id_doctoralia": did} if did is not None else {"doctor_id": doc.get("doctor_id")}
     resultado = coleccion.update_one(
-        {"doctor_id": doctor_id},
+        filtro,
         {"$set": doc},
         upsert=True,
     )
@@ -80,7 +85,7 @@ def guardar_analisis(doc: dict) -> str:
     if resultado.upserted_id:
         return str(resultado.upserted_id)
 
-    existente = coleccion.find_one({"doctor_id": doctor_id})
+    existente = coleccion.find_one(filtro)
     return str(existente.get("_id")) if existente else ""
 
 

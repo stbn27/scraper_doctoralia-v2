@@ -16,6 +16,7 @@ import { Button } from './Button';
  *   variant?: 'danger' | 'primary';
  *   position?: 'center' | 'bottom-right';
  *   icon?: React.ReactNode;
+ *   loading?: boolean;
  * }} props
  */
 export function ConfirmModal({
@@ -28,7 +29,8 @@ export function ConfirmModal({
   cancelText = 'Cancelar',
   variant = 'danger',
   position = 'center',
-  icon = null
+  icon = null,
+  loading = false,
 }) {
   if (!isOpen) return null;
   if (typeof document === 'undefined') return null;
@@ -54,7 +56,7 @@ export function ConfirmModal({
       {/* Background overlay */}
       <div 
         className="absolute inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity duration-300"
-        onClick={onClose}
+        onClick={() => { if (!loading) onClose(); }}
       />
       
       {/* Modal content */}
@@ -80,6 +82,7 @@ export function ConfirmModal({
             <Button
               variant="ghost"
               onClick={onClose}
+              disabled={loading}
               className="flex-1 text-xs py-2"
             >
               {cancelText}
@@ -87,6 +90,7 @@ export function ConfirmModal({
             <Button
               variant={variant}
               onClick={onConfirm}
+              loading={loading}
               className="flex-grow flex-1 text-xs py-2"
             >
               {confirmText}

@@ -203,15 +203,22 @@ async def scrape_analyze(
     db_async = get_doctoralia_async_db()
     col_profiles = db_async["doctor_profiles"]
 
-    # Asignar un scraping_meta mínimo si no existe
-    if "scraping_meta" not in profile:
-        profile["scraping_meta"] = {
-            "url_origen": data.url,
-            "fecha_consulta": datetime.now(timezone.utc).isoformat(),
-        }
+    # Registrar la fecha de actualización en metadata (no en un campo aparte)
+    ahora_iso = datetime.now(timezone.utc).isoformat()
+    if "metadata" not in profile or profile["metadata"] is None:
+        profile["metadata"] = {}
+    profile["metadata"]["ultima_actualizacion"] = ahora_iso
+
+    # Eliminar scraping_meta si existiera en el doc entrante para no contaminar el esquema
+    profile.pop("scraping_meta", None)
 
     await col_profiles.update_one(
-        {"doctor.id_doctoralia": doctor_id}, {"$set": profile}, upsert=True
+        {"doctor.id_doctoralia": doctor_id},
+        {
+            "$set": profile,
+            "$unset": {"scraping_meta": ""},
+        },
+        upsert=True,
     )
 
     # Recuperar el documento para obtener su ObjectId
@@ -266,7 +273,6 @@ async def scrape_analyze(
             construir_prompt_usuario,
             reforzar_resultado_analisis,
         )
-        from app.nlp.repositorios.analisis_repo import guardar_analisis
 
         # Buscar las opiniones guardadas para enviarlas al modelo
         cursor_opinions = (
@@ -334,15 +340,32 @@ async def scrape_analyze(
                 resultado_ia = modelo.parsear_respuesta(respuesta_raw)
                 resultado_ia = reforzar_resultado_analisis(resultado_ia, datos)
 
+                especialidad_nom = profile.get("doctor", {}).get("especialidad", "") or profile.get("especialidad", "")
                 doc_analisis = {
+                    "id_doctoralia": doctor_id,
                     "doctor_id": doctor_id,
                     "doctoralia_id": doctor_id,
                     "nombre_especialista": profile.get("doctor", {}).get("nombre", ""),
-                    "especialidad": profile.get("especialidad", ""),
+                    "especialidad": especialidad_nom,
+                    "estatus_analisis": "completado",
                     "estado": "completado",
                     "fecha_analisis": datetime.now(timezone.utc),
                     "modelo_usado": data.model,
                     "version_prompt": "v2",
+                    "analisis": {
+                        "puntuacion": resultado_ia.get("puntuacion_recomendacion"),
+                        "resumen": resultado_ia.get("resumen"),
+                        "puntos_fuertes": resultado_ia.get("puntos_fuertes", []),
+                        "puntos_debiles": resultado_ia.get("puntos_debiles", []),
+                        "confiabilidad": resultado_ia.get("confiabilidad_opiniones"),
+                        "justificacion": resultado_ia.get("justificacion_puntuacion"),
+                    },
+                    "metadata_analisis": {
+                        "fecha": datetime.now(timezone.utc).isoformat(),
+                        "opiniones_enviadas": len(datos.get("opiniones_procesadas", [])),
+                        "error_detalle": None,
+                    },
+                    "metadata_opiniones": datos.get("metricas_locales", {}),
                     "metricas_locales": datos.get("metricas_locales", {}),
                     "metadatos_muestreo": datos.get("metadatos_muestreo", {}),
                     "perfil_limpio": datos.get("perfil_limpio", {}),
@@ -352,30 +375,54 @@ async def scrape_analyze(
                     "fatal_proveedor": False,
                 }
 
-                # guardar_analisis es síncrono
-                await asyncio.to_thread(guardar_analisis, doc_analisis)
+                await db_async["analisis_especialistas"].update_one(
+                    {"id_doctoralia": doctor_id},
+                    {"$set": doc_analisis},
+                    upsert=True,
+                )
 
             except Exception as e:
                 # Guardar el error de análisis si falla
                 doc_error = {
+                    "id_doctoralia": doctor_id,
                     "doctor_id": doctor_id,
                     "doctoralia_id": doctor_id,
+                    "estatus_analisis": "error",
                     "estado": "error",
                     "error_detalle": str(e),
+                    "metadata_analisis": {
+                        "fecha": datetime.now(timezone.utc).isoformat(),
+                        "error_detalle": str(e),
+                    },
                     "fecha_analisis": datetime.now(timezone.utc),
                 }
-                await asyncio.to_thread(guardar_analisis, doc_error)
+                await db_async["analisis_especialistas"].update_one(
+                    {"id_doctoralia": doctor_id},
+                    {"$set": doc_error},
+                    upsert=True,
+                )
                 raise HTTPException(
                     status_code=500, detail=f"Error en análisis IA: {e}"
                 )
         else:
             doc_no_apto = {
+                "id_doctoralia": doctor_id,
                 "doctor_id": doctor_id,
+                "doctoralia_id": doctor_id,
+                "estatus_analisis": "sin_opiniones",
                 "estado": "sin_opiniones",
+                "metadata_analisis": {
+                    "fecha": datetime.now(timezone.utc).isoformat(),
+                    "error_detalle": datos.get("razon_no_apto"),
+                },
                 "fecha_analisis": datetime.now(timezone.utc),
                 "error_detalle": datos.get("razon_no_apto"),
             }
-            await asyncio.to_thread(guardar_analisis, doc_no_apto)
+            await db_async["analisis_especialistas"].update_one(
+                {"id_doctoralia": doctor_id},
+                {"$set": doc_no_apto},
+                upsert=True,
+            )
 
     return {
         "mensaje": "Scraping y análisis completados con éxito.",
