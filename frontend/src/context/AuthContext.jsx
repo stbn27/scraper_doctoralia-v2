@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   iniciarSesion as apiIniciarSesion,
   registrarUsuario as apiRegistrarUsuario,
@@ -6,13 +6,81 @@ import {
   actualizarPerfilUsuario as apiActualizarPerfilUsuario,
   listarFavoritos as apiListarFavoritos
 } from '@/services/api';
+import { SessionExpiredModal } from '@/components/ui/SessionExpiredModal';
 
 export const AuthContext = createContext(null);
+
+/** Tiempo en ms antes del vencimiento para refrescar proactivamente (5 min) */
+const REFRESH_ANTES_DE_VENCER_MS = 5 * 60 * 1000;
+
+/**
+ * Decodifica el payload del JWT sin verificar la firma (solo para leer exp en el cliente).
+ * @param {string} token
+ * @returns {{ exp?: number } | null}
+ */
+function _decodeJwtPayload(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem('medrec_token') || null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const refreshTimerRef = useRef(null);
+
+  /**
+   * Programa el refresco proactivo del JWT antes de que expire.
+   */
+  const _programarRefresh = useCallback((rawToken) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    if (!rawToken) return;
+
+    const payload = _decodeJwtPayload(rawToken);
+    if (!payload?.exp) return;
+
+    const expiresMs = payload.exp * 1000;
+    const ahora = Date.now();
+    const tiempoHastaRefresh = expiresMs - ahora - REFRESH_ANTES_DE_VENCER_MS;
+
+    if (tiempoHastaRefresh <= 0) {
+      // Ya está muy cerca de expirar o ya expiró — no programar timer
+      return;
+    }
+
+    refreshTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${rawToken}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.access_token) {
+            localStorage.setItem('medrec_token', data.access_token);
+            setToken(data.access_token);
+            _programarRefresh(data.access_token);
+          }
+        }
+      } catch {
+        // Si falla el refresh proactivo se ignora — el interceptor en api.js lo manejará
+      }
+    }, tiempoHastaRefresh);
+  }, []);
 
   // Recarga el usuario desde el backend usando el token actual
   const recargarUsuario = useCallback(async () => {
@@ -30,48 +98,65 @@ export function AuthProvider({ children }) {
       setUser(perfil);
       setToken(curToken);
       localStorage.setItem('medrec_user', JSON.stringify(perfil));
-      
+      _programarRefresh(curToken);
+
       // Sincronizar favoritos
       try {
         await apiListarFavoritos();
       } catch (e) {
         console.error("Error sincronizando favoritos al recargar usuario:", e);
       }
-      
+
       return perfil;
     } catch (error) {
       console.error("Error al recargar perfil de usuario:", error);
-      // Si falla por token inválido/expirado, limpiar sesión
       cerrarSesion();
       return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [_programarRefresh]);
 
   // Cargar usuario inicial al montar
   useEffect(() => {
     recargarUsuario();
   }, [recargarUsuario]);
 
+  // Escuchar el evento global de sesión expirada emitido por api.js
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      setToken(null);
+      setSessionExpired(true);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+    window.addEventListener('medrec:session-expired', handler);
+    return () => window.removeEventListener('medrec:session-expired', handler);
+  }, []);
+
+  const cerrarSesion = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    setSessionExpired(false);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    localStorage.removeItem('medrec_token');
+    localStorage.removeItem('medrec_user');
+    localStorage.removeItem('medrec_favorites');
+  }, []);
+
   const iniciarSesion = useCallback(async (email, password) => {
     try {
       const result = await apiIniciarSesion(email, password);
       setUser(result.user);
       setToken(result.token);
+      setSessionExpired(false);
+      _programarRefresh(result.token);
       return { success: true, message: '¡Bienvenido de nuevo!' };
     } catch (error) {
-      //console.error("Error de inicio de sesión:", error);
       return { success: false, message: error.message || 'Usuario o contraseña incorrectos.' };
     }
-  }, []);
+  }, [_programarRefresh]);
 
-  /**
-   * Registra un nuevo usuario en la API del backend.
-   * @param {string} email
-   * @param {string} password
-   * @param {Object} extraFields — nombre, apellido, telefono, avatar_url opcionales
-   */
   const registrarUsuario = useCallback(async (email, password, extraFields = {}) => {
     try {
       await apiRegistrarUsuario(email, password, extraFields);
@@ -82,20 +167,6 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  /**
-   * Cierra la sesión y limpia el almacenamiento local.
-   */
-  const cerrarSesion = useCallback(() => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('medrec_token');
-    localStorage.removeItem('medrec_user');
-    localStorage.removeItem('medrec_favorites');
-  }, []);
-
-  /**
-   * Actualiza el usuario localmente sin consultar el backend.
-   */
   const actualizarUsuarioLocal = useCallback((updates) => {
     setUser((prev) => {
       if (!prev) return null;
@@ -105,9 +176,6 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  /**
-   * Actualiza el perfil en el backend y refresca el estado local.
-   */
   const updateProfile = useCallback(async (updates) => {
     try {
       const updatedUser = await apiActualizarPerfilUsuario(updates);
@@ -119,16 +187,28 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Compatibilidad con aliases en inglés para no romper componentes existentes
+  // Compatibilidad con aliases en inglés
   const login = iniciarSesion;
   const logout = cerrarSesion;
 
   const loginWithGoogle = useCallback(async () => {
-    // Simulado para compatibilidad
     return { success: false, message: 'El inicio de sesión con Google no está configurado.' };
   }, []);
 
   const isAuthenticated = Boolean(user && token);
+
+  /**
+   * Maneja el click en "Iniciar sesión" del modal de sesión expirada.
+   * Guarda la ruta actual y redirige al login para volver después.
+   */
+  const handleSessionExpiredLogin = useCallback(() => {
+    setSessionExpired(false);
+    const returnTo = window.location.pathname + window.location.search;
+    const loginUrl = returnTo && returnTo !== '/login'
+      ? `/login?redirect=${encodeURIComponent(returnTo)}`
+      : '/login';
+    window.location.href = loginUrl;
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -142,7 +222,6 @@ export function AuthProvider({ children }) {
         cerrarSesion,
         recargarUsuario,
         actualizarUsuarioLocal,
-        // Compatibilidad:
         login,
         loginWithGoogle,
         logout,
@@ -150,6 +229,12 @@ export function AuthProvider({ children }) {
       }}
     >
       {children}
+
+      {/* Modal de sesión expirada — aparece como overlay encima de todo */}
+      {sessionExpired && (
+        <SessionExpiredModal onLogin={handleSessionExpiredLogin} />
+      )}
     </AuthContext.Provider>
   );
 }
+

@@ -174,6 +174,54 @@ def login(data: UsuarioLogin):
 
 
 # =============================================================================
+# REFRESH TOKEN
+# =============================================================================
+
+
+@router.post("/auth/refresh")
+def refresh_token(current_user: dict = Depends(get_current_user)):
+    """
+    Renueva silenciosamente el JWT del usuario autenticado.
+
+    No requiere credenciales adicionales — basta con enviar el token actual
+    (aún válido) en el header Authorization. Devuelve un token nuevo con
+    la misma vida que el original configurada en ACCESS_TOKEN_EXPIRE_MINUTES.
+
+    Retorna
+    -------
+    dict
+        Nuevo access_token y token_type.
+    """
+    from app.db.mysql import get_mysql_conn
+    conn = get_mysql_conn()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT u.id, r.nombre AS rol_nombre
+            FROM usuarios u
+            LEFT JOIN roles r ON u.rol_id = r.id
+            WHERE u.id = %s
+            """,
+            (current_user["id"],),
+        )
+        user = cursor.fetchone()
+    except Exception:
+        cursor.execute("SELECT id FROM usuarios WHERE id = %s", (current_user["id"],))
+        user = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado.")
+
+    rol = (user.get("rol_nombre") or current_user.get("rol") or "USER")
+    nuevo_token = create_access_token({"sub": str(current_user["id"]), "rol": rol})
+    return {"access_token": nuevo_token, "token_type": "bearer"}
+
+
+# =============================================================================
 # PERFIL
 # =============================================================================
 

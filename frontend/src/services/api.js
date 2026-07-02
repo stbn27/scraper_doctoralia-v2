@@ -37,9 +37,42 @@ function writeStoredArray(key, value) {
 }
 
 /**
- * Realiza una petición HTTP con el token JWT si está disponible.
+ * Intenta refrescar el JWT silenciosamente.
+ * Retorna el nuevo token si tiene éxito, o null si falla.
+ * @returns {Promise<string|null>}
  */
-export async function realizarPeticion(endpoint, opciones = {}) {
+async function _intentarRefresh() {
+  const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.access_token) {
+      window.localStorage.setItem('medrec_token', data.access_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Flag para evitar bucles de refresh simultáneos */
+let _refreshEnProceso = false;
+let _refreshPromise = null;
+
+/**
+ * Realiza una petición HTTP con el token JWT si está disponible.
+ * Si recibe un 401 intenta refrescar el token una sola vez antes de rendirse.
+ */
+export async function realizarPeticion(endpoint, opciones = {}, _esReintento = false) {
   const url = `${API_BASE_URL}${endpoint}`;
 
   const headers = { ...opciones.headers };
@@ -60,10 +93,40 @@ export async function realizarPeticion(endpoint, opciones = {}) {
   });
 
   if (response.status === 401) {
+    // Si ya es un reintento, la sesión definitivamente expiró
+    if (_esReintento) {
+      if (canUseStorage()) {
+        window.localStorage.removeItem('medrec_token');
+        window.localStorage.removeItem('medrec_user');
+      }
+      // Emitir evento global para que el contexto de auth lo maneje
+      window.dispatchEvent(new CustomEvent('medrec:session-expired'));
+      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+    }
+
+    // Primer intento — tratar de refrescar silenciosamente
+    if (!_refreshEnProceso) {
+      _refreshEnProceso = true;
+      _refreshPromise = _intentarRefresh().finally(() => {
+        _refreshEnProceso = false;
+        _refreshPromise = null;
+      });
+    }
+
+    const nuevoToken = await _refreshPromise;
+
+    if (nuevoToken) {
+      // Reintento con el token nuevo
+      return realizarPeticion(endpoint, opciones, true);
+    }
+
+    // Refresh falló — sesión expirada
     if (canUseStorage()) {
       window.localStorage.removeItem('medrec_token');
       window.localStorage.removeItem('medrec_user');
     }
+    window.dispatchEvent(new CustomEvent('medrec:session-expired'));
+    throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
   }
 
   if (response.status === 404) {
@@ -83,6 +146,7 @@ export async function realizarPeticion(endpoint, opciones = {}) {
 
   return response.json();
 }
+
 
 /**
  * Petición base compatible con código existente.

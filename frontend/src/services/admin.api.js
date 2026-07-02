@@ -112,7 +112,7 @@ export async function validarUrlAdmin(url) {
 }
 
 /**
- * Ejecuta el scraping y análisis opcional de un perfil manualmente.
+ * Ejecuta el scraping y análisis opcional de un perfil manualmente (vía URL).
  *
  * @param {Object} payload - { url, analyze, model }
  * @returns {Promise<Object>} Resultado del scraping
@@ -127,6 +127,36 @@ export async function ejecutarScrapingManual(payload) {
       max_opinions: 30,
       scrape_only: !payload.analyze
     }),
+  });
+}
+
+/**
+ * Re-scrapea un especialista ya almacenado en la BD usando su URL de fuente.
+ * Usado desde la vista de detalle del admin.
+ *
+ * @param {string} url - URL del perfil en Doctoralia
+ * @returns {Promise<Object>} Resultado del scraping
+ */
+export async function reescrapearEspecialistaAdmin(url) {
+  return realizarPeticion('/especialistas/avanzada/scrape-analyze', {
+    method: 'POST',
+    body: JSON.stringify({ url, analyze: false, scrape_only: true }),
+  });
+}
+
+/**
+ * Dispara el análisis IA de un especialista desde el panel admin.
+ * El backend selecciona automáticamente el modelo disponible por prioridad.
+ * No requiere token del usuario.
+ *
+ * @param {number} doctoraliaId - ID numérico del especialista
+ * @param {number} [maxOpinions=50] - Máximo de opiniones a analizar
+ * @returns {Promise<Object>} { mensaje, doctoralia_id, modelo_usado }
+ */
+export async function analizarEspecialistaAdmin(doctoraliaId, maxOpinions = 50) {
+  return realizarPeticion(`/admin/especialistas/${doctoraliaId}/analizar`, {
+    method: 'POST',
+    body: JSON.stringify({ max_opinions: maxOpinions }),
   });
 }
 
