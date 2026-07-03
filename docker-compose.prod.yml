@@ -1,0 +1,125 @@
+###############################################################################
+#  docker-compose.prod.yml
+#  Perfil de PRODUCCIÓN — bajo consumo de recursos, sin hot-reload, sin scraper.
+#
+#  Uso básico:
+#    docker compose -f docker-compose.prod.yml up -d
+#
+#  Con Ollama (solo en máquina con GPU):
+#    docker compose -f docker-compose.prod.yml --profile ollama up -d
+###############################################################################
+
+services:
+
+  # ======================== BASES DE DATOS =====================================
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb_prod
+    restart: unless-stopped
+    # Limitar caché de WiredTiger a 512 MB (por defecto usa el 50% de la RAM)
+    command: --wiredTigerCacheSizeGB 0.5
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: doctoralia
+    volumes:
+      - ./data/mongodb:/data/db
+      - ./data/mongodb_config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_prod
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: medicos_db
+      MYSQL_ROOT_HOST: '%'
+    # Limitar uso de memoria de MySQL a ~256 MB
+    command: >
+      --innodb-buffer-pool-size=128M
+      --max-connections=50
+      --performance-schema=OFF
+    ports:
+      - "3310:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ============================ BACKEND ========================================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod   # <-- Dockerfile de producción (sin --reload, sin Playwright)
+    image: pt_backend:prod
+    container_name: backend_prod
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.prod                   # <-- variables apuntando a nombres de servicio Docker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    # SIN volumen montado: el código ya está dentro de la imagen
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ============================ FRONTEND (Nginx) ================================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod   # <-- build estático + Nginx (sin Vite dev server)
+    image: pt_frontend:prod
+    container_name: frontend_prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    # SIN volumen montado: los archivos estáticos ya están dentro de la imagen
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # ============= OLLAMA (manual: --profile ollama) =============================
+  # Solo activar en máquinas con GPU NVIDIA.
+  # Uso: docker compose -f docker-compose.prod.yml --profile ollama up -d ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_prod
+    profiles: ["ollama"]
+    restart: "no"
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_QUEUE=20
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

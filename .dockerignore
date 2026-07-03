@@ -1,0 +1,39 @@
+# IDEs y editores
+.vscode
+.idea
+.cursor
+
+# Entornos virtuales
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+*.egg-info
+
+# Dependencias frontend (se instalan en el build)
+node_modules
+dist
+
+# Control de versiones
+.git
+.gitignore
+
+# Documentación
+docs
+*.md
+
+# Datos y backups (persisten en el host, no en la imagen)
+data
+backups
+.data
+
+# Variables de entorno (se pasan en tiempo de ejecución)
+.env
+.env.*
+
+# Archivos de scraping / scripts temporales
+*.log
+*.out
