@@ -75,8 +75,14 @@ let _refreshPromise = null;
 export async function realizarPeticion(endpoint, opciones = {}, _esReintento = false) {
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const headers = { ...opciones.headers };
-  if (!(opciones.body instanceof FormData) && !headers['Content-Type']) {
+  // skipSessionExpiry: evita que un 401 dispare el modal de "sesión expirada".
+  // Usado en endpoints de autenticación donde 401 = credenciales incorrectas.
+  const skipSessionExpiry = opciones._skipSessionExpiry ?? false;
+  const opcionesFetch = { ...opciones };
+  delete opcionesFetch._skipSessionExpiry;
+
+  const headers = { ...opcionesFetch.headers };
+  if (!(opcionesFetch.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -88,11 +94,24 @@ export async function realizarPeticion(endpoint, opciones = {}, _esReintento = f
   }
 
   const response = await fetch(url, {
-    ...opciones,
+    ...opcionesFetch,
     headers,
   });
 
   if (response.status === 401) {
+    // Endpoints de auth: el 401 es credenciales incorrectas, no sesión expirada.
+    // Lanzar error directo sin disparar el modal ni intentar refresh.
+    if (skipSessionExpiry) {
+      let mensaje = 'Credenciales incorrectas.';
+      try {
+        const errorJson = await response.json();
+        if (errorJson?.detail) {
+          mensaje = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+        }
+      } catch (_) { }
+      throw new Error(mensaje);
+    }
+
     // Si ya es un reintento, la sesión definitivamente expiró
     if (_esReintento) {
       if (canUseStorage()) {
@@ -203,9 +222,12 @@ export {
  * Inicia sesión con email y contraseña. Devuelve token y datos del usuario.
  */
 export async function iniciarSesion(email, password) {
+  // _skipSessionExpiry: un 401 aquí significa contraseña incorrecta,
+  // no sesión caducada. Evita que se abra el modal de sesión expirada.
   const data = await realizarPeticion('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
+    _skipSessionExpiry: true,
   });
 
   if (data?.access_token) {
@@ -239,6 +261,7 @@ export async function registrarUsuario(email, password, extraFields = {}) {
   return realizarPeticion('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password, ...extraFields }),
+    _skipSessionExpiry: true,
   });
 }
 
