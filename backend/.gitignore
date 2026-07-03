@@ -9,7 +9,7 @@ venv/
 test/
 /**/__pycache__/**
 migrations/
-
+db_migrations/
 app/api/docs/
 
 # Archivos

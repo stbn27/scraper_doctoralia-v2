@@ -135,7 +135,7 @@ export default function Search() {
             try {
                 const response = await searchSpecialists(nextFilters);
 
-                console.log('[Search] Respuesta del backend:', response);
+                //console.log('[Search] Respuesta del backend:', response);
 
                 setSpecialists(response.results);
                 setPagination({
