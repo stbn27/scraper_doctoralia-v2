@@ -17,7 +17,7 @@ services:
   # ======================== BASES DE DATOS =====================================
 
   mongodb:
-    image: mongo:7
+    image: mongo:8                  # <-- debe coincidir con la versión que creó ./data/mongodb
     container_name: mongodb_prod
     restart: unless-stopped
     # Limitar caché de WiredTiger a 512 MB (por defecto usa el 50% de la RAM)

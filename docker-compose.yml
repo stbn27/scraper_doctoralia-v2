@@ -1,6 +1,30 @@
 services:
+
+  # ======================== BASES DE DATOS (auto-start) ========================
+
+  mongodb:
+    image: mongo:8                  # versión fijada — no usar 'latest' para evitar upgrades inesperados
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: doctoralia
+    volumes:
+      - ./data/mongodb:/data/db
+      - ./data/mongodb_config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   mysql:
     image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: medicos_db
@@ -8,16 +32,89 @@ services:
     ports:
       - "3310:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  mongodb:
-    image: mongo:6
+  # ============================ BACKEND (auto-start) ============================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    init: true
+    ipc: host
+    restart: unless-stopped
     ports:
-      - "27018:27017"
+      - "8000:8000"
+    env_file:
+      - .env
     volumes:
-      - mongo_data:/data/db
-    command: --wiredTigerCacheSizeGB 0.5
+      - ./backend:/app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
 
-volumes:
-  mysql_data:
-  mongo_data:
+  # ============================ FRONTEND (auto-start) ===========================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  # =============== OLLAMA (manual: docker compose up -d --profile ollama) ==============
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    profiles: ["ollama"]
+    restart: "no"
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_QUEUE=20
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama2:
+    image: ollama/ollama:latest
+    container_name: ollama2
+    profiles: ["ollama"]
+    restart: "no"
+    ports:
+      - "11435:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_QUEUE=20
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
