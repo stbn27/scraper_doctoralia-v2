@@ -17,7 +17,7 @@ services:
   # ======================== BASES DE DATOS =====================================
 
   mongodb:
-    image: mongo:8                  # <-- debe coincidir con la versión que creó ./data/mongodb
+    image: mongo:8
     container_name: mongodb_prod
     restart: unless-stopped
     # Limitar caché de WiredTiger a 512 MB (por defecto usa el 50% de la RAM)
@@ -56,6 +56,8 @@ services:
       - "3310:3306"
     volumes:
       - ./data/mysql:/var/lib/mysql
+      # Init script: se ejecuta SOLO cuando la BD está vacía (primer arranque)
+      - ./backend/db_migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" 2>/dev/null || exit 1"]
       interval: 15s
