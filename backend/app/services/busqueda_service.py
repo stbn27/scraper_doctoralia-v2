@@ -24,25 +24,32 @@ from app.db.repositorios import analisis_repo
 # =============================================================================
 
 
-def _normalizar(texto: str) -> str:
+def _normalizar(texto) -> str:
     """
     Convierte texto a minúsculas sin acentos para comparación normalizada.
 
+    Acepta None o cualquier tipo no-str y retorna string vacío de forma segura,
+    evitando TypeError cuando campos de MongoDB llegan como null.
+
     Parámetros
     ----------
-    texto : str
+    texto : str | None | Any
         Texto a normalizar.
 
     Retorna
     -------
     str
-        Texto normalizado sin acentos ni mayúsculas.
+        Texto normalizado sin acentos ni mayúsculas, o '' si la entrada es None.
 
     Ejemplo
     -------
     >>> _normalizar("Ginecólogo")
     'ginecologo'
+    >>> _normalizar(None)
+    ''
     """
+    if not isinstance(texto, str):
+        return ""
     texto = unicodedata.normalize("NFD", texto)
     return "".join(c for c in texto if unicodedata.category(c) != "Mn").lower().strip()
 

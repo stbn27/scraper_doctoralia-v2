@@ -18,4 +18,5 @@ COPY . .
 EXPOSE 8000
 
 # Sin --reload en producción: menor consumo de CPU y RAM
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# --timeout-keep-alive: más alto que el timeout de Ollama (600s) para análisis IA largos
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-keep-alive", "660"]

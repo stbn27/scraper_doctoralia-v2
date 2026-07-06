@@ -8,9 +8,13 @@
 #  Uso básico:
 #    docker compose -f docker-compose.prod.yml up -d
 #
-#  Con Ollama (solo en máquina con GPU):
+#  Con Ollama (solo en máquina con GPU NVIDIA):
 #    docker compose -f docker-compose.prod.yml --profile ollama up -d
 ###############################################################################
+
+networks:
+  prod_network:
+    driver: bridge
 
 services:
 
@@ -31,6 +35,8 @@ services:
     volumes:
       - ./data/mongodb:/data/db
       - ./data/mongodb_config:/data/configdb
+    networks:
+      - prod_network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 15s
@@ -58,6 +64,8 @@ services:
       - ./data/mysql:/var/lib/mysql
       # Init script: se ejecuta SOLO cuando la BD está vacía (primer arranque)
       - ./backend/db_migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - prod_network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" 2>/dev/null || exit 1"]
       interval: 15s
@@ -82,11 +90,14 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+    networks:
+      - prod_network
     # SIN volumen montado: el código ya está dentro de la imagen
     deploy:
       resources:
         limits:
-          memory: 512M
+          # 1 GB permite asyncio.to_thread durante análisis IA largos sin OOM
+          memory: 1024M
 
   # ============================ FRONTEND (Nginx) ================================
 
@@ -101,6 +112,8 @@ services:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - prod_network
     # SIN volumen montado: los archivos estáticos ya están dentro de la imagen
     deploy:
       resources:
@@ -123,6 +136,10 @@ services:
     environment:
       - OLLAMA_NUM_PARALLEL=4
       - OLLAMA_MAX_QUEUE=20
+      # Mantener el modelo cargado en VRAM indefinidamente (evita cold-start de minutos)
+      - OLLAMA_KEEP_ALIVE=-1
+    networks:
+      - prod_network
     deploy:
       resources:
         reservations:

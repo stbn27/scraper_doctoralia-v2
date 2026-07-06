@@ -34,6 +34,9 @@ class OllamaModelo(BaseModelo):
         """
         Envía los prompts a Ollama via HTTP y retorna la respuesta.
 
+        El timeout es alto (600s) porque modelos grandes como qwen2.5:14b
+        pueden tardar varios minutos en la primera carga a VRAM.
+
         Parámetros
         ----------
         prompt_sistema : str
@@ -46,6 +49,7 @@ class OllamaModelo(BaseModelo):
         str
             Respuesta cruda del modelo.
         """
+        import time
         url = f"{self._base_url}/api/chat"
         payload = {
             "model": self._modelo,
@@ -60,8 +64,12 @@ class OllamaModelo(BaseModelo):
             },
         }
 
-        respuesta = httpx.post(url, json=payload, timeout=120.0)
+        t0 = time.monotonic()
+        logger.info("[OllamaModelo] Enviando petición a %s con modelo %s", url, self._modelo)
+        respuesta = httpx.post(url, json=payload, timeout=600.0)
         respuesta.raise_for_status()
+        elapsed = time.monotonic() - t0
+        logger.info("[OllamaModelo] Respuesta recibida en %.1fs", elapsed)
 
         datos = respuesta.json()
         return datos.get("message", {}).get("content", "")
