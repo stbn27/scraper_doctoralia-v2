@@ -899,6 +899,49 @@ async def resumen_scraping(
 
 
 # =============================================================================
+# GET /admin/modelos-usados
+# =============================================================================
+
+
+@router.get("/modelos-usados")
+async def obtener_modelos_usados(
+    _admin: dict = Depends(_requerir_admin),
+):
+    """
+    Retorna la lista de modelos de IA únicos registrados en los análisis.
+
+    Consulta el campo `modelo_usado` de la colección `analisis_especialistas`
+    para obtener los valores reales presentes en la base de datos, junto con
+    el conteo de análisis por modelo.
+
+    Retorna
+    -------
+    dict
+        { modelos: [{ valor, etiqueta, total }] }
+    """
+    db = get_doctoralia_async_db()
+
+    pipeline = [
+        {"$match": {"modelo_usado": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$modelo_usado", "total": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+    ]
+
+    modelos = []
+    async for doc in db["analisis_especialistas"].aggregate(pipeline):
+        valor_raw = doc["_id"]
+        # Extraer solo el nombre del proveedor (ej: "qwen2.5:14b" → "ollama", "gemini-2.0" → "gemini")
+        # El campo puede tener el nombre exacto del modelo (ollama) o el proveedor directamente
+        modelos.append({
+            "valor": valor_raw,
+            "etiqueta": valor_raw,
+            "total": doc["total"],
+        })
+
+    return {"modelos": modelos}
+
+
+# =============================================================================
 # DELETE /admin/especialistas/{doctoralia_id}
 # =============================================================================
 

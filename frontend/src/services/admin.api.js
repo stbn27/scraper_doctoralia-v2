@@ -171,3 +171,17 @@ export async function deleteEspecialistaAdmin(doctoraliaId) {
     method: 'DELETE',
   });
 }
+
+/**
+ * Obtiene los modelos de IA realmente usados en los análisis (dinámico desde MongoDB).
+ *
+ * @returns {Promise<{ modelos: Array<{ valor: string, etiqueta: string, total: number }> }>}
+ *
+ * @example
+ * const { modelos } = await getModelosUsadosAdmin();
+ * // [{ valor: 'qwen2.5:14b', etiqueta: 'qwen2.5:14b', total: 1200 }, ...]
+ */
+export async function getModelosUsadosAdmin() {
+  return realizarPeticion('/admin/modelos-usados');
+}
+

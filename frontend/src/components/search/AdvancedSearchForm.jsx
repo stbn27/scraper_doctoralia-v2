@@ -67,8 +67,27 @@ export function AdvancedSearchForm({ onClose }) {
       } finally {
         setLoadingTokens(false);
       }
+
+      // Siempre verificar Ollama al montar si analyze está activo
+      // (analyze=true por defecto, así el formulario ya sabe qué hay disponible)
+      if (analyze) {
+        try {
+          setOllamaStatus({ cargando: true });
+          const data = await realizarPeticion('/especialistas/avanzada/ollama-status');
+          const modelos = data?.modelos || [];
+          setOllamaStatus({ disponible: data?.disponible === true, modelos });
+          if (data?.disponible && modelos.length > 0) {
+            setSelectedOllamaModel(modelos[0]);
+            // Auto-seleccionar Ollama si no hay tokens configurados
+            setSelectedModel((prev) => (prev === '' ? 'ollama' : prev));
+          }
+        } catch {
+          setOllamaStatus({ disponible: false, modelos: [] });
+        }
+      }
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Verificar Ollama cuando el usuario activa el análisis con IA
@@ -125,8 +144,18 @@ export function AdvancedSearchForm({ onClose }) {
           return;
         }
       } else if (!selectedModel) {
-        setShowTokenModal(true);
-        return;
+        // Solo mostrar el modal si TAMPOCO hay Ollama disponible
+        const ollamaDisponible = ollamaStatus?.disponible && (ollamaStatus?.modelos?.length ?? 0) > 0;
+        if (!ollamaDisponible) {
+          setShowTokenModal(true);
+          return;
+        }
+        // Si Ollama está disponible pero no estaba seleccionado, seleccionarlo ahora
+        setSelectedModel('ollama');
+        if (ollamaStatus.modelos.length > 0 && !selectedOllamaModel) {
+          setSelectedOllamaModel(ollamaStatus.modelos[0]);
+        }
+        return; // Dejar que el usuario revise y vuelva a enviar con Ollama ya seleccionado
       }
     }
 

@@ -31,7 +31,8 @@ import {
   getEspecialistasAdmin,
   deleteEspecialistaAdmin,
   validarUrlAdmin,
-  ejecutarScrapingManual
+  ejecutarScrapingManual,
+  getModelosUsadosAdmin,
 } from '@/services/admin.api';
 import { useToast } from '@/hooks/useToast';
 
@@ -200,14 +201,8 @@ const OPT_ANALISIS = [
   { value: 'false', label: 'Sin análisis' }
 ];
 
-const OPT_MODELOS = [
-  { value: '', label: 'Todos' },
-  { value: 'deepseek', label: 'deepseek' },
-  { value: 'groq', label: 'groq' },
-  { value: 'gemini', label: 'gemini' },
-  { value: 'minimax', label: 'minimax' },
-  { value: 'ollama', label: 'ollama' }
-];
+// OPT_MODELOS se carga dinámicamente desde la API (ver PanelFiltros).
+// No hardcodeado para reflejar siempre los valores reales de la BD.
 
 const OPT_ESTATUS = [
   { value: '', label: 'Todos' },
@@ -219,6 +214,23 @@ const OPT_ESTATUS = [
 
 function PanelFiltros({ filtros, onChange }) {
   const [qInput, setQInput] = useState(filtros.q);
+  const [optsModelos, setOptsModelos] = useState([{ value: '', label: 'Todos' }]);
+
+  // Cargar modelos dinámicamente desde MongoDB
+  useEffect(() => {
+    getModelosUsadosAdmin()
+      .then((res) => {
+        const dinamicos = (res?.modelos || []).map((m) => ({
+          value: m.valor,
+          label: `${m.etiqueta} (${m.total})`,
+        }));
+        setOptsModelos([{ value: '', label: 'Todos' }, ...dinamicos]);
+      })
+      .catch(() => {
+        // Fallback a lista vacía si la API falla
+        setOptsModelos([{ value: '', label: 'Todos' }]);
+      });
+  }, []);
 
   useEffect(() => {
     setQInput(filtros.q || '');
@@ -270,12 +282,13 @@ function PanelFiltros({ filtros, onChange }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 150px' }}>
         <label style={{ fontSize: 10, color: 'var(--text-muted)' }}>Modelo IA</label>
         <Select
-          options={OPT_MODELOS}
+          options={optsModelos}
           styles={selectStyles}
-          value={OPT_MODELOS.find(o => o.value === filtros.modeloUsado) || OPT_MODELOS[0]}
+          value={optsModelos.find(o => o.value === filtros.modeloUsado) || optsModelos[0]}
           onChange={item => onChange(f => ({ ...f, modeloUsado: item.value, page: 1 }))}
           isSearchable={false}
           menuPortalTarget={document.body}
+          placeholder="Todos"
         />
       </div>
 

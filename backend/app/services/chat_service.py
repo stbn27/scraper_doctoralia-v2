@@ -140,32 +140,86 @@ def _respuesta_emergencia() -> dict:
     }
 
 
+def _verificar_ollama_sync() -> tuple[bool, str]:
+    """
+    Verifica si Ollama está disponible de forma síncrona (para uso en threads).
+
+    Retorna
+    -------
+    tuple[bool, str]
+        (disponible, modelo_a_usar) — el primer modelo instalado o vacío.
+    """
+    import httpx as _httpx  # pyrefly: ignore [missing-import]
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model = os.getenv("OLLAMA_CHAT_MODEL", "")
+    try:
+        with _httpx.Client(timeout=3.0) as c:
+            resp = c.get(f"{ollama_url}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            modelos = [m["name"] for m in data.get("models", [])]
+            if not modelos:
+                return False, ""
+            # Usar el modelo configurado o el primero disponible
+            modelo_elegido = ollama_model if ollama_model in modelos else modelos[0]
+            return True, modelo_elegido
+    except Exception:
+        return False, ""
+
+
 def _construir_instancia_modelo(provider: str):
     """
     Instancia el modelo LLM según el proveedor solicitado.
 
+    Prioridad cuando provider='auto':
+      1. Ollama (local, sin costo) — si está disponible
+      2. Gemini — si hay GEMINI_API_KEY
+      3. Groq  — si hay GROQ_API_KEY
+
     Parámetros
     ----------
     provider : str
-        'groq', 'gemini' o 'auto'.
+        'groq', 'gemini', 'ollama' o 'auto'.
 
     Retorna
     -------
     tuple[BaseModelo, str, str]
         Tupla de (instancia_modelo, nombre_proveedor, nombre_modelo).
     """
-    #modelo_activo = os.getenv("MODELO_ACTIVO", "groq")
-    modelo_activo = "gemini"
-
     if provider == "auto":
-        provider = modelo_activo
+        # 1. Intentar Ollama primero
+        ollama_ok, ollama_model = _verificar_ollama_sync()
+        if ollama_ok:
+            from app.nlp.modelos.ollama_modelo import OllamaModelo  # pyrefly: ignore
+            m = OllamaModelo()
+            if ollama_model:
+                m._modelo = ollama_model
+            return m, "ollama", ollama_model
+
+        # 2. Gemini como fallback
+        if os.getenv("GEMINI_API_KEY", "").strip():
+            m = GeminiModelo()
+            return m, "gemini", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+        # 3. Groq como último recurso
+        m = GroqModelo()
+        return m, "groq", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    if provider == "ollama":
+        from app.nlp.modelos.ollama_modelo import OllamaModelo  # pyrefly: ignore
+        ollama_model = os.getenv("OLLAMA_CHAT_MODEL", "")
+        m = OllamaModelo()
+        if ollama_model:
+            m._modelo = ollama_model
+        return m, "ollama", ollama_model
 
     if provider == "gemini":
         m = GeminiModelo()
         return m, "gemini", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    else:
-        m = GroqModelo()
-        return m, "groq", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    # groq (u otro valor desconocido)
+    m = GroqModelo()
+    return m, "groq", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 async def interpretar_consulta_medica(
@@ -218,21 +272,38 @@ async def interpretar_consulta_medica(
             "[ChatService] Error con proveedor %s: %s", proveedor_nombre, exc_principal
         )
 
-        # Fallback a Gemini si el principal era Groq
-        if proveedor_nombre == "groq":
-            try:
-                fallback = GeminiModelo()
-                respuesta_raw = await asyncio.to_thread(
-                    fallback.analizar, PROMPT_SISTEMA, prompt_usuario
-                )
-                resultado = fallback.parsear_respuesta(respuesta_raw)
-                proveedor_nombre = "gemini"
-                modelo_nombre = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-            except Exception as exc_fallback:
-                logger.error("[ChatService] Fallback también falló: %s", exc_fallback)
-                raise RuntimeError(
-                    "El servicio de interpretación no está disponible."
-                ) from exc_fallback
+        # Fallback encadenado: ollama → gemini → groq
+        if proveedor_nombre in ("ollama", "groq"):
+            # Intentar Gemini como segundo paso
+            if os.getenv("GEMINI_API_KEY", "").strip():
+                try:
+                    fallback = GeminiModelo()
+                    respuesta_raw = await asyncio.to_thread(
+                        fallback.analizar, PROMPT_SISTEMA, prompt_usuario
+                    )
+                    resultado = fallback.parsear_respuesta(respuesta_raw)
+                    proveedor_nombre = "gemini"
+                    modelo_nombre = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+                except Exception as exc_fallback:
+                    logger.error("[ChatService] Fallback Gemini también falló: %s", exc_fallback)
+                    raise RuntimeError(
+                        "El servicio de interpretación no está disponible."
+                    ) from exc_fallback
+            else:
+                # Sin clave Gemini, intentar Groq como último recurso
+                try:
+                    fallback_groq = GroqModelo()
+                    respuesta_raw = await asyncio.to_thread(
+                        fallback_groq.analizar, PROMPT_SISTEMA, prompt_usuario
+                    )
+                    resultado = fallback_groq.parsear_respuesta(respuesta_raw)
+                    proveedor_nombre = "groq"
+                    modelo_nombre = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+                except Exception as exc_groq:
+                    logger.error("[ChatService] Fallback Groq también falló: %s", exc_groq)
+                    raise RuntimeError(
+                        "El servicio de interpretación no está disponible."
+                    ) from exc_groq
         else:
             raise RuntimeError(
                 "El servicio de interpretación no está disponible."
