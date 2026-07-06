@@ -13,6 +13,7 @@ Variables de entorno requeridas:
 import os
 import logging
 
+# pyrefly: ignore [missing-import]
 import httpx
 
 from app.nlp.modelos.base_modelo import BaseModelo
@@ -50,6 +51,7 @@ class OllamaModelo(BaseModelo):
             Respuesta cruda del modelo.
         """
         import time
+
         url = f"{self._base_url}/api/chat"
         payload = {
             "model": self._modelo,
@@ -65,7 +67,9 @@ class OllamaModelo(BaseModelo):
         }
 
         t0 = time.monotonic()
-        logger.info("[OllamaModelo] Enviando petición a %s con modelo %s", url, self._modelo)
+        logger.info(
+            "[OllamaModelo] Enviando petición a %s con modelo %s", url, self._modelo
+        )
         respuesta = httpx.post(url, json=payload, timeout=600.0)
         respuesta.raise_for_status()
         elapsed = time.monotonic() - t0
