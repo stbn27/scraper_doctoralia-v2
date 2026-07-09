@@ -1,30 +1,17 @@
 import React from 'react';
-import {
-  RiShieldCheckLine,
-  RiGraduationCapLine,
-  RiDatabaseLine,
-  RiRobot2Line,
-  RiStethoscopeLine,
-  RiLockPasswordLine,
-  RiCheckDoubleLine,
-  RiServerLine,
-  RiRefreshLine,
-  RiCustomerService2Line,
-} from 'react-icons/ri';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { BubbleBackground } from '@/components/layout/BubbleBackground';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 
 /**
- * Secciones de los Términos y Condiciones de Uso del sistema MedRec.
+ * Secciones del documento legal de Términos y Condiciones de Uso.
  */
 const SECCIONES_TERMINOS = [
   {
     id: 'proposito-academico',
     numero: '1',
     titulo: 'Propósito Académico y Sin Fines de Lucro',
-    icono: RiGraduationCapLine,
     contenido: [
       'Este sistema web ha sido desarrollado exclusivamente con fines académicos y educativos. No tiene carácter comercial ni persigue ningún beneficio económico. Su objetivo es demostrar capacidades técnicas de desarrollo de software y explorar conceptos de inteligencia artificial aplicada a la salud.',
     ],
@@ -33,7 +20,6 @@ const SECCIONES_TERMINOS = [
     id: 'origen-veracidad',
     numero: '2',
     titulo: 'Origen y Veracidad de la Información',
-    icono: RiDatabaseLine,
     contenido: [
       'La información presentada en esta plataforma ha sido obtenida de perfiles públicos disponibles en "doctoralia.mx". Es importante destacar que:',
     ],
@@ -47,7 +33,6 @@ const SECCIONES_TERMINOS = [
     id: 'limitacion-chatbot',
     numero: '3',
     titulo: 'Limitación de Responsabilidad del Asistente Virtual (Chatbot)',
-    icono: RiRobot2Line,
     contenido: [
       'El sistema incorpora un asistente virtual impulsado por inteligencia artificial que puede:',
     ],
@@ -66,7 +51,6 @@ const SECCIONES_TERMINOS = [
     id: 'naturaleza-recomendaciones',
     numero: '4',
     titulo: 'Naturaleza de las Recomendaciones',
-    icono: RiStethoscopeLine,
     contenido: [
       'Las recomendaciones generadas por el sistema:',
     ],
@@ -81,7 +65,6 @@ const SECCIONES_TERMINOS = [
     id: 'privacidad-datos',
     numero: '5',
     titulo: 'Privacidad y Manejo de Datos',
-    icono: RiLockPasswordLine,
     contenido: [
       'Este sistema:',
     ],
@@ -95,7 +78,6 @@ const SECCIONES_TERMINOS = [
     id: 'uso-aceptable',
     numero: '6',
     titulo: 'Uso Aceptable',
-    icono: RiCheckDoubleLine,
     contenido: [
       'El usuario se compromete a:',
     ],
@@ -109,7 +91,6 @@ const SECCIONES_TERMINOS = [
     id: 'disponibilidad-servicio',
     numero: '7',
     titulo: 'Disponibilidad del Servicio',
-    icono: RiServerLine,
     contenido: [
       'El sistema se encuentra en fase de desarrollo y pruebas, por lo que:',
     ],
@@ -123,7 +104,6 @@ const SECCIONES_TERMINOS = [
     id: 'actualizacion-terminos',
     numero: '8',
     titulo: 'Actualización de los Términos',
-    icono: RiRefreshLine,
     contenido: [
       'Estos términos y condiciones pueden ser actualizados periódicamente. Es responsabilidad del usuario revisarlos antes de cada uso del sistema.',
     ],
@@ -132,7 +112,6 @@ const SECCIONES_TERMINOS = [
     id: 'contacto-soporte',
     numero: '9',
     titulo: 'Contacto y Soporte',
-    icono: RiCustomerService2Line,
     contenido: [
       'Para cualquier duda, comentario o reporte de fallos, el usuario puede ponerse en contacto con los desarrolladores a través de los canales habilitados dentro de la plataforma.',
     ],
@@ -140,12 +119,12 @@ const SECCIONES_TERMINOS = [
 ];
 
 /**
- * Terminos — Página de Términos y Condiciones de Uso del sistema MedRec.
+ * Terminos — Página de Términos y Condiciones de Uso de MedRec.
  *
- * Muestra las directrices legales, propósito académico, limitaciones del asistente virtual
- * y manejo de privacidad con coherencia visual al resto de la plataforma.
+ * Implementa un diseño formal, limpio y profesional con tipografía seria,
+ * separadores sutiles, espaciado generoso y animaciones de entrada al scroll.
  *
- * @returns {React.JSX.Element} Componente de la página de Términos y Condiciones.
+ * @returns {React.JSX.Element} Página de Términos y Condiciones.
  */
 export default function Terminos() {
   return (
@@ -153,101 +132,99 @@ export default function Terminos() {
       <BubbleBackground />
       <Navbar />
 
-      <main className="relative z-10 mx-auto max-w-4xl px-4 pb-16 pt-24 sm:px-6 lg:px-8">
-        {/* Encabezado Principal */}
-        <header className="glass-card mb-8 p-6 sm:p-10 text-center relative overflow-hidden border border-white/10 dark:border-white/10 shadow-xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-royalBlue-600/20 text-royalBlue-500 dark:text-royalBlue-400 border border-royalBlue-500/30 shadow-inner mb-4">
-            <RiShieldCheckLine className="text-3xl" />
-          </div>
+      <main className="relative z-10 mx-auto max-w-4xl px-4 pb-24 pt-28 sm:px-6 lg:px-8 font-primary">
+        {/* Encabezado del Documento */}
+        <header className="scroll-reveal pb-12 border-b border-black/10 dark:border-white/10">
+          <p className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-royalBlue-600 dark:text-royalBlue-400 mb-3">
+            Documento Legal y Normativa
+          </p>
 
-          <h1 className="text-3xl sm:text-4xl font-bold font-secondary tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
             Términos y Condiciones de Uso
           </h1>
 
           <p
-            className="mt-3 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed"
+            className="mt-4 text-base sm:text-lg leading-relaxed max-w-3xl"
             style={{ color: 'var(--text-muted)' }}
           >
-            Consulta las condiciones generales que regulan el acceso, el uso ético y las limitaciones
-            técnicas de la plataforma académica MedRec y su asistente de inteligencia artificial.
+            El presente documento establece las condiciones generales que regulan el acceso,
+            el uso ético y las limitaciones técnicas de la plataforma académica MedRec
+            y su asistente virtual médico de inteligencia artificial.
           </p>
         </header>
 
-        {/* Secciones de Contenido */}
-        <div className="flex flex-col gap-6">
-          {SECCIONES_TERMINOS.map((seccion) => {
-            const IconoSeccion = seccion.icono;
-            return (
-              <section
-                key={seccion.id}
-                id={seccion.id}
-                className="glass-card p-6 sm:p-8 transition-all duration-300 hover:border-royalBlue-500/40 border border-transparent"
-              >
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="flex-shrink-0 flex h-11 w-11 items-center justify-center rounded-xl bg-royalBlue-600/10 dark:bg-royalBlue-500/20 text-royalBlue-600 dark:text-royalBlue-400 font-semibold text-base border border-royalBlue-500/20">
-                    <IconoSeccion className="text-xl" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-royalBlue-500 dark:text-royalBlue-400">
-                      Sección {seccion.numero}
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-semibold mt-0.5">
-                      {seccion.titulo}
-                    </h2>
-                  </div>
-                </div>
+        {/* Lista de Secciones con Animación al Scroll */}
+        <div className="divide-y divide-black/10 dark:divide-white/10">
+          {SECCIONES_TERMINOS.map((seccion) => (
+            <section
+              key={seccion.id}
+              id={seccion.id}
+              className="scroll-reveal py-10 sm:py-14 space-y-4"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6">
+                <span className="text-base sm:text-lg font-bold font-numbers tracking-wider text-royalBlue-600 dark:text-royalBlue-400 w-12 flex-shrink-0">
+                  {seccion.numero.padStart(2, '0')}.
+                </span>
 
-                <div className="space-y-3 pl-0 sm:pl-15 text-sm sm:text-base leading-relaxed">
-                  {seccion.contenido && seccion.contenido.map((parrafo, idx) => (
-                    <p key={idx} className="leading-relaxed">
-                      {parrafo}
-                    </p>
-                  ))}
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {seccion.titulo}
+                </h2>
+              </div>
 
-                  {seccion.puntos && (
-                    <ul className="list-disc list-inside space-y-2 mt-3 pl-2" style={{ color: 'var(--text-muted)' }}>
-                      {seccion.puntos.map((punto, idx) => (
-                        <li key={idx} className="leading-relaxed">
-                          <span className="text-slate-800 dark:text-slate-200">{punto}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+              <div className="sm:pl-18 space-y-4 text-base leading-relaxed">
+                {seccion.contenido.map((parrafo, idx) => (
+                  <p
+                    key={idx}
+                    className="leading-relaxed"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {parrafo}
+                  </p>
+                ))}
 
-                  {seccion.subcontenido && (
-                    <p className="mt-4 font-medium pt-2 text-slate-800 dark:text-slate-200">
-                      {seccion.subcontenido}
-                    </p>
-                  )}
+                {seccion.puntos && (
+                  <ul className="list-disc list-outside ml-5 space-y-2 pt-1" style={{ color: 'var(--text-muted)' }}>
+                    {seccion.puntos.map((punto, idx) => (
+                      <li key={idx} className="leading-relaxed pl-1">
+                        <span className="text-slate-800 dark:text-slate-200">{punto}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-                  {seccion.subpuntos && (
-                    <ul className="list-disc list-inside space-y-2 mt-2 pl-2" style={{ color: 'var(--text-muted)' }}>
-                      {seccion.subpuntos.map((subpunto, idx) => (
-                        <li key={idx} className="leading-relaxed">
-                          <span className="text-slate-800 dark:text-slate-200">{subpunto}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                {seccion.subcontenido && (
+                  <p className="font-medium pt-3 text-slate-800 dark:text-slate-200">
+                    {seccion.subcontenido}
+                  </p>
+                )}
 
-                  {seccion.conclusion && (
-                    <p className="mt-4 pt-2 border-t border-black/5 dark:border-white/5 font-medium text-slate-800 dark:text-slate-200">
-                      {seccion.conclusion}
-                    </p>
-                  )}
-                </div>
-              </section>
-            );
-          })}
+                {seccion.subpuntos && (
+                  <ul className="list-disc list-outside ml-5 space-y-2 pt-1" style={{ color: 'var(--text-muted)' }}>
+                    {seccion.subpuntos.map((subpunto, idx) => (
+                      <li key={idx} className="leading-relaxed pl-1">
+                        <span className="text-slate-800 dark:text-slate-200">{subpunto}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {seccion.conclusion && (
+                  <p className="mt-6 pt-4 border-t border-black/5 dark:border-white/5 font-medium text-slate-800 dark:text-slate-200">
+                    {seccion.conclusion}
+                  </p>
+                )}
+              </div>
+            </section>
+          ))}
         </div>
 
-        {/* Pie de página con versión y fecha */}
-        <footer className="mt-12 text-center text-xs sm:text-sm pt-6 border-t border-black/10 dark:border-white/10" style={{ color: 'var(--text-muted)' }}>
-          <p className="font-medium">
+        {/* Pie de Documento con Fecha de Actualización */}
+        <footer className="scroll-reveal mt-16 pt-8 border-t border-black/10 dark:border-white/10 text-center text-xs sm:text-sm" style={{ color: 'var(--text-muted)' }}>
+          <p className="font-semibold text-slate-800 dark:text-slate-200">
             Última actualización: julio de 2026
           </p>
-          <p className="mt-1 text-xs">
-            Plataforma MedRec — Desarrollo exclusivo para fines académicos y educativos.
+          <p className="mt-1">
+            Plataforma MedRec — Desarrollo de software sin fines de lucro para investigación y fines académicos.
           </p>
         </footer>
       </main>
