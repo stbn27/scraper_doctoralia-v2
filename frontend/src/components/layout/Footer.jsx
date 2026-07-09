@@ -1,5 +1,6 @@
 import logo from '@/assets/logo.png';
 import { RiGithubFill, RiInstagramLine } from 'react-icons/ri';
+import { Link } from 'react-router-dom';
 
 export function Footer() {
     return (
@@ -35,7 +36,7 @@ export function Footer() {
                                     <a href="#" className="hover:underline">Política de privacidad</a>
                                 </li>
                                 <li className='text-xs'>
-                                    <a href="#" className="hover:underline">Términos y Condiciones</a>
+                                    <Link to="/terminos" className="hover:underline">Términos y Condiciones</Link>
                                 </li>
                             </ul>
                         </div>

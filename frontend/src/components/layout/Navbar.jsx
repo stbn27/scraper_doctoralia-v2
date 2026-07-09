@@ -39,6 +39,7 @@ export function Navbar() {
         if (path === '/perfil') return 'Mi perfil';
         if (path === '/favoritos') return 'Mis favoritos';
         if (path === '/historial') return 'Historial de búsqueda';
+        if (path === '/terminos') return 'Términos y Condiciones';
 
         return '';
     };

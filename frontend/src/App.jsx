@@ -14,6 +14,7 @@ const Favoritos = lazy(() => import('@/pages/Favoritos/index'));
 const Historial = lazy(() => import('@/pages/Historial/index'));
 const Admin = lazy(() => import('@/pages/Admin/index'));
 const AdminDetail = lazy(() => import('@/pages/Admin/Detail'));
+const Terminos = lazy(() => import('@/pages/Terminos/index'));
 
 /**
  * ProtectedRoute — Redirige a /login si no hay sesión activa.
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="/especialista/:id" element={<Detail />} />
           <Route path="/especialistas/:id" element={<Detail />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/terminos" element={<Terminos />} />
           
           <Route
             path="/perfil"
