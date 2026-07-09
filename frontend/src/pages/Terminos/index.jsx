@@ -166,7 +166,7 @@ export default function Terminos() {
                   {seccion.numero.padStart(2, '0')}.
                 </span>
 
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-secondary">
                   {seccion.titulo}
                 </h2>
               </div>

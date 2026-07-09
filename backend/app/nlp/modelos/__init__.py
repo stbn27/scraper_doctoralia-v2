@@ -22,7 +22,7 @@ def obtener_modelo(nombre: str | None = None) -> BaseModelo:
     ----------
     nombre : str | None
         Nombre del modelo a instanciar.
-        Valores válidos: groq | deepseek | gemini | minimax | ollama
+        Valores válidos: groq | deepseek | gemini | minimax | ollama | lmstudio
 
     Retorna
     -------
@@ -41,26 +41,43 @@ def obtener_modelo(nombre: str | None = None) -> BaseModelo:
 
     if nombre == "groq":
         from app.nlp.modelos.groq_modelo import GroqModelo
+
         return GroqModelo()
 
     elif nombre == "deepseek":
         from app.nlp.modelos.deepseek_modelo import DeepSeekModelo
+
         return DeepSeekModelo()
 
     elif nombre == "gemini":
         from app.nlp.modelos.gemini_modelo import GeminiModelo
+
         return GeminiModelo()
 
     elif nombre == "minimax":
         from app.nlp.modelos.minimax_modelo import MiniMaxModelo
+
         return MiniMaxModelo()
 
     elif nombre == "ollama":
         from app.nlp.modelos.ollama_modelo import OllamaModelo
+
         return OllamaModelo()
 
+    elif nombre == "lmstudio":
+        from app.nlp.modelos.lmstudio_modelo import LMStudioModelo
+
+        return LMStudioModelo()
+
     else:
-        modelos_validos = ["groq", "deepseek", "gemini", "minimax", "ollama"]
+        modelos_validos = [
+            "groq",
+            "deepseek",
+            "gemini",
+            "minimax",
+            "ollama",
+            "lmstudio",
+        ]
         raise ValueError(
             f"Modelo '{nombre}' no reconocido. "
             f"Valores válidos: {', '.join(modelos_validos)}"

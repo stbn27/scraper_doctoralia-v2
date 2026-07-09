@@ -92,6 +92,10 @@ services:
         condition: service_healthy
     networks:
       - prod_network
+    # Permite alcanzar LM Studio corriendo en la máquina anfitriona desde el contenedor.
+    # En Linux, Docker no define host.docker.internal por defecto.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # SIN volumen montado: el código ya está dentro de la imagen
     deploy:
       resources:

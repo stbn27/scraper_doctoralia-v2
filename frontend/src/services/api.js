@@ -565,47 +565,19 @@ export async function limpiarHistorial() {
    Chat
    ────────────────────────────────────────────── */
 
+export {
+  enviarMensajeChat,
+  verificarEstadoLLM,
+  guardarTokenExterno,
+  limpiarTokenExterno,
+  leerTokenExterno,
+} from './chat.api';
+
 /**
- * Envía el historial del chat al backend.
+ * @deprecated Usar enviarMensajeChat() de chat.api.js en su lugar.
+ * Mantenido por compatibilidad con código existente.
  */
 export async function chatMessage(history = []) {
-  const messages = Array.isArray(history)
-    ? history
-      .filter((msg) => msg?.role && typeof msg?.content === 'string')
-      .map(({ role, content }) => ({ role, content }))
-    : [];
-
-  const consulta = messages[messages.length - 1]?.content?.trim() ?? '';
-
-  if (!consulta) {
-    throw new Error('No hay mensaje para enviar al chat');
-  }
-
-  const token = canUseStorage() ? window.localStorage.getItem('medrec_token') : null;
-  const endpoint = token ? '/chat/interpretar/auth' : '/chat/interpretar';
-
-  const data = await realizarPeticion(endpoint, {
-    method: 'POST',
-    body: JSON.stringify({
-      consulta,
-      messages,
-      provider: 'auto',
-      auto_search: false,
-    }),
-  });
-
-  const filtros = data?.filtros ?? {};
-
-  return {
-    role: 'assistant',
-    content: data?.mensaje ?? 'No pude procesar tu mensaje.',
-    respuesta: Array.isArray(data?.respuesta) ? data.respuesta : ['Lo siento, hubo un error procesando el mensaje.'],
-    especialidad: filtros?.especialidad ?? null,
-    ciudad: filtros?.ubicacion ?? null,
-    filtros: filtros,
-    sql: data?.sql ?? null,
-    ready: Boolean(data?.ready),
-    suggestions: Array.isArray(data?.sugerencias) ? data.sugerencias : [],
-    ubicaciones_usuario: Array.isArray(data?.ubicaciones_usuario) ? data.ubicaciones_usuario : [],
-  };
+  const { enviarMensajeChat: _enviar } = await import('./chat.api');
+  return _enviar(history);
 }

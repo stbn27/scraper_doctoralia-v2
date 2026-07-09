@@ -2,9 +2,10 @@
 Router del chatbot médico y endpoint combinado de recomendación.
 
 Endpoints:
-- POST /chat/interpretar       — Interpreta lenguaje natural (público).
-- POST /chat/interpretar/auth  — Versión con contexto de usuario autenticado.
-- POST /recomendar             — Interpreta y ejecuta la búsqueda si tiene datos.
+- GET  /chat/estado               — Estado de disponibilidad de proveedores LLM.
+- POST /chat/interpretar          — Interpreta lenguaje natural (público).
+- POST /chat/interpretar/auth     — Versión con contexto de usuario autenticado.
+- POST /recomendar                — Interpreta y ejecuta la búsqueda si tiene datos.
 """
 
 from __future__ import annotations
@@ -30,6 +31,11 @@ from app.db.mysql import get_mysql_conn
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chatbot"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers de usuario (MySQL)
+# ---------------------------------------------------------------------------
 
 
 def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
@@ -60,22 +66,31 @@ def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if not row:
             return None
-            
+
         mun = row.get("municipio_alcaldia")
         ciu = row.get("ciudad")
         est = row.get("estado")
-        
+
         parts = []
         if mun and mun.strip():
             parts.append(mun.strip())
-        if ciu and ciu.strip() and ciu.strip().lower() != (mun.strip().lower() if mun else ""):
+        if (
+            ciu
+            and ciu.strip()
+            and ciu.strip().lower() != (mun.strip().lower() if mun else "")
+        ):
             parts.append(ciu.strip())
-        if est and est.strip() and est.strip().lower() != (ciu.strip().lower() if ciu else "") and est.strip().lower() != (mun.strip().lower() if mun else ""):
+        if (
+            est
+            and est.strip()
+            and est.strip().lower() != (ciu.strip().lower() if ciu else "")
+            and est.strip().lower() != (mun.strip().lower() if mun else "")
+        ):
             parts.append(est.strip())
-            
+
         return ", ".join(parts) if parts else None
     except Exception:
         return None
@@ -84,6 +99,16 @@ def _obtener_ciudad_usuario(usuario_id: int) -> Optional[str]:
 def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
     """
     Obtiene hasta 3 ubicaciones (ciudades/estados) registradas para el usuario.
+
+    Parámetros
+    ----------
+    usuario_id : int
+        ID del usuario autenticado.
+
+    Retorna
+    -------
+    list[str]
+        Lista de hasta 3 ubicaciones únicas del usuario.
     """
     try:
         conn = get_mysql_conn()
@@ -106,15 +131,24 @@ def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
             mun = row.get("municipio_alcaldia")
             ciu = row.get("ciudad")
             est = row.get("estado")
-            
+
             parts = []
             if mun and mun.strip():
                 parts.append(mun.strip())
-            if ciu and ciu.strip() and ciu.strip().lower() != (mun.strip().lower() if mun else ""):
+            if (
+                ciu
+                and ciu.strip()
+                and ciu.strip().lower() != (mun.strip().lower() if mun else "")
+            ):
                 parts.append(ciu.strip())
-            if est and est.strip() and est.strip().lower() != (ciu.strip().lower() if ciu else "") and est.strip().lower() != (mun.strip().lower() if mun else ""):
+            if (
+                est
+                and est.strip()
+                and est.strip().lower() != (ciu.strip().lower() if ciu else "")
+                and est.strip().lower() != (mun.strip().lower() if mun else "")
+            ):
                 parts.append(est.strip())
-                
+
             if parts:
                 loc = ", ".join(parts)
                 if loc not in ubicaciones:
@@ -128,6 +162,16 @@ def _obtener_ubicaciones_usuario(usuario_id: int) -> list[str]:
 def _obtener_especialidades_frecuentes(usuario_id: int) -> list[str]:
     """
     Obtiene las especialidades más buscadas por el usuario desde su historial.
+
+    Parámetros
+    ----------
+    usuario_id : int
+        ID del usuario autenticado.
+
+    Retorna
+    -------
+    list[str]
+        Lista de especialidades ordenadas por frecuencia.
     """
     try:
         conn = get_mysql_conn()
@@ -154,6 +198,16 @@ def _obtener_especialidades_frecuentes(usuario_id: int) -> list[str]:
 def _obtener_especialidades_sugeridas(usuario_id: int) -> list[str]:
     """
     Retorna especialidades sugeridas combinando el historial del usuario y comunes.
+
+    Parámetros
+    ----------
+    usuario_id : int
+        ID del usuario autenticado.
+
+    Retorna
+    -------
+    list[str]
+        Lista de hasta 4 especialidades sugeridas.
     """
     frecuentes = _obtener_especialidades_frecuentes(usuario_id)
     comunes = [
@@ -188,13 +242,35 @@ def _obtener_especialidades_sugeridas(usuario_id: int) -> list[str]:
     return sugeridas
 
 
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/chat/estado")
+async def estado_proveedores():
+    """
+    Verifica qué proveedores LLM están disponibles en este momento.
+
+    Permite que el frontend decida si debe solicitar al usuario un token
+    externo antes de iniciar el chat.
+
+    Retorna
+    -------
+    dict
+        Estado de cada proveedor: lmstudio, ollama, externo_disponible, requiere_token.
+    """
+    estado = await chat_service.verificar_disponibilidad_proveedores()
+    return estado
+
+
 @router.post("/chat/interpretar", response_model=ChatInterpretResponse)
 async def interpretar_consulta(body: ChatInterpretRequest):
     """
     Interpreta una consulta médica en lenguaje natural (endpoint público).
 
     Convierte el texto del usuario en filtros de búsqueda estructurados para
-    el endpoint `GET /especialistas`. No requiere autenticación.
+    el endpoint GET /especialistas. No requiere autenticación.
 
     Parámetros
     ----------
@@ -211,6 +287,8 @@ async def interpretar_consulta(body: ChatInterpretRequest):
     -----------
     HTTPException 503
         Si todos los proveedores LLM no están disponibles.
+    HTTPException 402
+        Si no hay LLM local y se requiere token del usuario.
     """
     try:
         resultado = await chat_service.interpretar_consulta_medica(
@@ -218,9 +296,19 @@ async def interpretar_consulta(body: ChatInterpretRequest):
             messages=[m.model_dump() for m in body.messages],
             provider=body.provider,
             ubicacion_usuario=None,
+            token_externo=getattr(body, "token_externo", None),
+            proveedor_externo=getattr(body, "proveedor_externo", None),
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        codigo = str(exc)
+        if codigo == "NO_LOCAL_LLM_AVAILABLE":
+            raise HTTPException(
+                status_code=402,
+                detail="No hay LLM local disponible. Por favor, ingresa un token de API externo.",
+            )
+        raise HTTPException(
+            status_code=503, detail="El servicio de chat no está disponible."
+        )
 
     return resultado
 
@@ -250,8 +338,10 @@ async def interpretar_consulta_autenticado(
 
     Excepciones
     -----------
+    HTTPException 402
+        Si no hay LLM local y se requiere token del usuario.
     HTTPException 503
-        Si todos los proveedores LLM no están disponibles.
+        Si todos los proveedores fallan.
     """
     usuario_id = current_user["id"]
     ubicacion_usuario = _obtener_ciudad_usuario(usuario_id)
@@ -262,14 +352,24 @@ async def interpretar_consulta_autenticado(
             messages=[m.model_dump() for m in body.messages],
             provider=body.provider,
             ubicacion_usuario=ubicacion_usuario,
+            token_externo=getattr(body, "token_externo", None),
+            proveedor_externo=getattr(body, "proveedor_externo", None),
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        codigo = str(exc)
+        if codigo == "NO_LOCAL_LLM_AVAILABLE":
+            raise HTTPException(
+                status_code=402,
+                detail="No hay LLM local disponible. Por favor, ingresa un token de API externo.",
+            )
+        raise HTTPException(
+            status_code=503, detail="El servicio de chat no está disponible."
+        )
 
     filtros = resultado.get("filtros") or {}
     ubicacion_detectada = filtros.get("ubicacion")
 
-    # 1. Si no hay ubicación en los filtros, sugerir ubicaciones registradas del usuario
+    # Si no hay ubicación en los filtros, sugerir ubicaciones registradas del usuario
     if not ubicacion_detectada:
         if not resultado.get("sql"):
             resultado["sql"] = []
@@ -280,7 +380,7 @@ async def interpretar_consulta_autenticado(
         if ubicaciones:
             resultado["ubicaciones_usuario"] = ubicaciones
 
-    # 2. Si no hay especialidad detectada en los filtros, sugerir especialidades frecuentes o aleatorias
+    # Si no hay especialidad detectada, sugerir especialidades frecuentes
     especialidad_detectada = filtros.get("especialidad")
     if not especialidad_detectada:
         sugerencias_especialidades = _obtener_especialidades_sugeridas(usuario_id)
@@ -311,6 +411,8 @@ async def recomendar(body: RecomendarRequest):
 
     Excepciones
     -----------
+    HTTPException 402
+        Si no hay LLM local disponible.
     HTTPException 503
         Si todos los proveedores LLM no están disponibles.
     """
@@ -321,6 +423,12 @@ async def recomendar(body: RecomendarRequest):
             provider=body.provider,
         )
     except RuntimeError as exc:
+        codigo = str(exc)
+        if codigo == "NO_LOCAL_LLM_AVAILABLE":
+            raise HTTPException(
+                status_code=402,
+                detail="No hay LLM local disponible. Por favor, ingresa un token de API externo.",
+            )
         raise HTTPException(status_code=503, detail=str(exc))
 
     if not interpretacion.get("ready"):
