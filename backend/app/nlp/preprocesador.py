@@ -29,13 +29,15 @@ def preparar_datos_para_analisis(
     Retorna un dict con perfil normalizado, opiniones seleccionadas,
     métricas locales y metadatos descriptivos del muestreo.
     """
+    esp_data = {**especialista, **especialista.get("doctor", {})} if "doctor" in especialista and isinstance(especialista.get("doctor"), dict) else especialista
+
     alertas: list[str] = []
     ahora = datetime.now(timezone.utc)
     total_opiniones = len(opiniones)
-    total_reportado_perfil = _entero_seguro(especialista.get("total_opiniones"))
+    total_reportado_perfil = _entero_seguro(esp_data.get("total_opiniones"))
 
     if total_opiniones < min_opiniones_ia:
-        perfil = _limpiar_perfil(especialista, total_opiniones, total_reportado_perfil)
+        perfil = _limpiar_perfil(esp_data, total_opiniones, total_reportado_perfil)
         return {
             "apto_para_ia": False,
             "razon_no_apto": "sin_opiniones_suficientes",
@@ -219,15 +221,14 @@ def _limpiar_perfil(
     total_opiniones_reportadas: int | None = None,
 ) -> dict:
     """Normaliza el perfil conservando campos útiles para el análisis."""
-    servicios_normalizados = _normalizar_servicios(
-        especialista.get("servicios", []) or []
-    )
+    servicios_raw = especialista.get("servicios", []) or especialista.get("servicios_y_precios", []) or []
+    servicios_normalizados = _normalizar_servicios(servicios_raw)
     servicios_procesados: list[dict] = []
     servicios_duplicados: list[str] = []
     nombres_vistos: set[str] = set()
 
     for servicio in servicios_normalizados:
-        nombre = (servicio.get("nombre") or "").strip()
+        nombre = (servicio.get("nombre") or servicio.get("servicio") or "").strip()
         if not nombre:
             continue
         nombre_norm = _normalizar_texto(nombre)
@@ -236,7 +237,7 @@ def _limpiar_perfil(
             continue
         nombres_vistos.add(nombre_norm)
         precio_desde = servicio.get("precio_desde")
-        precio_texto = servicio.get("precio_texto")
+        precio_texto = servicio.get("precio_texto") or servicio.get("precio")
         servicios_procesados.append(
             {
                 "nombre": nombre,
@@ -251,13 +252,14 @@ def _limpiar_perfil(
         experiencia_raw = _normalizar_experiencia_string(experiencia_raw)
     experiencia = [str(e).strip() for e in experiencia_raw[:6] if e]
 
-    pacientes = _normalizar_pacientes(especialista.get("pacientes") or {})
-    atiende_ninos = bool(pacientes.get("atiende_ninos", False))
-    atiende_adultos = bool(pacientes.get("atiende_adultos", False))
-    atiende_adolescentes = bool(pacientes.get("atiende_adolescentes", False))
+    pacientes = _normalizar_pacientes(especialista.get("pacientes") or especialista.get("pacientes_que_atiende") or {})
+    atiende_ninos = bool(pacientes.get("atiende_ninos", pacientes.get("ninos", False)))
+    atiende_adultos = bool(pacientes.get("atiende_adultos", pacientes.get("adultos", False)))
+    atiende_adolescentes = bool(pacientes.get("atiende_adolescentes", pacientes.get("adolescentes", False)))
     perfil_detalla_pacientes = atiende_ninos or atiende_adultos or atiende_adolescentes
 
-    consultorios = _normalizar_consultorios(especialista.get("consultorios", []) or [])
+    consultorios_raw = especialista.get("consultorios", []) or especialista.get("direcciones", []) or []
+    consultorios = _normalizar_consultorios(consultorios_raw)
     servicios_con_precio = sum(1 for s in servicios_procesados if s["tiene_precio"])
     servicios_sin_precio = len(servicios_procesados) - servicios_con_precio
 
@@ -272,10 +274,17 @@ def _limpiar_perfil(
         "tiene_rating_global": especialista.get("rating_global") is not None,
     }
 
+    especialidades_lista = especialista.get("especialidades")
+    especialidad_nom = especialista.get("especialidad") or (
+        especialidades_lista[0] if isinstance(especialidades_lista, list) and especialidades_lista else "Sin especialidad"
+    )
+    if isinstance(especialidad_nom, list) and especialidad_nom:
+        especialidad_nom = especialidad_nom[0]
+
     return {
         "nombre": especialista.get("nombre", "Sin nombre"),
-        "especialidad": especialista.get("especialidad", "Sin especialidad"),
-        "ciudad": especialista.get("ciudad"),
+        "especialidad": str(especialidad_nom),
+        "ciudad": especialista.get("ciudad") or (especialista.get("estado", [None])[0] if isinstance(especialista.get("estado"), list) else especialista.get("estado")),
         "rating_global": especialista.get("rating_global"),
         "experiencia": experiencia,
         "servicios": servicios_procesados,

@@ -772,12 +772,15 @@ async def analizar_especialista_admin(
         modelo = obtener_modelo("ollama")
         if modelo_local_id:
             modelo._modelo = modelo_local_id
-        # Apuntar al URL correcto (Ollama o LM Studio)
-        if modelo_elegido == "lm_studio" and hasattr(modelo, "_base_url"):
-            modelo._base_url = f"{modelo_local_url}/v1"
-        elif modelo_elegido == "lm_studio":
-            # Intentar redirigir via atributo genérico
-            setattr(modelo, "_base_url", f"{modelo_local_url}/v1")
+        if modelo_elegido == "lm_studio":
+            if hasattr(modelo, "_es_lm_studio"):
+                modelo._es_lm_studio = True
+            else:
+                setattr(modelo, "_es_lm_studio", True)
+            if hasattr(modelo, "_base_url"):
+                modelo._base_url = f"{modelo_local_url}/v1"
+            else:
+                setattr(modelo, "_base_url", f"{modelo_local_url}/v1")
     else:
         modelo = obtener_modelo(modelo_elegido)
 
@@ -809,6 +812,7 @@ async def analizar_especialista_admin(
         resultado_ia = reforzar_resultado_analisis(resultado_ia, datos)
 
         especialidad_nom = (doc.get("doctor") or {}).get("especialidad", "") or doc.get("especialidad", "")
+        modelo_real_usado = f"{modelo_elegido} ({modelo_local_id})" if (modelo_elegido in ("lm_studio", "ollama") and modelo_local_id) else str(modelo_elegido)
         doc_analisis = {
             "id_doctoralia": doctoralia_id,
             "doctor_id": doctoralia_id,
@@ -818,7 +822,7 @@ async def analizar_especialista_admin(
             "estatus_analisis": "completado",
             "estado": "completado",
             "fecha_analisis": datetime.now(timezone.utc),
-            "modelo_usado": modelo_elegido,
+            "modelo_usado": modelo_real_usado,
             "version_prompt": "v2",
             "analisis": {
                 "puntuacion": resultado_ia.get("puntuacion_recomendacion"),
@@ -871,7 +875,7 @@ async def analizar_especialista_admin(
     return {
         "mensaje": "Análisis generado con éxito.",
         "doctoralia_id": doctoralia_id,
-        "modelo_usado": modelo_elegido,
+        "modelo_usado": modelo_real_usado,
     }
 
 

@@ -449,7 +449,14 @@ async def scrape_analyze(
                 if ollama_model_id:
                     modelo._modelo = ollama_model_id
                 if es_lm_studio_model and _local_url:
-                    setattr(modelo, "_base_url", f"{_local_url}/v1")
+                    if hasattr(modelo, "_es_lm_studio"):
+                        modelo._es_lm_studio = True
+                    else:
+                        setattr(modelo, "_es_lm_studio", True)
+                    if hasattr(modelo, "_base_url"):
+                        modelo._base_url = f"{_local_url}/v1"
+                    else:
+                        setattr(modelo, "_base_url", f"{_local_url}/v1")
             else:
                 modelo = obtener_modelo(data.model)
                 # Inyectar token del sistema o de usuario
@@ -484,6 +491,8 @@ async def scrape_analyze(
                 resultado_ia = reforzar_resultado_analisis(resultado_ia, datos)
 
                 especialidad_nom = profile.get("doctor", {}).get("especialidad", "") or profile.get("especialidad", "")
+                nombre_prov_local = "lm_studio" if _local_es_lm_studio else "ollama"
+                modelo_real_usado = f"{nombre_prov_local} ({_local_model_id})" if (usar_local and _local_model_id) else (f"{data.model} ({ollama_model_id})" if (data.model in ("ollama", "lm_studio") and ollama_model_id) else str(data.model))
                 doc_analisis = {
                     "id_doctoralia": doctor_id,
                     "doctor_id": doctor_id,
@@ -493,7 +502,7 @@ async def scrape_analyze(
                     "estatus_analisis": "completado",
                     "estado": "completado",
                     "fecha_analisis": datetime.now(timezone.utc),
-                    "modelo_usado": data.model,
+                    "modelo_usado": modelo_real_usado,
                     "version_prompt": "v2",
                     "analisis": {
                         "puntuacion": resultado_ia.get("puntuacion_recomendacion"),
