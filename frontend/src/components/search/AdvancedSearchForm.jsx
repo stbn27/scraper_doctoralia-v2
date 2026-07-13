@@ -48,8 +48,8 @@ export function AdvancedSearchForm({ onClose }) {
   const [result, setResult] = useState(null);
   const [showTokenModal, setShowTokenModal] = useState(false);
 
-  // Determina si el modelo seleccionado es Ollama
-  const esOllama = selectedModel === 'ollama';
+  // Determina si el modelo seleccionado es local (Ollama o LM Studio)
+  const esLocal = selectedModel === 'local';
 
   // ── Carga inicial: tokens del usuario + estado Ollama ──
   useEffect(() => {
@@ -68,21 +68,21 @@ export function AdvancedSearchForm({ onClose }) {
         setLoadingTokens(false);
       }
 
-      // Siempre verificar Ollama al montar si analyze está activo
-      // (analyze=true por defecto, así el formulario ya sabe qué hay disponible)
+      // Siempre verificar proveedores locales al montar si analyze está activo
       if (analyze) {
         try {
           setOllamaStatus({ cargando: true });
           const data = await realizarPeticion('/especialistas/avanzada/ollama-status');
+          // modelos es ahora array de {name, proveedor}
           const modelos = data?.modelos || [];
-          setOllamaStatus({ disponible: data?.disponible === true, modelos });
+          setOllamaStatus({ disponible: data?.disponible === true, modelos, ollama: !!data?.ollama, lm_studio: !!data?.lm_studio });
           if (data?.disponible && modelos.length > 0) {
-            setSelectedOllamaModel(modelos[0]);
-            // Auto-seleccionar Ollama si no hay tokens configurados
-            setSelectedModel((prev) => (prev === '' ? 'ollama' : prev));
+            setSelectedOllamaModel(modelos[0].name);
+            // Auto-seleccionar local si no hay tokens configurados
+            setSelectedModel((prev) => (prev === '' ? 'local' : prev));
           }
         } catch {
-          setOllamaStatus({ disponible: false, modelos: [] });
+          setOllamaStatus({ disponible: false, modelos: [], ollama: false, lm_studio: false });
         }
       }
     };
@@ -97,15 +97,14 @@ export function AdvancedSearchForm({ onClose }) {
     try {
       const data = await realizarPeticion('/especialistas/avanzada/ollama-status');
       const modelos = data?.modelos || [];
-      setOllamaStatus({ disponible: data?.disponible === true, modelos });
+      setOllamaStatus({ disponible: data?.disponible === true, modelos, ollama: !!data?.ollama, lm_studio: !!data?.lm_studio });
       if (data?.disponible && modelos.length > 0) {
-        // Si Ollama está disponible, sugerirlo como primera opción
-        setSelectedOllamaModel(modelos[0]);
-        // Solo auto-seleccionar Ollama si el usuario no tiene otros tokens
-        setSelectedModel((prev) => (prev === '' ? 'ollama' : prev));
+        setSelectedOllamaModel(modelos[0].name);
+        // Solo auto-seleccionar local si el usuario no tiene otros tokens
+        setSelectedModel((prev) => (prev === '' ? 'local' : prev));
       }
     } catch {
-      setOllamaStatus({ disponible: false, modelos: [] });
+      setOllamaStatus({ disponible: false, modelos: [], ollama: false, lm_studio: false });
     }
   }, [ollamaStatus]);
 
@@ -137,25 +136,25 @@ export function AdvancedSearchForm({ onClose }) {
     }
 
     if (analyze) {
-      // Si seleccionó Ollama, verificar que esté disponible
-      if (esOllama) {
+      // Si seleccionó un proveedor local, verificar que esté disponible
+      if (esLocal) {
         if (!ollamaStatus?.disponible) {
-          addToast({ type: 'error', message: 'Ollama no está disponible localmente.' });
+          addToast({ type: 'error', message: 'Ningún proveedor local (Ollama / LM Studio) está disponible.' });
           return;
         }
       } else if (!selectedModel) {
-        // Solo mostrar el modal si TAMPOCO hay Ollama disponible
-        const ollamaDisponible = ollamaStatus?.disponible && (ollamaStatus?.modelos?.length ?? 0) > 0;
-        if (!ollamaDisponible) {
+        // Solo mostrar el modal si TAMPOCO hay proveedor local disponible
+        const localDisponible = ollamaStatus?.disponible && (ollamaStatus?.modelos?.length ?? 0) > 0;
+        if (!localDisponible) {
           setShowTokenModal(true);
           return;
         }
-        // Si Ollama está disponible pero no estaba seleccionado, seleccionarlo ahora
-        setSelectedModel('ollama');
+        // Si hay proveedor local disponible pero no estaba seleccionado, seleccionarlo ahora
+        setSelectedModel('local');
         if (ollamaStatus.modelos.length > 0 && !selectedOllamaModel) {
-          setSelectedOllamaModel(ollamaStatus.modelos[0]);
+          setSelectedOllamaModel(ollamaStatus.modelos[0].name);
         }
-        return; // Dejar que el usuario revise y vuelva a enviar con Ollama ya seleccionado
+        return; // Dejar que el usuario revise y vuelva a enviar
       }
     }
 
@@ -168,8 +167,8 @@ export function AdvancedSearchForm({ onClose }) {
         max_opinions: parseInt(maxOpinions, 10),
         scrape_only: scrapeOnly,
         analyze,
-        model: analyze ? selectedModel : null,
-        ollama_model: analyze && esOllama ? selectedOllamaModel : null,
+        model: analyze ? (esLocal ? 'local' : selectedModel) : null,
+        ollama_model: analyze && esLocal ? selectedOllamaModel : null,
       };
 
       const response = await scrapeAnalyze(payload);
@@ -188,6 +187,12 @@ export function AdvancedSearchForm({ onClose }) {
   };
 
   // ── Opciones de modelo ──
+  // Etiqueta descriptiva para cada proveedor local
+  const proveedorLabel = (proveedor) => {
+    if (proveedor === 'lm_studio') return 'LM Studio';
+    return 'Ollama';
+  };
+
   const modelOptions = [
     ...tokens.map((t) => ({
       value: t.modelo,
@@ -195,7 +200,7 @@ export function AdvancedSearchForm({ onClose }) {
       group: 'API Externas',
     })),
     ...(ollamaStatus?.disponible
-      ? [{ value: 'ollama', label: '🖥️ Ollama (local — sin costo)', group: 'Local' }]
+      ? [{ value: 'local', label: proveedorLabel((ollamaStatus.modelos[0] || {}).proveedor), group: 'Local' }]
       : []),
   ];
 
@@ -203,7 +208,7 @@ export function AdvancedSearchForm({ onClose }) {
     !url.trim() ||
     processing ||
     (analyze && !selectedModel) ||
-    (analyze && esOllama && !ollamaStatus?.disponible);
+    (analyze && esLocal && !ollamaStatus?.disponible);
 
   // ── Render ──
   return (
@@ -323,11 +328,11 @@ export function AdvancedSearchForm({ onClose }) {
                 </select>
               )}
 
-              {/* Si seleccionó Ollama, mostrar selector de modelo local */}
-              {esOllama && ollamaStatus?.disponible && ollamaStatus.modelos.length > 0 && (
+              {/* Si seleccionó un proveedor local, mostrar selector de modelo */}
+              {esLocal && ollamaStatus?.disponible && ollamaStatus.modelos.length > 0 && (
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                    Modelo local de Ollama:
+                    Modelo local:
                   </label>
                   <select
                     value={selectedOllamaModel}
@@ -336,7 +341,9 @@ export function AdvancedSearchForm({ onClose }) {
                     className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:ring-2 focus:ring-royalBlue-500"
                   >
                     {ollamaStatus.modelos.map((m) => (
-                      <option key={m} value={m}>{m}</option>
+                      <option key={m.name} value={m.name}>
+                        {m.name} ({m.proveedor === 'lm_studio' ? 'LM Studio' : 'Ollama'})
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -360,11 +367,10 @@ export function AdvancedSearchForm({ onClose }) {
           {/* Resultado */}
           {result && (
             <div
-              className={`mt-4 p-4 rounded-xl border ${
-                result.success
+              className={`mt-4 p-4 rounded-xl border ${result.success
                   ? 'bg-emerald-500/10 border-emerald-500/30'
                   : 'bg-red-500/10 border-red-500/30'
-              }`}
+                }`}
             >
               <div className="flex items-start gap-3">
                 {result.success ? (
@@ -429,7 +435,7 @@ export function AdvancedSearchForm({ onClose }) {
   );
 }
 
-// ── Sub-componente: badge de estado de Ollama ──
+// ── Sub-componente: badge de estado de proveedores locales ──
 function OllamaStatusBadge({ status }) {
   if (!status) return null;
 
@@ -437,17 +443,22 @@ function OllamaStatusBadge({ status }) {
     return (
       <div className="flex items-center gap-2 text-slate-400 text-xs">
         <RiLoader4Line className="animate-spin" />
-        Verificando Ollama local...
+        Verificando proveedores locales (Ollama / LM Studio)...
       </div>
     );
   }
 
   if (status.disponible) {
+    const proveedoresActivos = [
+      status.ollama && 'Ollama',
+      status.lm_studio && 'LM Studio',
+    ].filter(Boolean).join(' + ');
+
     return (
       <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
         <RiServerLine />
         <span>
-          Ollama disponible — {status.modelos.length} modelo{status.modelos.length !== 1 ? 's' : ''} instalado{status.modelos.length !== 1 ? 's' : ''}
+          {proveedoresActivos} disponible — {status.modelos.length} modelo{status.modelos.length !== 1 ? 's' : ''} instalado{status.modelos.length !== 1 ? 's' : ''}
         </span>
       </div>
     );
@@ -456,7 +467,7 @@ function OllamaStatusBadge({ status }) {
   return (
     <div className="flex items-center gap-2 text-slate-500 text-xs">
       <RiServerLine />
-      Ollama no detectado. Puedes usar un token de API externo.
+      Sin proveedores locales disponibles. Agrega un token de API en tu perfil para continuar.
     </div>
   );
 }

@@ -652,7 +652,7 @@ async def analizar_especialista_admin(
         raise HTTPException(status_code=404, detail="Especialista no encontrado")
 
     # 2. Seleccionar modelo disponible por prioridad
-    PRIORIDAD = ["ollama", "gemini", "groq", "deepseek", "minimax"]
+    PRIORIDAD = ["ollama", "lm_studio", "gemini", "groq", "deepseek", "minimax"]
     ENV_KEYS = {
         "gemini": "GEMINI_API_KEY",
         "groq": "GROQ_API_KEY",
@@ -660,9 +660,12 @@ async def analizar_especialista_admin(
         "minimax": "MINIMAX_API_KEY",
     }
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    LM_STUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234")
 
     modelo_elegido = None
     token_elegido = None
+    modelo_local_url = None  # URL base del proveedor local elegido
+    modelo_local_id = None   # ID del modelo local a usar
 
     for nombre in PRIORIDAD:
         if nombre == "ollama":
@@ -672,9 +675,37 @@ async def analizar_especialista_admin(
                 async with _hx.AsyncClient(timeout=3.0) as c:
                     r = await c.get(f"{OLLAMA_BASE_URL}/api/tags")
                     r.raise_for_status()
-                modelo_elegido = "ollama"
-                token_elegido = None
-                break
+                    tags_data = r.json()
+                    available_models = [m["name"] for m in tags_data.get("models", [])]
+                    if available_models:
+                        modelo_elegido = "ollama"
+                        modelo_local_id = available_models[0]
+                        modelo_local_url = OLLAMA_BASE_URL
+                        break
+            except Exception:
+                continue
+        elif nombre == "lm_studio":
+            # Verificar LM Studio: /v1/models (campo 'id') o /api/v1/models (campo 'key')
+            try:
+                import httpx as _hx
+                async with _hx.AsyncClient(timeout=3.0) as c:
+                    available_models = []
+                    for path, id_field in [("/v1/models", "id"), ("/api/v1/models", "key")]:
+                        try:
+                            r = await c.get(f"{LM_STUDIO_BASE_URL}{path}")
+                            r.raise_for_status()
+                            lms_data = r.json()
+                            items = lms_data.get("data") or lms_data.get("models") or []
+                            available_models = [m[id_field] for m in items if m.get(id_field)]
+                            if available_models:
+                                break
+                        except Exception:
+                            continue
+                    if available_models:
+                        modelo_elegido = "lm_studio"
+                        modelo_local_id = available_models[0]
+                        modelo_local_url = LM_STUDIO_BASE_URL
+                        break
             except Exception:
                 continue
         else:
@@ -736,7 +767,20 @@ async def analizar_especialista_admin(
         )
 
     # 5. Instanciar modelo e inyectar token si aplica
-    modelo = obtener_modelo(modelo_elegido)
+    if modelo_elegido in ("ollama", "lm_studio"):
+        # Modelos locales: usar el adaptador Ollama o el compatible con OpenAI
+        modelo = obtener_modelo("ollama")
+        if modelo_local_id:
+            modelo._modelo = modelo_local_id
+        # Apuntar al URL correcto (Ollama o LM Studio)
+        if modelo_elegido == "lm_studio" and hasattr(modelo, "_base_url"):
+            modelo._base_url = f"{modelo_local_url}/v1"
+        elif modelo_elegido == "lm_studio":
+            # Intentar redirigir via atributo genérico
+            setattr(modelo, "_base_url", f"{modelo_local_url}/v1")
+    else:
+        modelo = obtener_modelo(modelo_elegido)
+
     if token_elegido:
         if modelo_elegido == "groq":
             from groq import Groq  # pyrefly: ignore [missing-import]

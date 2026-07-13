@@ -21,6 +21,8 @@ from app.security import get_current_user
 router = APIRouter(prefix="/especialistas/avanzada", tags=["Búsqueda Avanzada"])
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# Compatible con el nombre en .env (LMSTUDIO_BASE_URL) y el alternativo (LM_STUDIO_BASE_URL)
+LM_STUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234")
 
 
 class AvanzadaRequest(BaseModel):
@@ -106,20 +108,62 @@ def _doctor_id_sintetico_desde_url(url: str) -> int:
 @router.get("/ollama-status")
 async def ollama_status():
     """
-    Verifica si Ollama está disponible localmente y devuelve los modelos instalados.
+    Verifica si Ollama o LM Studio están disponibles localmente y devuelve los modelos instalados.
+
+    Comprueba primero Ollama (puerto 11434) y luego LM Studio (puerto 1234).
+    El campo `disponible` es True si al menos uno de los dos está activo.
+    Cada entrada en `modelos` incluye el campo `proveedor` para identificar la fuente.
 
     Returns:
-        Objeto con {disponible: bool, modelos: list[str], url: str}
+        Objeto con {disponible: bool, ollama: bool, lm_studio: bool,
+                    modelos: list[{name, proveedor}], url: str}
     """
+    ollama_ok = False
+    lm_studio_ok = False
+    modelos: list[dict] = []
+
+    # — Verificar Ollama
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             resp.raise_for_status()
             data = resp.json()
-            modelos = [m["name"] for m in data.get("models", [])]
-            return {"disponible": True, "modelos": modelos, "url": OLLAMA_BASE_URL}
+            for m in data.get("models", []):
+                modelos.append({"name": m["name"], "proveedor": "ollama"})
+            ollama_ok = True
     except Exception:
-        return {"disponible": False, "modelos": [], "url": OLLAMA_BASE_URL}
+        pass
+
+    # — Verificar LM Studio
+    # Prueba /v1/models (OpenAI-compat, campo 'id') y /api/v1/models (nativa, campo 'key')
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            for path, id_field in [("/v1/models", "id"), ("/api/v1/models", "key")]:
+                try:
+                    resp = await client.get(f"{LM_STUDIO_BASE_URL}{path}")
+                    resp.raise_for_status()
+                    lms_data = resp.json()
+                    # /v1/models devuelve {data:[{id,...}]}, /api/v1/models devuelve {models:[{key,...}]}
+                    items = lms_data.get("data") or lms_data.get("models") or []
+                    found = [m[id_field] for m in items if m.get(id_field)]
+                    if found:
+                        for name in found:
+                            modelos.append({"name": name, "proveedor": "lm_studio"})
+                        lm_studio_ok = True
+                        break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return {
+        "disponible": ollama_ok or lm_studio_ok,
+        "ollama": ollama_ok,
+        "lm_studio": lm_studio_ok,
+        "modelos": modelos,
+        "url": OLLAMA_BASE_URL,
+        "lm_studio_url": LM_STUDIO_BASE_URL,
+    }
 
 
 @router.post("/scrape-analyze")
@@ -137,6 +181,8 @@ async def scrape_analyze(
 
     # 1. Validar Token si se requiere análisis
     token_str = None
+    # Los modelos locales (ollama / lm_studio) no requieren token de usuario
+    es_modelo_local = data.model in ("ollama", "local", "lm_studio")
     if data.analyze:
         if not data.model:
             raise HTTPException(
@@ -144,22 +190,23 @@ async def scrape_analyze(
                 detail="El modelo es requerido para realizar el análisis.",
             )
 
-        conn = get_mysql_conn()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT token FROM tokens_llm WHERE usuario_id = %s AND modelo = %s",
-            (current_user["id"], data.model),
-        )
-        token_db = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if not token_db or not token_db["token"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No tienes token configurado para el modelo {data.model}.",
+        if not es_modelo_local:
+            conn = get_mysql_conn()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT token FROM tokens_llm WHERE usuario_id = %s AND modelo = %s",
+                (current_user["id"], data.model),
             )
-        token_str = token_db["token"]
+            token_db = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if not token_db or not token_db["token"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No tienes token configurado para el modelo {data.model}.",
+                )
+            token_str = token_db["token"]
 
     # 2. Scraping del Perfil
     from app.scraper.doctoralia import fetch_and_parse_profile_async
@@ -261,10 +308,10 @@ async def scrape_analyze(
             if operations:
                 await col_opinions.bulk_write(operations)
 
-    # 5. Analizar con Ollama (sin token, local) o con modelo externo (con token)
-    usar_ollama = data.analyze and data.model == "ollama"
+    # 5. Analizar con proveedor local (Ollama / LM Studio) o con modelo externo (con token)
+    usar_local = data.analyze and es_modelo_local
 
-    if data.analyze and (token_str or usar_ollama):
+    if data.analyze and (token_str or usar_local):
         # Importaciones tardías para evitar dependencias circulares/carga pesada global
         from app.nlp.modelos import obtener_modelo
         from app.nlp.preprocesador import preparar_datos_para_analisis
@@ -290,11 +337,47 @@ async def scrape_analyze(
         datos = preparar_datos_para_analisis(profile, opiniones_db, min_opiniones_ia=1)
 
         if datos["apto_para_ia"]:
-            modelo = obtener_modelo(data.model)
+            # Resolver el proveedor local real si se envía "local"
+            modelo_efectivo = data.model  # ej. "gemini", "groq"
+            ollama_model_id = data.ollama_model
+            es_lm_studio_model = False  # default; se actualiza si usar_local es True
 
-            # Configurar modelo Ollama con el modelo específico si se indicó
-            if usar_ollama and data.ollama_model:
-                modelo._modelo = data.ollama_model
+            if usar_local:
+                # Determinar si usar Ollama o LM Studio (el que esté disponible)
+                if data.ollama_model:
+                    # El frontend envió el modelo con proveedor embutido en ollama_model
+                    ollama_model_id = data.ollama_model
+                # Siempre instanciar como "ollama" (usa adaptador genérico de Ollama)
+                modelo_efectivo = "ollama"
+
+                # Si el modelo viene de LM Studio, redirigir la URL base
+                lm_studio_modelos = []
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as c:
+                        for path, id_field in [("/v1/models", "id"), ("/api/v1/models", "key")]:
+                            try:
+                                r = await c.get(f"{LM_STUDIO_BASE_URL}{path}")
+                                r.raise_for_status()
+                                lms_data = r.json()
+                                items = lms_data.get("data") or lms_data.get("models") or []
+                                lm_studio_modelos = [m[id_field] for m in items if m.get(id_field)]
+                                if lm_studio_modelos:
+                                    break
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+
+                es_lm_studio_model = ollama_model_id and ollama_model_id in lm_studio_modelos
+
+            modelo = obtener_modelo(modelo_efectivo)
+
+            # Configurar modelo local con el modelo específico si se indicó
+            if usar_local and ollama_model_id:
+                modelo._modelo = ollama_model_id
+                # Si el modelo pertenece a LM Studio, apuntar al URL correcto
+                if es_lm_studio_model:
+                    setattr(modelo, "_base_url", f"{LM_STUDIO_BASE_URL}/v1")
 
             # Inyección dinámica del API key (solo para modelos externos)
             # Asumimos que los modelos en base_modelo.py leen self.api_key o usarán os.environ.

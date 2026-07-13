@@ -681,7 +681,7 @@ export default function AdminDetail() {
                           }}
                         >
                           {ana.opiniones_enviadas_modelo || 0} de{" "}
-                          {ana.opiniones_en_bd || 0}
+                          {ana.opiniones_en_bd || data.total_opiniones_bd || 0}
                         </div>
                       </div>
                     </div>
@@ -1450,7 +1450,7 @@ export default function AdminDetail() {
         onConfirm={handleAnalyze}
         loading={actionLoading}
         title="Generar Análisis IA"
-        message={`¿Generar un nuevo análisis para este especialista? Esto reemplazará el análisis actual si existe.`}
+        message={`¿Generar un nuevo análisis para este especialista? El sistema usará automáticamente el primer proveedor disponible (Ollama → LM Studio → Gemini → Groq). Esto reemplazará el análisis actual si existe.`}
         confirmText="Iniciar Análisis"
         cancelText="Cancelar"
         variant="primary"

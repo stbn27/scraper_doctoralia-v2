@@ -3,7 +3,7 @@ services:
   # ======================== BASES DE DATOS (auto-start) ========================
 
   mongodb:
-    image: mongo:8                  # versión fijada — no usar 'latest' para evitar upgrades inesperados
+    image: mongo:8
     container_name: mongodb
     restart: unless-stopped
     ports:
