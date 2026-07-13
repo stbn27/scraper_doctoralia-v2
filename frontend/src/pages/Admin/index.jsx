@@ -180,7 +180,7 @@ function UrlScrapingSection({ onScraped }) {
               <Checkbox
                 label="Generar análisis IA tras scraping"
                 checked={analyze}
-                onChange={e => setAnalyze(e.target.checked)}
+                onChange={val => setAnalyze(val)}
                 disabled={loading}
               />
               <Button onClick={handleScrape} disabled={loading} className="text-xs" variant="primary">

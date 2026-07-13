@@ -462,9 +462,16 @@ def extract_profile_header(soup: BeautifulSoup) -> dict:
     full_text = soup.get_text("\n", strip=True)
 
     nombre = None
-    h1 = soup.select_one("h1")
-    if h1:
-        nombre = safe_text(h1)
+    for sel in ["h1", "[data-test-id='doctor-name']", "[data-test-id='facility-name']", ".doctor-name", ".facility-name"]:
+        el = soup.select_one(sel)
+        if el and safe_text(el):
+            nombre = safe_text(el)
+            break
+
+    if not nombre:
+        og_title = soup.select_one('meta[property="og:title"]')
+        if og_title and og_title.get("content"):
+            nombre = clean_text(og_title.get("content").split("|")[0].split("- Agenda")[0])
 
     if not nombre:
         title = soup.title.get_text(strip=True) if soup.title else ""
@@ -497,6 +504,20 @@ def extract_profile_header(soup: BeautifulSoup) -> dict:
     review_count_meta = soup.select_one('[itemprop="reviewCount"]')
     if review_count_meta and review_count_meta.get("content"):
         total_opiniones = extract_number(review_count_meta.get("content"))
+    if total_opiniones is None:
+        # Intentar buscar en JSON-LD si hay aggregateRating
+        for script_tag in soup.find_all("script", type="application/ld+json"):
+            try:
+                ld_data = json.loads(script_tag.string or "")
+                items = ld_data if isinstance(ld_data, list) else (ld_data.get("@graph", []) if isinstance(ld_data, dict) and "@graph" in ld_data else [ld_data])
+                for it in items:
+                    if isinstance(it, dict) and "aggregateRating" in it and isinstance(it["aggregateRating"], dict):
+                        rc = it["aggregateRating"].get("reviewCount")
+                        if rc:
+                            total_opiniones = int(rc)
+                            break
+            except Exception:
+                continue
     if total_opiniones is None:
         m = re.search(r"(\d+)\s+opiniones", full_text, re.IGNORECASE)
         if m:

@@ -36,11 +36,13 @@ async def obtener_o_scrapear_opiniones(
             "opiniones": opiniones,
         }
 
+    url_perfil = especialista.get("doctor", {}).get("url_perfil") or especialista.get("metadata", {}).get("fuente")
     resultado = await asyncio.to_thread(
         reviews_scraper.construir_resultado_opiniones,
         doctoralia_id,
         total_opiniones,
         limite,
+        url_perfil,
     )
 
     meta = resultado.get("meta", {})

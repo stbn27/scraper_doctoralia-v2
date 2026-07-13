@@ -113,8 +113,9 @@ export async function validarUrlAdmin(url) {
 
 /**
  * Ejecuta el scraping y análisis opcional de un perfil manualmente (vía URL).
+ * Usado desde el panel de administración — usa auto-selección de modelo (local → env vars).
  *
- * @param {Object} payload - { url, analyze, model }
+ * @param {Object} payload - { url, analyze, model? }
  * @returns {Promise<Object>} Resultado del scraping
  */
 export async function ejecutarScrapingManual(payload) {
@@ -123,9 +124,10 @@ export async function ejecutarScrapingManual(payload) {
     body: JSON.stringify({
       url: payload.url,
       analyze: payload.analyze,
-      model: payload.model || 'deepseek',
+      // 'local' = auto-selección: LM Studio → Ollama → env vars del sistema (sin token de usuario)
+      model: payload.analyze ? (payload.model || 'local') : null,
       max_opinions: 30,
-      scrape_only: !payload.analyze
+      scrape_only: !payload.analyze,
     }),
   });
 }

@@ -34,23 +34,23 @@ class AvanzadaRequest(BaseModel):
     ollama_model: Optional[str] = None  # Modelo específico de Ollama si aplica
 
 
-def _extraer_doctor_id_de_html(html: str) -> int | None:
+def _extraer_doctor_id_de_html(html: str, url: Optional[str] = None) -> int | None:
     """
-    Intenta extraer el ID numérico de Doctoralia desde el HTML del perfil.
-    Prueba múltiples estrategias: JSON-LD, data attributes y patrones JS.
+    Intenta extraer el ID numérico de Doctoralia desde el HTML del perfil o URL.
+    Prueba múltiples estrategias: JSON-LD, data attributes y patrones JS/URL para médicos y clínicas.
 
     Args:
         html: HTML crudo del perfil de Doctoralia.
+        url: URL opcional del perfil.
 
     Returns:
-        ID numérico del doctor, o None si no se pudo extraer.
+        ID numérico del doctor/clínica, o None si no se pudo extraer.
     """
-    # Estrategia 1: JSON-LD con @type Doctor o Physician
+    # Estrategia 1: JSON-LD con @type Doctor o Physician o MedicalBusiness
     ld_blocks = re.findall(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL)
     for block in ld_blocks:
         try:
             data = json.loads(block)
-            # puede ser una lista
             if isinstance(data, list):
                 items = data
             elif isinstance(data, dict) and "@graph" in data:
@@ -58,7 +58,7 @@ def _extraer_doctor_id_de_html(html: str) -> int | None:
             else:
                 items = [data]
             for item in items:
-                if isinstance(item, dict) and item.get("@type") in ("Physician", "Doctor", "Person", "MedicalBusiness"):
+                if isinstance(item, dict) and item.get("@type") in ("Physician", "Doctor", "Person", "MedicalBusiness", "Hospital", "MedicalOrganization"):
                     url_item = item.get("url", item.get("@id", ""))
                     m = re.search(r'/(\d+)(?:[/?#]|$)', url_item)
                     if m:
@@ -66,34 +66,46 @@ def _extraer_doctor_id_de_html(html: str) -> int | None:
         except Exception:
             pass
 
-    # Estrategia 2: data-doctor-id / data-user-id en cualquier tag HTML
-    m = re.search(r'data-doctor-id=["\']?(\d+)["\']?', html)
-    if m:
-        return int(m.group(1))
-
-    m = re.search(r'data-user-id=["\']?(\d+)["\']?', html)
-    if m:
-        return int(m.group(1))
-
-    # Estrategia 3: variable JS con el ID del doctor
-    patterns = [
+    # Estrategia 2: variable JS con el ID del doctor o clínica
+    patterns_js = [
         r'"doctor_id"\s*:\s*(\d+)',
         r'"userId"\s*:\s*(\d+)',
         r'"docId"\s*:\s*(\d+)',
         r"doctorId[\s:=]+(\d+)",
+        r'"facility_id"\s*:\s*(\d+)',
+        r'"facilityId"\s*:\s*(\d+)',
+        r"facilityId[\s:=]+(\d+)",
     ]
-    for pat in patterns:
+    for pat in patterns_js:
         m = re.search(pat, html)
         if m:
             return int(m.group(1))
+
+    # Estrategia 3: data attributes para médicos o clínicas
+    patterns_attr = [
+        r'data-doctor-id=["\']?(\d+)["\']?',
+        r'data-user-id=["\']?(\d+)["\']?',
+        r'data-facility-id=["\']?(\d+)["\']?',
+        r'data-clinic-id=["\']?(\d+)["\']?',
+    ]
+    for pat in patterns_attr:
+        m = re.search(pat, html)
+        if m:
+            return int(m.group(1))
+
+    # Estrategia 4: Si es una URL de clínica específicamente y no se encontró en HTML, usar address-id si está
+    if url and any(w in url.lower() for w in ["/clinica", "/centro-", "/facility", "/hospital", "/sanatorio"]):
+        m_addr = re.search(r'#address-id=(\d+)', url)
+        if m_addr:
+            return int(m_addr.group(1))
 
     return None
 
 
 def _doctor_id_sintetico_desde_url(url: str) -> int:
     """
-    Genera un ID entero estable a partir de la URL usando los últimos 8 dígitos
-    de su hash MD5. Sirve como fallback cuando no se puede extraer el ID real.
+    Genera un ID entero estable a partir de la URL. Si es específicamente una URL de clínica
+    y tiene #address-id=123, utiliza ese ID. En caso contrario, usa los últimos 8 dígitos del hash MD5.
 
     Args:
         url: URL del perfil de Doctoralia.
@@ -101,6 +113,10 @@ def _doctor_id_sintetico_desde_url(url: str) -> int:
     Returns:
         Entero positivo reproducible para esa URL.
     """
+    if any(w in url.lower() for w in ["/clinica", "/centro-", "/facility", "/hospital", "/sanatorio"]):
+        m_addr = re.search(r'#address-id=(\d+)', url)
+        if m_addr:
+            return int(m_addr.group(1))
     digest = hashlib.md5(url.encode()).hexdigest()
     return int(digest[:8], 16)  # máx ~4.29 mil millones, suficiente para colisiones bajas
 
@@ -210,6 +226,7 @@ async def scrape_analyze(
 
     # 2. Scraping del Perfil
     from app.scraper.doctoralia import fetch_and_parse_profile_async
+    # pyrefly: ignore [missing-import]
     import httpx as _httpx_scraper
 
     try:
@@ -230,7 +247,7 @@ async def scrape_analyze(
         # Intentar extraer el ID real desde el HTML descargado
         doctor_id = profile.get("doctor", {}).get("id_doctoralia")
         if not doctor_id:
-            doctor_id = _extraer_doctor_id_de_html(_html_raw)
+            doctor_id = _extraer_doctor_id_de_html(_html_raw, data.url)
 
         # Si aún no hay ID, generar uno sintético reproducible desde la URL
         if not doctor_id:
@@ -249,6 +266,24 @@ async def scrape_analyze(
     # 3. Guardar Perfil en MongoDB
     db_async = get_doctoralia_async_db()
     col_profiles = db_async["doctor_profiles"]
+
+    # Verificar si el perfil ya existía para proteger y preservar metadatos valiosos (nombre, opiniones reportadas)
+    doc_existente = await col_profiles.find_one({"doctor.id_doctoralia": doctor_id})
+    if doc_existente:
+        doc_exist_doc = doc_existente.get("doctor", {})
+        new_doc = profile.get("doctor", {})
+        if not new_doc.get("nombre") and doc_exist_doc.get("nombre"):
+            new_doc["nombre"] = doc_exist_doc["nombre"]
+        if not new_doc.get("foto_perfil") and doc_exist_doc.get("foto_perfil"):
+            new_doc["foto_perfil"] = doc_exist_doc["foto_perfil"]
+        if not new_doc.get("especialidades") and doc_exist_doc.get("especialidades"):
+            new_doc["especialidades"] = doc_exist_doc["especialidades"]
+        if not new_doc.get("cedulas") and doc_exist_doc.get("cedulas"):
+            new_doc["cedulas"] = doc_exist_doc["cedulas"]
+        
+        # Si total_opiniones vino en 0 o nulo y en BD teníamos un número real > 0, conservar el de BD
+        if (not profile.get("total_opiniones") or profile.get("total_opiniones") == 0) and doc_existente.get("total_opiniones", 0) > 0:
+            profile["total_opiniones"] = doc_existente["total_opiniones"]
 
     # Registrar la fecha de actualización en metadata (no en un campo aparte)
     ahora_iso = datetime.now(timezone.utc).isoformat()
@@ -283,12 +318,15 @@ async def scrape_analyze(
     if total_opiniones > 0:
         from app.scraper.reviews_scraper import construir_resultado_opiniones
 
-        # Ejecutar scraper sincrónico de opiniones en un thread
-        opiniones_resultado = await asyncio.to_thread(
-            construir_resultado_opiniones, doctor_id, total_opiniones, data.max_opinions
-        )
-
-        opiniones_guardadas = opiniones_resultado.get("opiniones", [])
+        try:
+            # Ejecutar scraper sincrónico de opiniones en un thread
+            opiniones_resultado = await asyncio.to_thread(
+                construir_resultado_opiniones, doctor_id, total_opiniones, data.max_opinions, data.url
+            )
+            opiniones_guardadas = opiniones_resultado.get("opiniones", [])
+        except Exception:
+            # Si el endpoint AJAX no está disponible (ej. 404 o ID sintético), continuamos sin opiniones AJAX
+            opiniones_guardadas = []
 
         if opiniones_guardadas:
             col_opinions = db_async["doctor_opinions"]
@@ -308,8 +346,70 @@ async def scrape_analyze(
             if operations:
                 await col_opinions.bulk_write(operations)
 
-    # 5. Analizar con proveedor local (Ollama / LM Studio) o con modelo externo (con token)
+    # 5. Analizar con proveedor local (Ollama / LM Studio) o con modelo externo
     usar_local = data.analyze and es_modelo_local
+
+    # Cuando se pide 'local' pero no hay proveedor disponible, hacer fallback a env vars del sistema
+    if usar_local:
+        # Verificar si hay algún proveedor local disponible
+        _local_disponible = False
+        _local_model_id = None
+        _local_url = None
+        _local_es_lm_studio = False
+
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as _c:
+                # Intentar LM Studio primero
+                for _path, _field in [("/v1/models", "id"), ("/api/v1/models", "key")]:
+                    try:
+                        _r = await _c.get(f"{LM_STUDIO_BASE_URL}{_path}")
+                        _r.raise_for_status()
+                        _lms_data = _r.json()
+                        _items = _lms_data.get("data") or _lms_data.get("models") or []
+                        _found = [m[_field] for m in _items if m.get(_field)]
+                        if _found:
+                            _local_model_id = data.ollama_model or _found[0]
+                            _local_url = LM_STUDIO_BASE_URL
+                            _local_es_lm_studio = True
+                            _local_disponible = True
+                            break
+                    except Exception:
+                        continue
+
+                # Si LM Studio no está, probar Ollama
+                if not _local_disponible:
+                    try:
+                        _r = await _c.get(f"{OLLAMA_BASE_URL}/api/tags")
+                        _r.raise_for_status()
+                        _tags = _r.json().get("models", [])
+                        if _tags:
+                            _local_model_id = data.ollama_model or _tags[0]["name"]
+                            _local_url = OLLAMA_BASE_URL
+                            _local_disponible = True
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        if not _local_disponible:
+            # Fallback: buscar token en variables de entorno del sistema (modo admin)
+            _ENV_FALLBACK = [
+                ("gemini",   "GEMINI_API_KEY"),
+                ("groq",     "GROQ_API_KEY"),
+                ("deepseek", "DEEPSEEK_API_KEY"),
+            ]
+            for _mod, _env in _ENV_FALLBACK:
+                _key = os.getenv(_env, "").strip()
+                if _key:
+                    usar_local = False
+                    es_modelo_local = False
+                    token_str = _key
+                    # Actualizar data.model al modelo de fallback para que la instanciación sea correcta
+                    data.model = _mod  # type: ignore[assignment]
+                    break
+            else:
+                # Sin proveedor local ni env vars → omitir análisis, solo guardar el perfil
+                usar_local = False
 
     if data.analyze and (token_str or usar_local):
         # Importaciones tardías para evitar dependencias circulares/carga pesada global
@@ -337,80 +437,40 @@ async def scrape_analyze(
         datos = preparar_datos_para_analisis(profile, opiniones_db, min_opiniones_ia=1)
 
         if datos["apto_para_ia"]:
-            # Resolver el proveedor local real si se envía "local"
-            modelo_efectivo = data.model  # ej. "gemini", "groq"
+            # Resolver el proveedor local real
             ollama_model_id = data.ollama_model
-            es_lm_studio_model = False  # default; se actualiza si usar_local es True
+            es_lm_studio_model = False
 
             if usar_local:
-                # Determinar si usar Ollama o LM Studio (el que esté disponible)
-                if data.ollama_model:
-                    # El frontend envió el modelo con proveedor embutido en ollama_model
-                    ollama_model_id = data.ollama_model
-                # Siempre instanciar como "ollama" (usa adaptador genérico de Ollama)
-                modelo_efectivo = "ollama"
-
-                # Si el modelo viene de LM Studio, redirigir la URL base
-                lm_studio_modelos = []
-                try:
-                    async with httpx.AsyncClient(timeout=3.0) as c:
-                        for path, id_field in [("/v1/models", "id"), ("/api/v1/models", "key")]:
-                            try:
-                                r = await c.get(f"{LM_STUDIO_BASE_URL}{path}")
-                                r.raise_for_status()
-                                lms_data = r.json()
-                                items = lms_data.get("data") or lms_data.get("models") or []
-                                lm_studio_modelos = [m[id_field] for m in items if m.get(id_field)]
-                                if lm_studio_modelos:
-                                    break
-                            except Exception:
-                                continue
-                except Exception:
-                    pass
-
-                es_lm_studio_model = ollama_model_id and ollama_model_id in lm_studio_modelos
-
-            modelo = obtener_modelo(modelo_efectivo)
-
-            # Configurar modelo local con el modelo específico si se indicó
-            if usar_local and ollama_model_id:
-                modelo._modelo = ollama_model_id
-                # Si el modelo pertenece a LM Studio, apuntar al URL correcto
-                if es_lm_studio_model:
-                    setattr(modelo, "_base_url", f"{LM_STUDIO_BASE_URL}/v1")
-
-            # Inyección dinámica del API key (solo para modelos externos)
-            # Asumimos que los modelos en base_modelo.py leen self.api_key o usarán os.environ.
-            # Lo más limpio es setear la variable o pasarla en kwargs.
-            # Verificaremos cómo lo usan, por ahora agregamos la propiedad
-            if hasattr(modelo, "api_key"):
-                modelo.api_key = token_str
+                # Usar los datos ya resueltos arriba
+                ollama_model_id = _local_model_id
+                es_lm_studio_model = _local_es_lm_studio
+                modelo = obtener_modelo("ollama")
+                if ollama_model_id:
+                    modelo._modelo = ollama_model_id
+                if es_lm_studio_model and _local_url:
+                    setattr(modelo, "_base_url", f"{_local_url}/v1")
             else:
-                # Fallback: algunos modelos leen client.api_key (como GroqModelo, GeminiModelo)
-                # Como son instanciados, podemos asignarles
-                setattr(modelo, "api_key", token_str)
-                # Si usan cliente oficial, podríamos tener que recrear el cliente
-                if data.model == "groq":
-                    # pyrefly: ignore [missing-import]
-                    from groq import Groq
-
-                    modelo.cliente = Groq(api_key=token_str)
-                elif data.model == "gemini":
-                    # pyrefly: ignore [missing-import]
-                    import google.generativeai as genai
-
-                    # Gemini model initialization uses configure, which sets a global state.
-                    # This is tricky in a multi-user environment.
-                    genai.configure(api_key=token_str)
-                    # We might need to recreate the model instance:
-                    # modelo.model = genai.GenerativeModel(...)
-                elif data.model == "deepseek":
-                    # pyrefly: ignore [missing-import]
-                    import openai
-
-                    modelo.cliente = openai.OpenAI(
-                        api_key=token_str, base_url="https://api.deepseek.com"
-                    )
+                modelo = obtener_modelo(data.model)
+                # Inyectar token del sistema o de usuario
+                if hasattr(modelo, "api_key"):
+                    modelo.api_key = token_str
+                else:
+                    setattr(modelo, "api_key", token_str)
+                    if data.model == "groq":
+                        # pyrefly: ignore [missing-import]
+                        from groq import Groq
+                        modelo.cliente = Groq(api_key=token_str)
+                    elif data.model == "gemini":
+                        # pyrefly: ignore [missing-import]
+                        import google.generativeai as genai
+                        genai.configure(api_key=token_str)
+                    elif data.model == "deepseek":
+                        # pyrefly: ignore [missing-import]
+                        import openai
+                        modelo.cliente = openai.OpenAI(
+                            api_key=token_str, base_url="https://api.deepseek.com"
+                        )
 
             prompt_sistema = construir_prompt_sistema()
             prompt_usuario = construir_prompt_usuario(datos)

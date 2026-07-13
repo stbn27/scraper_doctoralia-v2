@@ -587,7 +587,10 @@ async def _scrapear_opiniones_medico(
     try:
         # construir_resultado_opiniones ya agrega doctor_id y scraping_meta
         resultado = construir_resultado_opiniones(
-            doctoralia_id, total_opiniones, max_opiniones=limite_opiniones
+            doctoralia_id,
+            total_opiniones,
+            max_opiniones=limite_opiniones,
+            url_perfil=medico.get("url_perfil") or medico.get("doctor", {}).get("url_perfil"),
         )
         opiniones = resultado.get("opiniones", [])
 

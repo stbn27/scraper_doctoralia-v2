@@ -19,6 +19,7 @@ from app.scraper.utils.base import get_user_agent
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FIXTURES_DIR = ROOT_DIR / "fixtures"
 BASE_URL = "https://www.doctoralia.com.mx/ajax/mobile/doctor-opinions"
+BASE_URL_FACILITY = "https://www.doctoralia.com.mx/ajax/facility/opinions"
 
 
 def limpiar_texto(text: str | None) -> str | None:
@@ -70,40 +71,66 @@ def convertir_decimal(value: str | int | float | None) -> float | None:
         return None
 
 
-def fetch_pagina_opiniones(doctor_id: int, page: int) -> tuple[str, int, int]:
-    """Descarga una pagina de opiniones desde el endpoint AJAX.
+def fetch_pagina_opiniones(
+    doctor_id: int, page: int, es_clinica: bool | None = None
+) -> tuple[str, int, int, bool]:
+    """Descarga una pagina de opiniones desde el endpoint AJAX de Doctoralia.
 
-    Doctoralia devuelve una respuesta JSON que contiene HTML en la clave
-    ``html``, el total de opiniones en ``numRows`` y el limite por pagina en
-    ``limit``. Esta funcion obtiene esa respuesta, extrae el HTML y decodifica
-    entidades como ``&amp;`` o ``&quot;``.
+    Soporta tanto perfiles de médicos (/ajax/mobile/doctor-opinions) como
+    perfiles de clínicas/centros (/ajax/facility/opinions). Si el endpoint
+    inicial responde con 404 Not Found, hace fallback automático al otro.
 
     Args:
-        doctor_id: Identificador interno del doctor en Doctoralia.
+        doctor_id: Identificador interno en Doctoralia.
         page: Numero de pagina de opiniones que se quiere descargar.
+        es_clinica: True para intentar ruta de clínica primero, False para doctor.
+            Si es None o da 404, prueba automáticamente ambos endpoints.
 
     Returns:
-        Tupla ``(html_text, num_rows, limit)`` donde ``html_text`` es el HTML
-        de las opiniones, ``num_rows`` es el total de opiniones reportado por
-        el servidor y ``limit`` es el tamano de pagina.
-
-    Raises:
-        httpx.HTTPStatusError: Si el servidor responde con error HTTP.
-        httpx.RequestError: Si ocurre un problema de red o timeout.
+        Tupla ``(html_text, num_rows, limit, es_clinica_efectivo)``.
     """
     headers = {
         "User-Agent": get_user_agent(),
         "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
         "Accept": "application/json, text/plain, */*",
     }
-    url = f"{BASE_URL}/{doctor_id}/{page}"
-    response = httpx.get(url, headers=headers, timeout=30)
-    response.raise_for_status()
-    payload = response.json()
-    raw_html = payload.get("html") if isinstance(payload, dict) else None
-    num_rows = int(payload.get("numRows", 0)) if isinstance(payload, dict) else 0
-    limit = int(payload.get("limit", 10)) if isinstance(payload, dict) else 10
-    return html.unescape(raw_html or ""), num_rows, limit
+
+    if es_clinica is True:
+        rutas = [(BASE_URL_FACILITY, True), (BASE_URL, False)]
+    elif es_clinica is False:
+        rutas = [(BASE_URL, False), (BASE_URL_FACILITY, True)]
+    else:
+        # Por defecto intenta doctor y luego facility
+        rutas = [(BASE_URL, False), (BASE_URL_FACILITY, True)]
+
+    ultimo_exc = None
+    for url_base, es_fac in rutas:
+        url = f"{url_base}/{doctor_id}/{page}"
+        try:
+            response = httpx.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+            raw_html = payload.get("html") if isinstance(payload, dict) else None
+            num_rows = int(payload.get("numRows", 0)) if isinstance(payload, dict) else 0
+            limit = int(payload.get("limit", 10)) if isinstance(payload, dict) else 10
+            return html.unescape(raw_html or ""), num_rows, limit, es_fac
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                ultimo_exc = exc
+                continue  # Probar el siguiente endpoint ante un 404
+            raise
+        except Exception as exc:
+            ultimo_exc = exc
+            continue
+
+    # Si todos los intentos respondieron 404, el ID o la página no tienen opiniones AJAX en Doctoralia.
+    # Devolvemos tupla vacía para que el flujo siga y no tumbar el servidor con un 500.
+    if isinstance(ultimo_exc, httpx.HTTPStatusError) and ultimo_exc.response.status_code == 404:
+        return "", 0, 10, (es_clinica if es_clinica is not None else False)
+
+    if ultimo_exc:
+        raise ultimo_exc
+    return "", 0, 10, False
 
 
 def extract_opinion_id(node) -> int | None:
@@ -251,6 +278,7 @@ def construir_resultado_opiniones(
     total_opiniones: int,
     max_opiniones: int | None = None,
     url_perfil: str | None = None,
+    es_clinica: bool | None = None,
 ) -> dict:
     """Descarga varias paginas de opiniones y arma el resultado final.
 
@@ -264,6 +292,7 @@ def construir_resultado_opiniones(
         max_opiniones: Limite opcional de opiniones a extraer. Si es ``None``,
             intenta extraer todas las disponibles segun ``total_opiniones``.
         url_perfil: URL del perfil del doctor para incluir en ``scraping_meta``.
+        es_clinica: True si el perfil pertenece a una clínica/centro.
 
     Returns:
         Diccionario con ``meta`` y ``opiniones``. ``meta`` incluye totales,
@@ -271,8 +300,15 @@ def construir_resultado_opiniones(
         tiene ``scraping_meta`` con ``url``, ``page``, ``total_pages`` y
         ``fecha_extraccion``.
     """
-    # Primera pagina para determinar total real de paginas
-    first_html, num_rows_real, limit_por_pagina = fetch_pagina_opiniones(doctor_id, 1)
+    if es_clinica is None and url_perfil:
+        url_lower = url_perfil.lower()
+        if any(w in url_lower for w in ["/clinica", "/centro-", "/facility", "/hospital", "/sanatorio"]):
+            es_clinica = True
+
+    # Primera pagina para determinar total real de paginas y si el endpoint efectivo es de clínica
+    first_html, num_rows_real, limit_por_pagina, es_fac_real = fetch_pagina_opiniones(
+        doctor_id, 1, es_clinica=es_clinica
+    )
     if num_rows_real > 0:
         total_opiniones = num_rows_real
     if limit_por_pagina <= 0:
@@ -288,7 +324,8 @@ def construir_resultado_opiniones(
         total_paginas = min(total_paginas, paginas_necesarias)
 
     fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    base_url_opinion = f"{BASE_URL}/{doctor_id}"
+    base_url_activa = BASE_URL_FACILITY if es_fac_real else BASE_URL
+    base_url_opinion = f"{base_url_activa}/{doctor_id}"
     all_opinions: list[dict] = []
 
     def _enriquecer(opinion: dict, page: int, t_pages: int) -> dict:
@@ -314,7 +351,9 @@ def construir_resultado_opiniones(
     else:
         for page in range(2, total_paginas + 1):
             time.sleep(random.uniform(1, 2))
-            html_text, _, _ = fetch_pagina_opiniones(doctor_id, page)
+            html_text, _, _, _ = fetch_pagina_opiniones(
+                doctor_id, page, es_clinica=es_fac_real
+            )
             for op in parse_opinions(html_text):
                 all_opinions.append(_enriquecer(op, page, total_paginas))
 
