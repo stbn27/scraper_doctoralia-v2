@@ -1,5 +1,12 @@
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+from pathlib import Path
+# pyrefly: ignore [missing-import]
+from dotenv import load_dotenv
+
+# Cargar variables de entorno del archivo .env local
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
