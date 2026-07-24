@@ -8,7 +8,13 @@ data/
 /backups/
 
 # Documentos
-/docs/
+/docs/*
+!/docs/secciones/
+!/docs/secciones/**
+!/docs/img
+!/docs/img/**
+!/docs/figures
+!/docs/figures/**
 
 # Logs
 ./**/*.log
