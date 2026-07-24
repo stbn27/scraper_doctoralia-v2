@@ -4,6 +4,10 @@ Plataforma web para buscar y recomendar especialistas médicos en México median
 
 ![Pantalla inicial de MedRec](./docs/img/sistema/inicio.png)
 
+## Release estable
+
+Actualmente el proyecto cuenta con un release estable. Ver [release](https://github.com/stbn27/scraper_doctoralia-v2/releases/tag/v1.0.1).
+
 ## ¿Qué hace?
 
 MedRec reúne perfiles médicos obtenidos de Doctoralia, opiniones de pacientes, catálogos de especialidades y ciudades, y análisis generados por modelos LLM. El usuario puede buscar especialistas por especialidad, ciudad, filtros de atención, precio, calificación, cédula, consultorio y confiabilidad del análisis. También incluye autenticación, favoritos, historial, direcciones de usuario, chatbot de búsqueda y herramientas administrativas.
@@ -41,7 +45,7 @@ flowchart TB
 
 ## Datos incluidos
 
-Actualmente el proyecto cuenta con datos scrapeados, almacenados y analizados en MongoDB. Estos registros se encuentran en las copias de base de datos exportadas dentro de `backups/`.
+Actualmente el proyecto cuenta con datos scrapeados, almacenados y analizados en MongoDB. Estos registros se distribuyen como copias de base de datos exportadas en los assets del release estable del proyecto.
 
 | Información almacenada | Total de documentos |
 |---|---:|
@@ -75,11 +79,11 @@ La documentación completa, según se requiera, está en `docs/secciones`.
 ## Inicio rápido recomendado
 
 > [!IMPORTANT]
-> Las copias de seguridad incluidas están ambientadas para restaurarse dentro de contenedores Docker. Para una primera carga completa, primero levanta las bases de datos y copia/restaura los backups dentro de los contenedores antes de usar el frontend.
+> Para descargar solo el código sin historial de commits, usa los assets automáticos del [release](https://github.com/stbn27/scraper_doctoralia-v2/releases/tag/v1.0.1) (`Source code .zip` o `Source code .tar.gz`) o clona con `--depth 1 --branch v1.0.1`. Las copias completas de MongoDB y MySQL se descargan por separado desde los assets del release, por ejemplo `mongo.gz` y `mysql.gz`, y están preparadas para restaurarse dentro de contenedores Docker. Para una primera carga completa, primero levanta las bases de datos y copia/restaura los backups dentro de los contenedores antes de usar el frontend.
 
 ```bash
 # 1. Clonar
-git clone --depth 1 --branch v1.0 https://github.com/stbn27/scraper_doctoralia-v2.git
+git clone --depth 1 --branch v1.0.1 https://github.com/stbn27/scraper_doctoralia-v2.git
 cd scraper_doctoralia-v2
 
 # 2. Preparar variables

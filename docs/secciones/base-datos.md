@@ -12,8 +12,11 @@ Las copias incluidas fueron preparadas para restaurarse dentro de contenedores D
 
 Para una restauración funcional del sistema se recomienda usar MongoDB v2 y el backup MySQL completo `.sql.gz`.
 
-> [!NOTE] En caso de que el directorio `backups/` no exista, se puede descargar desde el siguiente enlace:
-> 
+> [!NOTE]
+> Si descargaste el proyecto desde `Source code .zip` o `Source code .tar.gz` del [release](https://github.com/stbn27/scraper_doctoralia-v2/releases/tag/v1.0.1), obtendrás el código sin historial de commits, pero las copias completas de base de datos pueden venir como assets separados del mismo [release](https://github.com/stbn27/scraper_doctoralia-v2/releases/tag/v1.0.1). Descarga los archivos de MongoDB y MySQL según lo que necesites, colócalos dentro de `backups/` respetando la estructura documentada y después restaura las bases dentro de los contenedores Docker. Si prefieres usar Git, puedes clonar solo la versión estable con `git clone --depth 1 --branch v1.0.1 <URL_DEL_REPOSITORIO>`.
+>
+> En caso de que el directorio `backups/` no exista o prefieras descargar las copias desde Drive, también están disponibles en:
+>
 > https://drive.google.com/drive/folders/1lo7FJg6OHFf7AMqMWW5HknIXzlC03RdD?usp=sharing
 >
 > Contiene las copias de MongoDB y MySQL. Asegúrate de extraer el archivo ZIP antes de continuar.
