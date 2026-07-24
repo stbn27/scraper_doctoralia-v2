@@ -5,7 +5,14 @@
 data/
 
 # Backups
-/backups/
+/backups/**
+!/backups/mongo/
+!/backups/mongo/readme.md
+!/backups/mysql/
+!/backups/mysql/readme.md
+!/backups/mysql/medicos_db_2026-07-24_103857.sql.gz
+!/backups/mysql/sql/
+!/backups/mysql/sql/medicos_db_2026-07-24_104402_schema.sql
 
 # Documentos
 /docs/*
