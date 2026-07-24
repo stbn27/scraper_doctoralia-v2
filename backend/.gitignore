@@ -1,8 +1,8 @@
 logs/
-otros/
+otros/**
+!/otros
+!/otros/test_doctoralia_local.py
 **/__pycache__/**
-fixtures/
-fixtures/**
 .venv
 venv/
 **/__pycache__/
@@ -10,7 +10,6 @@ test/
 /**/__pycache__/**
 migrations/
 db_migrations/
-app/api/docs/
 
 # Archivos
 .env
