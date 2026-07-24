@@ -25,6 +25,8 @@ services:
     image: mysql:8.0
     container_name: mysql
     restart: unless-stopped
+    env_file:
+      - ./backend/.env.prod
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: medicos_db
