@@ -60,6 +60,47 @@ REGLAS DE EVIDENCIA:
 - Responde ÚNICAMENTE con el JSON solicitado, sin texto adicional."""
 
 
+def construir_prompt_usuario_EN(datos_preparados: dict) -> str:
+    """Construye el prompt de usuario con payload compacto y trazable."""
+    perfil = datos_preparados["perfil_limpio"]
+    metricas = datos_preparados["metricas_locales"]
+    opiniones = datos_preparados["opiniones_procesadas"]
+    alertas = datos_preparados.get("alertas", [])
+    metadatos_muestreo = datos_preparados.get("metadatos_muestreo", {})
+
+    nota_muestreo = _construir_nota_muestreo(metadatos_muestreo)
+    payload = {
+        "perfil": perfil,
+        "metricas_locales": metricas,
+        "metadatos_muestreo": metadatos_muestreo,
+        "nota_muestreo": nota_muestreo,
+        "alertas_preprocesamiento": alertas,
+        "opiniones": opiniones,
+    }
+
+    return f"""DATA TO ANALYZE
+    {json.dumps(payload, ensure_ascii=False, indent=2)}
+
+    CASE-SPECIFIC INSTRUCTIONS
+- Use the sampling note to avoid confusing the submitted subset with the actual volume.
+- If there is a partial sample, evaluate representativeness and mention the total actual number of opinions.
+- Distinguish between `opiniones_disponibles_en_bd` and `total_opiniones_reportadas_perfil`: if the profile reports more opinions than downloaded, clarify that the analysis is based on those locally available.
+- If `perfil.perfil_detalla_pacientes` is false, write literally that the profile does not detail what types of patients are treated.
+    - If `perfil.perfil_detalla_pacientes` is true, mention in the summary the groups that do appear as attended; if only adults are attended, say so explicitly.
+    - Evaluate pricing transparency with `perfil.integridad_perfil.servicios_con_precio` and `servicios_sin_precio`.
+    - If there are services with prices, explain that the user can review those prices in the profile; if many prices are missing, use it as a caution.
+    - Do not invent clinical data or patient populations.
+
+    RESPONDS EXACTLY WITH JSON AND ALL FIELDS AND VALUES MUST BE IN THE SPANISH LANGUAGE:
+    {{
+      "puntuacion_recomendacion": float (1.0-10.0),
+      "resumen": "string of maximum 5 sentences/lines, specific and useful for the end user; the first does not repeat full name or specialty",
+      "puntos_fuertes": ["maximum 4 concrete points"],
+      "puntos_debiles": ["minimum 1, maximum 4 concrete and variable points"],
+      "confiabilidad_opiniones": "high|medium|low|suspicious",
+      "justificacion_puntuacion": "string breve explaining the score assigned with evidence"
+    }}"""
+
 def construir_prompt_usuario(datos_preparados: dict) -> str:
     """Construye el prompt de usuario con payload compacto y trazable."""
     perfil = datos_preparados["perfil_limpio"]
