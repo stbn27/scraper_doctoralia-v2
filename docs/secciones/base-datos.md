@@ -12,7 +12,7 @@ Las copias incluidas fueron preparadas para restaurarse dentro de contenedores D
 
 Para una restauración funcional del sistema se recomienda usar MongoDB v2 y el backup MySQL completo `.sql.gz`.
 
-> ![NOTA] En caso de que el directorio `backups/` no exista, se puede descargar desde el siguiente enlace:
+> [!NOTE] En caso de que el directorio `backups/` no exista, se puede descargar desde el siguiente enlace:
 > 
 > https://drive.google.com/drive/folders/1lo7FJg6OHFf7AMqMWW5HknIXzlC03RdD?usp=sharing
 >

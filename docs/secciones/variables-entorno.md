@@ -62,7 +62,7 @@ LMSTUDIO_MODEL=...
 |**LMStudio**|`LMSTUDIO_BASE_URL`|`http://host.docker.internal:1234`|
 | |`LMSTUDIO_MODEL`|`llama-3.2-1b-instruct`|
 
-> ![NOTE] Para los modelos locales, primero se debe descargar el modelo en LMStudio u Ollama.
+> [!IMPORTANT] Para los modelos locales, primero se debe descargar el modelo en LMStudio u Ollama.
 
 **Uso:**
 Para usar otro modelo, se debe cambiar la variable `MODELO_ACTIVO` por el nombre del modelo deseado y agregar las variables correspondientes a la tabla de variables de entorno.
